@@ -18,6 +18,8 @@ import {
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 
 export default function AdminAgenda({ barberos, servicios }) {
+  // Modo de visualización: 'dia' (por fecha específica) o 'todas' (todas las citas)
+  const [vistaModo, setVistaModo] = useState('todas'); // 'todas' o 'dia'
   const [fecha, setFecha] = useState(getTodayStr());
   const [barberoId, setBarberoId] = useState('');
   const [citas, setCitas] = useState([]);
@@ -39,13 +41,22 @@ export default function AdminAgenda({ barberos, servicios }) {
 
   useEffect(() => {
     cargarCitas();
-  }, [fecha, barberoId]);
+  }, [fecha, barberoId, vistaModo]);
 
   async function cargarCitas() {
     setCargando(true);
     try {
-      let url = `/api/citas?fecha=${fecha}`;
-      if (barberoId) url += `&barbero_id=${barberoId}`;
+      let url = '/api/citas';
+      const params = [];
+      if (vistaModo === 'dia' && fecha) {
+        params.push(`fecha=${fecha}`);
+      }
+      if (barberoId) {
+        params.push(`barbero_id=${barberoId}`);
+      }
+      if (params.length > 0) {
+        url += `?${params.join('&')}`;
+      }
       const res = await fetch(url);
       const data = await res.json();
       setCitas(data);
@@ -128,40 +139,71 @@ export default function AdminAgenda({ barberos, servicios }) {
       {/* Barra superior de controles */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         
-        {/* Selector de fecha con botones prev/next */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => moverDia(-1)}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-            title="Día anterior"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex-1 sm:flex-initial">
-            <CalendarIcon className="w-4 h-4 text-amber-400" />
-            <input
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              className="bg-transparent text-white text-sm font-semibold focus:outline-none cursor-pointer"
-            />
+        {/* Selector de modo y selector de fecha */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Botones de Modo: Todas vs Por Día */}
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setVistaModo('todas')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                vistaModo === 'todas'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Ver Todas las Citas
+            </button>
+            <button
+              type="button"
+              onClick={() => setVistaModo('dia')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                vistaModo === 'dia'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Filtrar por Día
+            </button>
           </div>
 
-          <button
-            onClick={() => moverDia(1)}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-            title="Día siguiente"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          {/* Navegación por día solo cuando vistaModo === 'dia' */}
+          {vistaModo === 'dia' && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => moverDia(-1)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                title="Día anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
 
-          <button
-            onClick={() => setFecha(getTodayStr())}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold transition-colors"
-          >
-            Hoy
-          </button>
+              <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5">
+                <CalendarIcon className="w-3.5 h-3.5 text-amber-400" />
+                <input
+                  type="date"
+                  value={fecha}
+                  onChange={(e) => setFecha(e.target.value)}
+                  className="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer"
+                />
+              </div>
+
+              <button
+                onClick={() => moverDia(1)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                title="Día siguiente"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setFecha(getTodayStr())}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold transition-colors"
+              >
+                Hoy
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Filtro por barbero y botón Nueva Cita */}
@@ -199,14 +241,15 @@ export default function AdminAgenda({ barberos, servicios }) {
 
       </div>
 
-      {/* Título de la agenda del día */}
+      {/* Título de la agenda */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold text-white capitalize">
-            {formatDateReadable(fecha)}
+            {vistaModo === 'dia' ? formatDateReadable(fecha) : 'Historial de Citas Agendadas'}
           </h3>
           <p className="text-xs text-slate-400">
-            Total de turnos agendados: <span className="text-amber-400 font-bold">{citas.length}</span>
+            Total de turnos visibles: <span className="text-amber-400 font-bold">{citas.length}</span>
+            {vistaModo === 'todas' && <span className="text-slate-500 ml-1">(ordenadas cronológicamente por las más recientes)</span>}
           </p>
         </div>
         <button
