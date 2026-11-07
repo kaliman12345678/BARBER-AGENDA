@@ -33,16 +33,16 @@ export default function AdminRentabilidad({ barberos = [] }) {
     precio_promedio_corte: 25000
   });
 
-  // Parámetros interactivos del simulador
-  const [costosFijos, setCostosFijos] = useState(1200000); // Arriendo, servicios, etc.
-  const [precioCorte, setPrecioCorte] = useState(25000);
+  // Parámetros interactivos del simulador (manejados como string para permitir borrar completamente)
+  const [costosFijos, setCostosFijos] = useState('1200000'); // Arriendo, servicios, etc.
+  const [precioCorte, setPrecioCorte] = useState('25000');
   const [porcentajeComision, setPorcentajeComision] = useState(50);
-  const [numBarberos, setNumBarberos] = useState(2);
-  const [diasMes, setDiasMes] = useState(26); // Lunes a Sábado típicamente
-  const [margenProductos, setMargenProductos] = useState(150000); // Utilidad extra por ceras/aceites
+  const [numBarberos, setNumBarberos] = useState('2');
+  const [diasMes, setDiasMes] = useState('26'); // Lunes a Sábado típicamente
+  const [margenProductos, setMargenProductos] = useState('150000'); // Utilidad extra por ceras/aceites
 
   // Meta personalizada de ganancia neta
-  const [metaGananciaDeseada, setMetaGananciaDeseada] = useState(2500000);
+  const [metaGananciaDeseada, setMetaGananciaDeseada] = useState('2500000');
 
   // Slider para simular ritmo diario actual
   const [ritmoDiarioPorBarbero, setRitmoDiarioPorBarbero] = useState(6);
@@ -58,10 +58,10 @@ export default function AdminRentabilidad({ barberos = [] }) {
       const data = await res.json();
       setMetricasReales(data);
 
-      if (data.costos_fijos_mensuales > 0) setCostosFijos(data.costos_fijos_mensuales);
-      if (data.precio_promedio_corte > 0) setPrecioCorte(data.precio_promedio_corte);
-      if (data.comision_promedio > 0) setPorcentajeComision(data.comision_promedio);
-      if (data.barberos_activos_count > 0) setNumBarberos(data.barberos_activos_count);
+      if (data.costos_fijos_mensuales > 0) setCostosFijos(String(data.costos_fijos_mensuales));
+      if (data.precio_promedio_corte > 0) setPrecioCorte(String(data.precio_promedio_corte));
+      if (data.comision_promedio > 0) setPorcentajeComision(Number(data.comision_promedio));
+      if (data.barberos_activos_count > 0) setNumBarberos(String(data.barberos_activos_count));
     } catch (err) {
       console.error('Error cargando stats de rentabilidad:', err);
     } finally {
@@ -72,23 +72,30 @@ export default function AdminRentabilidad({ barberos = [] }) {
   // ==========================================
   // CÁLCULOS MATEMÁTICOS DE PUNTO DE EQUILIBRIO
   // ==========================================
+  const numCostosFijos = Number(costosFijos) || 0;
+  const numPrecioCorte = Number(precioCorte) || 0;
+  const numNumBarberos = Math.max(1, Number(numBarberos) || 1);
+  const numDiasMes = Math.max(1, Number(diasMes) || 1);
+  const numMargenProductos = Number(margenProductos) || 0;
+  const numMetaGanancia = Number(metaGananciaDeseada) || 0;
+
   // Margen que le queda a la barbería por cada corte realizado
-  const margenPorCorte = Math.max(1, precioCorte * (1 - (porcentajeComision / 100)));
+  const margenPorCorte = Math.max(1, numPrecioCorte * (1 - (porcentajeComision / 100)));
 
   // Costos fijos netos que deben cubrir los servicios de corte (descontando ganancia de productos)
-  const costosFijosACubrir = Math.max(0, costosFijos - margenProductos);
+  const costosFijosACubrir = Math.max(0, numCostosFijos - numMargenProductos);
 
   // Cortes mensuales necesarios para no perder dinero (Punto de Equilibrio)
   const cortesEquilibrioMes = Math.ceil(costosFijosACubrir / margenPorCorte);
 
   // Cortes diarios totales necesarios en la barbería
-  const cortesEquilibrioDiaTotal = (cortesEquilibrioMes / Math.max(1, diasMes)).toFixed(1);
+  const cortesEquilibrioDiaTotal = (cortesEquilibrioMes / numDiasMes).toFixed(1);
 
   // Cortes diarios que debe hacer CADA barbero para estar en equilibrio
-  const cortesEquilibrioDiaPorBarbero = (cortesEquilibrioMes / (Math.max(1, diasMes) * Math.max(1, numBarberos))).toFixed(1);
+  const cortesEquilibrioDiaPorBarbero = (cortesEquilibrioMes / (numDiasMes * numNumBarberos)).toFixed(1);
 
   // Facturación bruta mínima mensual para equilibrio
-  const facturacionBrutaEquilibrio = cortesEquilibrioMes * precioCorte;
+  const facturacionBrutaEquilibrio = cortesEquilibrioMes * numPrecioCorte;
 
   // ==========================================
   // TERMÓMETRO ACTUAL: ¿DÓNDE ESTÁ HOY LA BARBERÍA?
@@ -99,17 +106,17 @@ export default function AdminRentabilidad({ barberos = [] }) {
   const margenFaltanteCOP = cortesFaltantesParaEquilibrio * margenPorCorte;
 
   // Ganancia neta real actual del mes según cortes realizados
-  const gananciaNetaActualMes = (cortesActuales * margenPorCorte) + margenProductos - costosFijos;
+  const gananciaNetaActualMes = (cortesActuales * margenPorCorte) + numMargenProductos - numCostosFijos;
 
   // ==========================================
   // SIMULACIÓN DE ESCENARIOS (PESIMISTA, EQUILIBRIO, RENTABLE)
   // ==========================================
   function calcularEscenario(cortesDiaPorBarbero) {
-    const cortesMes = Math.round(cortesDiaPorBarbero * numBarberos * diasMes);
-    const facturacion = cortesMes * precioCorte;
+    const cortesMes = Math.round(cortesDiaPorBarbero * numNumBarberos * numDiasMes);
+    const facturacion = cortesMes * numPrecioCorte;
     const comisiones = Math.round(facturacion * (porcentajeComision / 100));
     const margenServicios = facturacion - comisiones;
-    const resultadoNeto = margenServicios + margenProductos - costosFijos;
+    const resultadoNeto = margenServicios + numMargenProductos - numCostosFijos;
     const margenNetoPct = facturacion > 0 ? Math.round((resultadoNeto / facturacion) * 100) : 0;
 
     return {
@@ -117,7 +124,7 @@ export default function AdminRentabilidad({ barberos = [] }) {
       cortesMes,
       facturacion,
       comisiones,
-      costosFijos,
+      costosFijos: numCostosFijos,
       resultadoNeto,
       margenNetoPct,
       esRentable: resultadoNeto > 0,
@@ -143,10 +150,10 @@ export default function AdminRentabilidad({ barberos = [] }) {
   // CALCULADORA INVERSA (META DE GANANCIA)
   // ==========================================
   // Para ganar X libre: Margen total necesario = Costos fijos + Meta - Margen productos
-  const margenTotalNecesarioParaMeta = Math.max(0, costosFijos + Number(metaGananciaDeseada || 0) - margenProductos);
+  const margenTotalNecesarioParaMeta = Math.max(0, numCostosFijos + numMetaGanancia - numMargenProductos);
   const cortesNecesariosParaMeta = Math.ceil(margenTotalNecesarioParaMeta / margenPorCorte);
-  const cortesDiaPorBarberoParaMeta = (cortesNecesariosParaMeta / (Math.max(1, diasMes) * Math.max(1, numBarberos))).toFixed(1);
-  const facturacionMeta = cortesNecesariosParaMeta * precioCorte;
+  const cortesDiaPorBarberoParaMeta = (cortesNecesariosParaMeta / (numDiasMes * numNumBarberos)).toFixed(1);
+  const facturacionMeta = cortesNecesariosParaMeta * numPrecioCorte;
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -262,10 +269,14 @@ export default function AdminRentabilidad({ barberos = [] }) {
             </label>
             <div className="relative">
               <input
-                type="number"
-                step="50000"
+                type="text"
+                inputMode="numeric"
                 value={costosFijos}
-                onChange={(e) => setCostosFijos(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setCostosFijos(val);
+                }}
+                placeholder="0"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm focus:outline-none focus:border-amber-500"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">COP</span>
@@ -279,10 +290,14 @@ export default function AdminRentabilidad({ barberos = [] }) {
             </label>
             <div className="relative">
               <input
-                type="number"
-                step="1000"
+                type="text"
+                inputMode="numeric"
                 value={precioCorte}
-                onChange={(e) => setPrecioCorte(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setPrecioCorte(val);
+                }}
+                placeholder="0"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm focus:outline-none focus:border-amber-500"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">COP</span>
@@ -319,11 +334,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
                 Barberos Activos
               </label>
               <input
-                type="number"
-                min="1"
-                max="20"
+                type="text"
+                inputMode="numeric"
                 value={numBarberos}
-                onChange={(e) => setNumBarberos(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => setNumBarberos(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="1"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm text-center"
               />
             </div>
@@ -332,11 +347,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
                 Días de Trabajo/Mes
               </label>
               <input
-                type="number"
-                min="10"
-                max="31"
+                type="text"
+                inputMode="numeric"
                 value={diasMes}
-                onChange={(e) => setDiasMes(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => setDiasMes(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="26"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm text-center"
               />
             </div>
@@ -349,10 +364,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
             </label>
             <div className="relative">
               <input
-                type="number"
-                step="20000"
+                type="text"
+                inputMode="numeric"
                 value={margenProductos}
-                onChange={(e) => setMargenProductos(Number(e.target.value))}
+                onChange={(e) => setMargenProductos(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="0"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-emerald-400 font-bold text-sm focus:outline-none focus:border-emerald-500"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">COP</span>
@@ -430,10 +446,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
 
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  step="200000"
+                  type="text"
+                  inputMode="numeric"
                   value={metaGananciaDeseada}
-                  onChange={(e) => setMetaGananciaDeseada(Number(e.target.value))}
+                  onChange={(e) => setMetaGananciaDeseada(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="0"
                   className="bg-slate-950 border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-black text-sm text-right w-40 focus:outline-none focus:border-emerald-400"
                 />
                 <span className="text-xs text-slate-400 font-bold">COP</span>
