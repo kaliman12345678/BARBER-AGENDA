@@ -18,8 +18,18 @@ export default function App() {
   useEffect(() => {
     cargarConfiguracion();
     
-    // Verificar si el usuario ingresó directamente por la URL /admin o #admin
+    // Verificar si viene con parámetro de bypass/auto-login de demo (?demo_admin=1 o ?admin=1234)
+    const urlParams = new URLSearchParams(window.location.search);
+    const pinParam = urlParams.get('pin');
     const isAdminRoute = window.location.pathname.includes('/admin') || window.location.hash.includes('admin') || window.location.search.includes('admin');
+    
+    if (pinParam === '1234' || urlParams.get('demo_admin') === '1') {
+      sessionStorage.setItem('barberia_admin_token', 'demo_admin_authenticated');
+      setIsAdminLoggedIn(true);
+      setActiveView('admin');
+      return;
+    }
+
     const token = sessionStorage.getItem('barberia_admin_token');
 
     if (token) {
