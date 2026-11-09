@@ -1,42 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { User, Lock, Scissors, AlertCircle, X, Check, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mail, Lock, Scissors, AlertCircle, X, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function BarberoLoginModal({ onAutenticado, onCancel }) {
-  const [barberos, setBarberos] = useState([]);
-  const [barberoSeleccionadoId, setBarberoSeleccionadoId] = useState('');
-  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [cargandoBarberos, setCargandoBarberos] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    async function cargarBarberos() {
-      try {
-        const res = await fetch('/api/barberos');
-        if (res.ok) {
-          const data = await res.json();
-          setBarberos(data);
-          if (data.length > 0) {
-            setBarberoSeleccionadoId(String(data[0].id));
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setCargandoBarberos(false);
-      }
-    }
-    cargarBarberos();
-  }, []);
 
   async function handleLogin(e) {
     e.preventDefault();
-    if (!barberoSeleccionadoId) {
-      setError('Por favor selecciona tu nombre de barbero');
-      return;
-    }
-    if (!pin || pin.length < 4) {
-      setError('Por favor ingresa tu PIN de 4 dígitos');
+    if (!email.trim() || !password.trim()) {
+      setError('Por favor ingresa tu correo electrónico y tu contraseña');
       return;
     }
 
@@ -48,15 +23,15 @@ export default function BarberoLoginModal({ onAutenticado, onCancel }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          barbero_id: Number(barberoSeleccionadoId),
-          pin: pin.trim()
+          email: email.trim().toLowerCase(),
+          password: password.trim()
         })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'PIN incorrecto');
+        setError(data.error || 'Credenciales incorrectas');
         return;
       }
 
@@ -67,18 +42,6 @@ export default function BarberoLoginModal({ onAutenticado, onCancel }) {
       setCargando(false);
     }
   }
-
-  function handleDigitClick(digit) {
-    if (pin.length < 6) {
-      setPin(prev => prev + digit);
-    }
-  }
-
-  function handleBackspace() {
-    setPin(prev => prev.slice(0, -1));
-  }
-
-  const barberoActual = barberos.find(b => String(b.id) === String(barberoSeleccionadoId));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
@@ -98,10 +61,10 @@ export default function BarberoLoginModal({ onAutenticado, onCancel }) {
             <Scissors className="w-7 h-7 transform -rotate-45" />
           </div>
           <h3 className="text-xl font-extrabold text-slate-900 font-sans">
-            Portal del Barbero
+            Acceso de Colaboradores
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Ingresa con tu usuario y PIN para consultar tus citas, ganancias y rentabilidad.
+            Ingresa con tu correo institucional y contraseña para consultar tus turnos, utilidad y récord.
           </p>
         </div>
 
@@ -114,102 +77,69 @@ export default function BarberoLoginModal({ onAutenticado, onCancel }) {
 
         <form onSubmit={handleLogin} className="space-y-4">
           
-          {/* Selector de Barbero */}
+          {/* Correo Electrónico */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              ¿Quién eres?
-            </label>
-            {cargandoBarberos ? (
-              <div className="h-10 bg-slate-100 rounded-xl animate-pulse"></div>
-            ) : (
-              <select
-                value={barberoSeleccionadoId}
-                onChange={(e) => setBarberoSeleccionadoId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
-              >
-                {barberos.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.nombre} ({b.porcentaje_comision || 50}% comisión)
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Campo de PIN */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Tu PIN de Seguridad</span>
-              <span className="text-[10px] text-slate-400 font-normal">Por defecto: 1234</span>
+              Correo Electrónico
             </label>
             <div className="relative">
               <input
-                type="password"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="••••"
-                className="w-full tracking-[0.5em] text-center text-xl font-bold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ejemplo@barberia.com"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
                 autoFocus
               />
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
             </div>
           </div>
 
-          {/* Teclado numérico rápido táctil */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+          {/* Contraseña */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Contraseña</span>
+            </label>
+            <div className="relative">
+              <input
+                type={mostrarPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
+              />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <button
-                key={num}
                 type="button"
-                onClick={() => handleDigitClick(String(num))}
-                className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-700 font-bold text-sm border border-slate-200/60 transition-colors"
+                onClick={() => setMostrarPassword(!mostrarPassword)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
               >
-                {num}
+                {mostrarPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setPin('')}
-              className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-xs border border-slate-200/60 transition-colors"
-            >
-              Borrar
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDigitClick('0')}
-              className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm border border-slate-200/60 transition-colors"
-            >
-              0
-            </button>
-            <button
-              type="button"
-              onClick={handleBackspace}
-              className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-xs border border-slate-200/60 transition-colors"
-            >
-              ←
-            </button>
+            </div>
           </div>
 
           {/* Botón Ingresar */}
           <button
             type="submit"
             disabled={cargando}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
           >
             {cargando ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
-                <span>Ingresar al Portal</span>
+                <span>Iniciar Sesión en el Portal</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
 
-        <p className="text-[11px] text-center text-slate-400 mt-4">
-          🔐 Tus datos y comisiones están protegidos y son privados.
+        <p className="text-[11px] text-center text-slate-400 mt-5">
+          🔒 Acceso restringido exclusivamente para barberos del equipo.
         </p>
       </div>
     </div>

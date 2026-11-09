@@ -13,11 +13,14 @@ import {
   AlertCircle, 
   Upload,
   Lock,
-  KeyRound,
+  Mail,
   Eye,
-  EyeOff
+  EyeOff,
+  UserCheck,
+  ExternalLink
 } from 'lucide-react';
 import { formatTime12 } from '../utils/helpers';
+import BarberoRecordModal from './BarberoRecordModal';
 
 const DIAS_SEMANA = [
   { id: 1, nombre: 'Lun' },
@@ -32,16 +35,18 @@ const DIAS_SEMANA = [
 export default function AdminBarberos({ barberos, onRecargar }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [barberoEditando, setBarberoEditando] = useState(null);
+  const [barberoRecordId, setBarberoRecordId] = useState(null);
 
   const [form, setForm] = useState({
     nombre: '',
     telefono: '',
+    email: '',
+    password: '',
     foto_url: '',
     porcentaje_comision: 50,
     horario_inicio: '09:00',
     horario_fin: '20:00',
-    dias_laborales: '1,2,3,4,5,6',
-    pin: '1234'
+    dias_laborales: '1,2,3,4,5,6'
   });
 
   const [guardando, setGuardando] = useState(false);
@@ -52,10 +57,10 @@ export default function AdminBarberos({ barberos, onRecargar }) {
   const [porcentajesEditables, setPorcentajesEditables] = useState({});
   const [guardandoComisionId, setGuardandoComisionId] = useState(null);
 
-  // Edición rápida de PIN de acceso portal
-  const [pinsEditables, setPinsEditables] = useState({});
-  const [guardandoPinId, setGuardandoPinId] = useState(null);
-  const [mostrarPins, setMostrarPins] = useState({});
+  // Edición rápida de Contraseña
+  const [passwordsEditables, setPasswordsEditables] = useState({});
+  const [guardandoPasswordId, setGuardandoPasswordId] = useState(null);
+  const [mostrarPasswords, setMostrarPasswords] = useState({});
 
   async function handleGuardarComisionRapida(barberoId, nuevoPorcentaje) {
     const val = Number(nuevoPorcentaje);
@@ -83,28 +88,28 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     }
   }
 
-  async function handleGuardarPinRapido(barberoId, nuevoPin) {
-    if (!nuevoPin || nuevoPin.length < 4) return;
+  async function handleGuardarPasswordRapida(barberoId, nuevaPassword) {
+    if (!nuevaPassword || nuevaPassword.trim().length < 4) return;
 
-    setGuardandoPinId(barberoId);
+    setGuardandoPasswordId(barberoId);
     try {
       const res = await fetch(`/api/barberos/${barberoId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: nuevoPin.trim() })
+        body: JSON.stringify({ password: nuevaPassword.trim() })
       });
       if (res.ok) {
         if (onRecargar) onRecargar();
-        setPinsEditables(prev => {
+        setPasswordsEditables(prev => {
           const copy = { ...prev };
           delete copy[barberoId];
           return copy;
         });
       }
     } catch (err) {
-      console.error('Error actualizando PIN:', err);
+      console.error('Error actualizando contraseña:', err);
     } finally {
-      setGuardandoPinId(null);
+      setGuardandoPasswordId(null);
     }
   }
 
@@ -141,12 +146,13 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     setForm({
       nombre: '',
       telefono: '',
+      email: '',
+      password: '123456',
       foto_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=300&h=300&fit=crop&crop=faces',
       porcentaje_comision: 50,
       horario_inicio: '09:00',
       horario_fin: '20:00',
-      dias_laborales: '1,2,3,4,5,6',
-      pin: '1234'
+      dias_laborales: '1,2,3,4,5,6'
     });
     setError('');
     setModalAbierto(true);
@@ -157,12 +163,13 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     setForm({
       nombre: b.nombre,
       telefono: b.telefono || '',
+      email: b.email || '',
+      password: b.password || '123456',
       foto_url: b.foto_url || '',
       porcentaje_comision: b.porcentaje_comision || 50,
       horario_inicio: b.horario_inicio || '09:00',
       horario_fin: b.horario_fin || '20:00',
-      dias_laborales: b.dias_laborales || '1,2,3,4,5,6',
-      pin: b.pin || '1234'
+      dias_laborales: b.dias_laborales || '1,2,3,4,5,6'
     });
     setError('');
     setModalAbierto(true);
@@ -205,15 +212,6 @@ export default function AdminBarberos({ barberos, onRecargar }) {
         return;
       }
 
-      // Si además estamos editando y cambió el PIN
-      if (barberoEditando && form.pin) {
-        await fetch(`/api/barberos/${barberoEditando.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: form.pin.trim() })
-        });
-      }
-
       setModalAbierto(false);
       if (onRecargar) onRecargar();
     } catch (err) {
@@ -244,10 +242,10 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
         <div>
           <h3 className="text-xl font-bold text-slate-900 font-sans">
-            Equipo de Barberos & Accesos
+            Equipo de Barberos & Usuarios
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Administra los barberos, sus comisiones individuales y sus claves PIN para su portal personal confidencial.
+            Administra el equipo, asigna correos y contraseñas de acceso y consulta el récord individual de cada colaborador.
           </p>
         </div>
         <button
@@ -263,8 +261,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {barberos.map((b) => {
           const dias = b.dias_laborales ? b.dias_laborales.split(',').map(Number) : [];
-          const pinVisible = mostrarPins[b.id];
-          const pinActual = pinsEditables[b.id] ?? (b.pin || '1234');
+          const passVisible = mostrarPasswords[b.id];
+          const passActual = passwordsEditables[b.id] ?? (b.password || '123456');
 
           return (
             <div
@@ -293,20 +291,23 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                         {b.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
-                    {b.telefono ? (
-                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-                        <Phone className="w-3.5 h-3.5 text-blue-600" />
+
+                    {/* Correo de usuario para iniciar sesión */}
+                    <p className="text-xs text-blue-600 font-semibold flex items-center gap-1.5 mt-1 truncate">
+                      <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{b.email || 'Sin correo asignado'}</span>
+                    </p>
+
+                    {b.telefono && (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400" />
                         <span>{b.telefono}</span>
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-amber-600 italic mt-1">
-                        Sin teléfono registrado
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Detalles: Comisión y Horario */}
+                {/* Detalles: Comisión, Contraseña y Horario */}
                 <div className="space-y-2.5 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                   
                   {/* Comisión Individual Editable */}
@@ -338,36 +339,35 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                     </div>
                   </div>
 
-                  {/* PIN de Acceso al Portal Personal */}
+                  {/* Contraseña de Acceso al Portal Personal */}
                   <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-200">
                     <span className="text-slate-700 font-semibold flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                      PIN Portal:
+                      <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                      Clave Acceso:
                     </span>
                     <div className="flex items-center gap-1.5">
                       <input
-                        type={pinVisible ? 'text' : 'password'}
-                        maxLength={6}
-                        value={pinActual}
-                        onChange={(e) => setPinsEditables(prev => ({ ...prev, [b.id]: e.target.value }))}
-                        className="w-16 bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1 text-center font-mono font-extrabold text-slate-800 text-xs focus:outline-none"
+                        type={passVisible ? 'text' : 'password'}
+                        value={passActual}
+                        onChange={(e) => setPasswordsEditables(prev => ({ ...prev, [b.id]: e.target.value }))}
+                        className="w-20 bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1 text-center font-mono font-extrabold text-slate-800 text-xs focus:outline-none"
                       />
                       <button
                         type="button"
-                        onClick={() => setMostrarPins(prev => ({ ...prev, [b.id]: !prev[b.id] }))}
+                        onClick={() => setMostrarPasswords(prev => ({ ...prev, [b.id]: !prev[b.id] }))}
                         className="p-1 text-slate-400 hover:text-slate-600 rounded"
-                        title={pinVisible ? 'Ocultar PIN' : 'Ver PIN'}
+                        title={passVisible ? 'Ocultar clave' : 'Ver clave'}
                       >
-                        {pinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {passVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
-                      {pinsEditables[b.id] !== undefined && pinsEditables[b.id] !== b.pin && (
+                      {passwordsEditables[b.id] !== undefined && passwordsEditables[b.id] !== b.password && (
                         <button
                           type="button"
-                          disabled={guardandoPinId === b.id}
-                          onClick={() => handleGuardarPinRapido(b.id, pinsEditables[b.id])}
+                          disabled={guardandoPasswordId === b.id}
+                          onClick={() => handleGuardarPasswordRapida(b.id, passwordsEditables[b.id])}
                           className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
                         >
-                          {guardandoPinId === b.id ? '...' : 'Guardar'}
+                          {guardandoPasswordId === b.id ? '...' : 'Guardar'}
                         </button>
                       )}
                     </div>
@@ -402,9 +402,20 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   </div>
 
                 </div>
+
+                {/* Botón Ver Récord & Expediente */}
+                <button
+                  type="button"
+                  onClick={() => setBarberoRecordId(b.id)}
+                  className="w-full mt-3 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition-colors"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Ver Récord Completo de {b.nombre}</span>
+                  <ExternalLink className="w-3 h-3 text-blue-500" />
+                </button>
               </div>
 
-              {/* Botones de acción */}
+              {/* Botones de acción inferiores */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -441,7 +452,7 @@ export default function AdminBarberos({ barberos, onRecargar }) {
               {barberoEditando ? 'Editar Barbero' : 'Nuevo Barbero'}
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Configura sus datos de contacto, horario laboral, comisión y PIN de acceso confidencial.
+              Configura los datos del barbero y sus credenciales (correo y contraseña) para el portal de colaboradores.
             </p>
 
             {error && (
@@ -464,6 +475,39 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 />
+              </div>
+
+              {/* Correo y Contraseña de Acceso */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-blue-700 uppercase mb-1 flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5" />
+                    Correo Electrónico *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="mateo@barberia.com"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-xl px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-emerald-700 uppercase mb-1 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5" />
+                    Contraseña *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="123456"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="w-full bg-slate-50 border border-emerald-200 rounded-xl px-3 py-2 text-emerald-800 font-bold focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -497,29 +541,6 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                     className="w-full bg-slate-50 border border-blue-200 rounded-xl px-3 py-2 text-blue-700 font-bold focus:outline-none focus:border-blue-500"
                   />
                 </div>
-              </div>
-
-              {/* PIN de Acceso al Portal Personal */}
-              <div>
-                <label className="block text-xs font-semibold text-emerald-700 uppercase mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5" />
-                    PIN de Acceso al Portal Personal *
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-normal">Por defecto: 1234</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  placeholder="1234"
-                  value={form.pin}
-                  onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/[^0-9]/g, '') })}
-                  className="w-full bg-slate-50 border border-emerald-200 rounded-xl px-3 py-2 text-emerald-800 font-mono font-bold tracking-widest focus:outline-none focus:border-emerald-500"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  El barbero usará este PIN para ver sus citas asignadas y sus ganancias personales sin ver datos de clientes ni utilidades del negocio.
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -632,6 +653,15 @@ export default function AdminBarberos({ barberos, onRecargar }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de Expediente y Récord Completo */}
+      {barberoRecordId && (
+        <BarberoRecordModal
+          barberoId={barberoRecordId}
+          esBarbero={false}
+          onClose={() => setBarberoRecordId(null)}
+        />
       )}
 
     </div>

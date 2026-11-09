@@ -143,17 +143,23 @@ app.get('/api/barberos', (req, res) => {
 });
 
 app.post('/api/barberos', (req, res) => {
-  const { nombre, telefono, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales } = req.body;
+  const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
   try {
+    const nombreLimpio = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const emailFinal = email ? email.trim().toLowerCase() : `${nombreLimpio || 'barbero' + Date.now()}@barberia.com`;
+    const passwordFinal = password ? password.trim() : '123456';
+
     const stmt = db.prepare(`
-      INSERT INTO barberos (nombre, telefono, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO barberos (nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
     const result = stmt.run(
       nombre,
       telefono || '',
+      emailFinal,
+      passwordFinal,
       foto_url || '',
       porcentaje_comision !== undefined ? Number(porcentaje_comision) : 50.0,
       horario_inicio || '09:00',
@@ -168,13 +174,15 @@ app.post('/api/barberos', (req, res) => {
 
 app.put('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
-  const { nombre, telefono, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
+  const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
 
   try {
     const stmt = db.prepare(`
       UPDATE barberos 
       SET nombre = COALESCE(?, nombre),
           telefono = COALESCE(?, telefono),
+          email = COALESCE(?, email),
+          password = COALESCE(?, password),
           foto_url = COALESCE(?, foto_url),
           porcentaje_comision = COALESCE(?, porcentaje_comision),
           horario_inicio = COALESCE(?, horario_inicio),
@@ -186,6 +194,8 @@ app.put('/api/barberos/:id', (req, res) => {
     stmt.run(
       nombre !== undefined ? nombre : null,
       telefono !== undefined ? telefono : null,
+      email !== undefined && email !== '' ? email.trim().toLowerCase() : null,
+      password !== undefined && password !== '' ? password.trim() : null,
       foto_url !== undefined ? foto_url : null,
       porcentaje_comision !== undefined && porcentaje_comision !== '' ? Number(porcentaje_comision) : null,
       horario_inicio !== undefined ? horario_inicio : null,
@@ -202,7 +212,7 @@ app.put('/api/barberos/:id', (req, res) => {
 
 app.patch('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
-  const { porcentaje_comision, activo, pin } = req.body;
+  const { porcentaje_comision, activo, pin, email, password } = req.body;
 
   try {
     const barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
@@ -217,6 +227,12 @@ app.patch('/api/barberos/:id', (req, res) => {
     if (pin !== undefined && pin !== '') {
       db.prepare('UPDATE barberos SET pin = ? WHERE id = ?').run(String(pin).trim(), id);
     }
+    if (email !== undefined && email !== '') {
+      db.prepare('UPDATE barberos SET email = ? WHERE id = ?').run(String(email).trim().toLowerCase(), id);
+    }
+    if (password !== undefined && password !== '') {
+      db.prepare('UPDATE barberos SET password = ? WHERE id = ?').run(String(password).trim(), id);
+    }
 
     const actualizado = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
     res.json({ success: true, message: 'Barbero actualizado', barbero: actualizado });
@@ -225,33 +241,138 @@ app.patch('/api/barberos/:id', (req, res) => {
   }
 });
 
-// Autenticación de Barbero (Para su portal privado)
+// Autenticación de Barbero (Ingreso profesional con Correo y Contraseña)
 app.post('/api/barberos/login', (req, res) => {
-  const { barbero_id, pin } = req.body;
-  if (!barbero_id || !pin) {
-    return res.status(400).json({ error: 'barbero_id y pin son requeridos' });
-  }
+  const { email, password, barbero_id, pin } = req.body;
 
   try {
-    const barbero = db.prepare('SELECT id, nombre, telefono, foto_url, porcentaje_comision, pin, activo FROM barberos WHERE id = ?').get(barbero_id);
-    if (!barbero) {
-      return res.status(404).json({ error: 'Barbero no encontrado' });
-    }
-    if (!barbero.activo) {
-      return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
+    let barbero;
+    if (email && password) {
+      barbero = db.prepare('SELECT * FROM barberos WHERE LOWER(email) = LOWER(?)').get(email.trim());
+      if (!barbero) {
+        return res.status(401).json({ error: 'No existe una cuenta registrada con este correo electrónico' });
+      }
+      if (!barbero.activo) {
+        return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
+      }
+      const passGuardada = String(barbero.password || '123456').trim();
+      const pinGuardado = String(barbero.pin || '1234').trim();
+      const passEnviada = String(password).trim();
+
+      if (passGuardada !== passEnviada && pinGuardado !== passEnviada) {
+        return res.status(401).json({ error: 'Contraseña incorrecta' });
+      }
+    } else if (barbero_id && pin) {
+      // Compatibilidad hacia atrás
+      barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(barbero_id);
+      if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
+      if (!barbero.activo) return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
+      if (String(barbero.pin || '1234').trim() !== String(pin).trim() && String(barbero.password || '').trim() !== String(pin).trim()) {
+        return res.status(401).json({ error: 'Contraseña / PIN incorrecto' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Por favor ingresa tu correo electrónico y contraseña' });
     }
 
-    if (String(barbero.pin || '1234') !== String(pin).trim()) {
-      return res.status(401).json({ error: 'PIN incorrecto' });
-    }
-
-    // Retornar perfil sin exponer el PIN
-    const { pin: _, ...perfilSeguro } = barbero;
+    // Retornar perfil seguro sin exponer la contraseña
+    const { password: _, pin: __, ...perfilSeguro } = barbero;
     res.json({
       success: true,
       message: `Bienvenido ${barbero.nombre}`,
       token: `barbero_session_${barbero.id}_${Date.now()}`,
       barbero: perfilSeguro
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Expediente / Récord completo de un barbero (Usado por el Administrador y por el Barbero)
+app.get('/api/barberos/:id/record', (req, res) => {
+  const { id } = req.params;
+  const { desde, hasta, es_barbero } = req.query;
+
+  try {
+    const barbero = db.prepare('SELECT id, nombre, email, telefono, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo, creado_en FROM barberos WHERE id = ?').get(id);
+    if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
+
+    // 1. Historial de Citas
+    let sqlCitas = `
+      SELECT 
+        c.id, c.fecha, c.hora_inicio, c.hora_fin, c.estado, c.precio_cobrado, c.notas, c.creado_en,
+        ${es_barbero === 'true' ? 'c.cliente_nombre' : 'c.cliente_nombre, c.cliente_telefono'},
+        s.nombre as servicio_nombre, s.duracion_minutos,
+        ROUND(c.precio_cobrado * (? / 100.0)) as comision_estimada
+      FROM citas c
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barbero_id = ?
+    `;
+    const paramsCitas = [barbero.porcentaje_comision || 50, id];
+    if (desde && hasta) {
+      sqlCitas += ' AND c.fecha BETWEEN ? AND ?';
+      paramsCitas.push(desde, hasta);
+    }
+    sqlCitas += ' ORDER BY c.fecha DESC, c.hora_inicio DESC';
+    const citas = db.prepare(sqlCitas).all(...paramsCitas);
+
+    // 2. Liquidaciones / Pagos Recibidos
+    let sqlLiq = `SELECT * FROM liquidaciones WHERE barbero_id = ?`;
+    const paramsLiq = [id];
+    if (desde && hasta) {
+      sqlLiq += ' AND fecha_pago BETWEEN ? AND ?';
+      paramsLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
+    }
+    sqlLiq += ' ORDER BY fecha_pago DESC';
+    const liquidaciones = db.prepare(sqlLiq).all(...paramsLiq);
+
+    // 3. Ventas de productos
+    const ventasProductos = db.prepare(`
+      SELECT vp.*, p.nombre as producto_nombre 
+      FROM ventas_productos vp 
+      JOIN productos p ON vp.producto_id = p.id 
+      WHERE vp.barbero_id = ? 
+      ORDER BY vp.fecha DESC
+    `).all(id);
+
+    // 4. Publicaciones multimedia en galería
+    const publicaciones = db.prepare(`
+      SELECT * FROM galeria_multimedia WHERE barbero_id = ? ORDER BY id DESC
+    `).all(id);
+
+    // 5. Auditoría del barbero
+    const auditoria = db.prepare(`
+      SELECT * FROM auditoria 
+      WHERE descripcion LIKE ? OR detalles_json LIKE ?
+      ORDER BY fecha_hora DESC LIMIT 50
+    `).all(`%${barbero.nombre}%`, `%"barbero_id":${id}%`);
+
+    // 6. Resumen Financiero Total
+    const totalCitasCompletadas = citas.filter(c => c.estado === 'completada').length;
+    const totalBrutoServicios = citas.filter(c => c.estado === 'completada').reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
+    const totalComisionServicios = Math.round(totalBrutoServicios * ((barbero.porcentaje_comision || 50) / 100));
+    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
+    const totalGanadoVitalicio = totalComisionServicios + totalComisionProductos;
+    const totalLiquidadoPagado = liquidaciones.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
+    const saldoPendientePorCobrar = Math.max(0, totalGanadoVitalicio - totalLiquidadoPagado);
+
+    res.json({
+      barbero,
+      resumen: {
+        total_citas_registradas: citas.length,
+        total_citas_completadas: totalCitasCompletadas,
+        total_bruto_servicios: totalBrutoServicios,
+        total_comision_servicios: totalComisionServicios,
+        total_comision_productos: totalComisionProductos,
+        total_ganado_vitalicio: totalGanadoVitalicio,
+        total_liquidado_pagado: totalLiquidadoPagado,
+        saldo_pendiente_por_cobrar: saldoPendientePorCobrar,
+        total_publicaciones: publicaciones.length
+      },
+      citas,
+      liquidaciones,
+      ventas_productos: ventasProductos,
+      publicaciones,
+      auditoria
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

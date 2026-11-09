@@ -176,12 +176,25 @@ function initDatabase() {
     db.prepare("ALTER TABLE costos ADD COLUMN barbero_id INTEGER").run();
   } catch (e) {}
 
-  // Migración segura para autenticación individual de barberos
+  // Migración segura para autenticación individual de barberos (Email y Contraseña)
   try {
     db.prepare("ALTER TABLE barberos ADD COLUMN pin TEXT DEFAULT '1234'").run();
   } catch (e) {}
   try {
     db.prepare("ALTER TABLE barberos ADD COLUMN email TEXT").run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE barberos ADD COLUMN password TEXT DEFAULT '123456'").run();
+  } catch (e) {}
+
+  // Asignar correos y contraseñas por defecto a los barberos existentes si están vacíos
+  try {
+    const barberosSinEmail = db.prepare("SELECT id, nombre, email, password FROM barberos WHERE email IS NULL OR email = ''").all();
+    for (const b of barberosSinEmail) {
+      const nombreLimpio = b.nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const defaultEmail = `${nombreLimpio || 'barbero' + b.id}@barberia.com`;
+      db.prepare("UPDATE barberos SET email = ?, password = COALESCE(password, '123456') WHERE id = ?").run(defaultEmail, b.id);
+    }
   } catch (e) {}
 
   // Seed de productos de venta si no hay

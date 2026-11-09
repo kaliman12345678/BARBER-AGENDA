@@ -14,9 +14,12 @@ import {
   Clock, 
   Filter,
   Sparkles,
-  PieChart
+  PieChart,
+  ExternalLink,
+  UserCheck
 } from 'lucide-react';
 import { formatCOP, getTodayStr } from '../utils/helpers';
+import BarberoRecordModal from './BarberoRecordModal';
 
 export default function AdminBalance() {
   const [balance, setBalance] = useState({
@@ -35,6 +38,7 @@ export default function AdminBalance() {
   const [filtroRango, setFiltroRango] = useState('mes'); // 'hoy', 'semana', 'mes', 'todo', 'personalizado'
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [barberoSeleccionadoId, setBarberoSeleccionadoId] = useState(null);
 
   useEffect(() => {
     aplicarPreset('mes');
@@ -431,6 +435,17 @@ export default function AdminBalance() {
                       )}
                     </div>
 
+                    {/* Botón para ver todo lo que ha pasado con el empleado (Récord & Historial) */}
+                    <button
+                      type="button"
+                      onClick={() => setBarberoSeleccionadoId(b.id)}
+                      className="w-full mt-2 py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center justify-center gap-2 border border-slate-800 hover:border-amber-500/40 transition-all shadow-xs"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Ver Expediente & Récord Completo</span>
+                      <ExternalLink className="w-3 h-3 text-slate-500" />
+                    </button>
+
                   </div>
                 ))}
               </div>
@@ -439,10 +454,13 @@ export default function AdminBalance() {
             {/* Tabla Consolidada Comparativa */}
             {barberosDetalle.length > 0 && (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl mt-6">
-                <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/40">
+                <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
                   <h5 className="font-bold text-white text-xs uppercase tracking-wider">
                     Tabla Comparativa de Liquidación y Retención por Barbero
                   </h5>
+                  <span className="text-[11px] text-slate-400">
+                    Haz clic en cualquier barbero para ver su récord completo
+                  </span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
@@ -455,11 +473,16 @@ export default function AdminBalance() {
                         <th className="py-3 px-4 text-right text-amber-400">Total Pagado</th>
                         <th className="py-3 px-4 text-right text-emerald-400">Le Quedó a Barbería</th>
                         <th className="py-3 px-4 text-center">Retención</th>
+                        <th className="py-3 px-4 text-center">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {barberosDetalle.map((b) => (
-                        <tr key={b.id} className="hover:bg-slate-800/40 transition-colors">
+                        <tr 
+                          key={b.id} 
+                          onClick={() => setBarberoSeleccionadoId(b.id)}
+                          className="hover:bg-slate-800/60 transition-colors cursor-pointer"
+                        >
                           <td className="py-3 px-4 text-white font-bold flex items-center gap-2">
                             <span>{b.nombre}</span>
                           </td>
@@ -483,6 +506,11 @@ export default function AdminBalance() {
                               {b.porcentaje_retenido_barberia}%
                             </span>
                           </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="text-[11px] font-bold text-amber-400 hover:underline">
+                              Ver Récord →
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -494,6 +522,15 @@ export default function AdminBalance() {
           </div>
 
         </div>
+      )}
+
+      {/* Modal de Expediente y Récord Completo del Barbero */}
+      {barberoSeleccionadoId && (
+        <BarberoRecordModal
+          barberoId={barberoSeleccionadoId}
+          esBarbero={false}
+          onClose={() => setBarberoSeleccionadoId(null)}
+        />
       )}
 
     </div>

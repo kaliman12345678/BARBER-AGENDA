@@ -103,7 +103,7 @@ export default function Navbar({
               </button>
             </div>
           ) : (
-            /* Vista para clientes y acceso a barbero */
+            /* Vista para clientes comunes: Limpia, moderna y 100% profesional */
             <div className="flex items-center gap-2.5 sm:gap-3">
               {shopPhone && (
                 <a
@@ -117,18 +117,9 @@ export default function Navbar({
                 </a>
               )}
 
-              {/* Botón de acceso directo para barberos */}
-              <button
-                onClick={onAbrirBarberoLogin}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-200 text-xs font-bold transition-all"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Soy Barbero</span>
-              </button>
-
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="hidden sm:inline">Turnos Disponibles</span>
+                <span>Turnos Disponibles</span>
               </span>
             </div>
           )}
