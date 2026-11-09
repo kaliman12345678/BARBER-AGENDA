@@ -3,24 +3,24 @@ import { Scissors, ShieldCheck, Calendar, LogOut, Phone } from 'lucide-react';
 
 export default function Navbar({ activeView, setActiveView, isAdminLoggedIn, onLogout, shopName = 'The Barber Club', shopPhone = '' }) {
   return (
-    <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          {/* Logo & Brand */}
+          {/* Logo & Brand estilo Konnexa SaaS */}
           <div 
             onClick={() => setActiveView('client')}
             className="flex items-center gap-3 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
-              <Scissors className="w-5 h-5 text-slate-950 transform -rotate-45" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+              <Scissors className="w-5 h-5 text-white transform -rotate-45" />
             </div>
             <div>
-              <span className="text-lg font-black tracking-wider text-slate-100 uppercase block font-serif">
+              <span className="text-base font-extrabold tracking-tight text-slate-900 block font-sans">
                 {shopName}
               </span>
-              <span className="text-xs text-amber-400 font-medium tracking-widest block -mt-1">
-                RESERVA DE TURNOS
+              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block -mt-0.5">
+                Portal de Gestión & Agenda
               </span>
             </div>
           </div>
@@ -31,10 +31,10 @@ export default function Navbar({ activeView, setActiveView, isAdminLoggedIn, onL
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setActiveView('client')}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                   activeView === 'client'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <Calendar className="w-4 h-4" />
@@ -43,21 +43,21 @@ export default function Navbar({ activeView, setActiveView, isAdminLoggedIn, onL
 
               <button
                 onClick={() => setActiveView('admin')}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                   activeView === 'admin'
-                    ? 'bg-slate-800 text-amber-400 border border-amber-500/30 shadow-md'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <ShieldCheck className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 <span>Panel Dueño</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               </button>
 
               <button
                 onClick={onLogout}
                 title="Cerrar sesión de administrador"
-                className="flex items-center gap-1.5 px-3 py-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors text-xs font-semibold border border-rose-500/20"
+                className="flex items-center gap-1.5 px-3 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors text-xs font-bold border border-rose-200"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Salir</span>
@@ -71,14 +71,14 @@ export default function Navbar({ activeView, setActiveView, isAdminLoggedIn, onL
                   href={`https://wa.me/${shopPhone.replace(/[^0-9]/g, '')}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300 hover:text-amber-400 hover:border-amber-500/30 transition-all"
+                  className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700 hover:text-blue-600 hover:border-blue-300 transition-all font-medium"
                 >
-                  <Phone className="w-3.5 h-3.5 text-amber-400" />
+                  <Phone className="w-3.5 h-3.5 text-blue-600" />
                   <span>{shopPhone}</span>
                 </a>
               )}
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>Turnos Disponibles</span>
               </span>
             </div>

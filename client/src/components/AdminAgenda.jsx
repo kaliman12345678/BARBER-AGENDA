@@ -137,19 +137,19 @@ export default function AdminAgenda({ barberos, servicios }) {
     <div className="space-y-6">
       
       {/* Barra superior de controles */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 shadow-xs">
         
         {/* Selector de modo y selector de fecha */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Botones de Modo: Todas vs Por Día */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+          <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200/80">
             <button
               type="button"
               onClick={() => setVistaModo('todas')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 vistaModo === 'todas'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Ver Todas las Citas
@@ -159,8 +159,8 @@ export default function AdminAgenda({ barberos, servicios }) {
               onClick={() => setVistaModo('dia')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 vistaModo === 'dia'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Filtrar por Día
@@ -172,25 +172,25 @@ export default function AdminAgenda({ barberos, servicios }) {
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => moverDia(-1)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
                 title="Día anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
-              <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-amber-400" />
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
                 <input
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
-                  className="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer"
+                  className="bg-transparent text-slate-800 text-xs font-semibold focus:outline-none cursor-pointer"
                 />
               </div>
 
               <button
                 onClick={() => moverDia(1)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
                 title="Día siguiente"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -198,7 +198,7 @@ export default function AdminAgenda({ barberos, servicios }) {
 
               <button
                 onClick={() => setFecha(getTodayStr())}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold transition-colors"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-blue-600 text-xs font-bold transition-colors"
               >
                 Hoy
               </button>
@@ -208,16 +208,16 @@ export default function AdminAgenda({ barberos, servicios }) {
 
         {/* Filtro por barbero y botón Nueva Cita */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex-1 md:flex-initial">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-1 md:flex-initial">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
               value={barberoId}
               onChange={(e) => setBarberoId(e.target.value)}
-              className="bg-transparent text-white text-sm focus:outline-none cursor-pointer"
+              className="bg-transparent text-slate-800 text-sm focus:outline-none cursor-pointer font-medium"
             >
-              <option value="" className="bg-slate-900">Todos los Barberos</option>
+              <option value="">Todos los Barberos</option>
               {barberos.map(b => (
-                <option key={b.id} value={b.id} className="bg-slate-900">{b.nombre}</option>
+                <option key={b.id} value={b.id}>{b.nombre}</option>
               ))}
             </select>
           </div>
@@ -232,7 +232,7 @@ export default function AdminAgenda({ barberos, servicios }) {
               }));
               setMostrarModalNueva(true);
             }}
-            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 whitespace-nowrap transition-all"
+            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm flex items-center gap-2 shadow-md shadow-blue-500/20 whitespace-nowrap transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>Agendar Presencial</span>
@@ -244,19 +244,19 @@ export default function AdminAgenda({ barberos, servicios }) {
       {/* Título de la agenda */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-white capitalize">
+          <h3 className="text-xl font-bold text-slate-900 capitalize font-sans">
             {vistaModo === 'dia' ? formatDateReadable(fecha) : 'Historial de Citas Agendadas'}
           </h3>
-          <p className="text-xs text-slate-400">
-            Total de turnos visibles: <span className="text-amber-400 font-bold">{citas.length}</span>
-            {vistaModo === 'todas' && <span className="text-slate-500 ml-1">(ordenadas cronológicamente por las más recientes)</span>}
+          <p className="text-xs text-slate-500">
+            Total de turnos visibles: <span className="text-blue-600 font-bold">{citas.length}</span>
+            {vistaModo === 'todas' && <span className="text-slate-400 ml-1">(ordenadas cronológicamente por las más recientes)</span>}
           </p>
         </div>
         <button
           onClick={cargarCitas}
-          className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1.5 p-2 rounded-lg hover:bg-slate-800 transition-colors"
+          className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1.5 p-2 rounded-lg hover:bg-slate-100 transition-colors font-medium"
         >
-          <RotateCcw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
+          <RotateCcw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin text-blue-600' : ''}`} />
           <span>Actualizar</span>
         </button>
       </div>
@@ -264,14 +264,14 @@ export default function AdminAgenda({ barberos, servicios }) {
       {/* Lista de citas */}
       {cargando ? (
         <div className="py-16 text-center text-slate-400">
-          <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-xs">Cargando agenda...</p>
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-xs font-medium">Cargando agenda...</p>
         </div>
       ) : citas.length === 0 ? (
-        <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-2xl">
-          <CalendarIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h4 className="text-slate-300 font-bold text-base">No hay turnos para esta fecha</h4>
-          <p className="text-slate-500 text-xs mt-1">
+        <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h4 className="text-slate-800 font-bold text-base">No hay turnos para esta fecha</h4>
+          <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto">
             Los clientes pueden agendar desde el portal o puedes registrar un cliente presencial con el botón "Agendar Presencial".
           </p>
         </div>
@@ -287,56 +287,56 @@ export default function AdminAgenda({ barberos, servicios }) {
                 key={cita.id}
                 className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
                   isCompletada
-                    ? 'bg-slate-900/40 border-emerald-500/30 ring-1 ring-emerald-500/10'
+                    ? 'bg-emerald-50/40 border-emerald-200'
                     : isCancelada
-                    ? 'bg-slate-950/60 border-slate-800/80 opacity-60'
+                    ? 'bg-slate-50 border-slate-200 opacity-60'
                     : isNoAsistio
-                    ? 'bg-slate-950/60 border-rose-900/40 opacity-70'
-                    : 'bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-lg'
+                    ? 'bg-rose-50/50 border-rose-200 opacity-75'
+                    : 'bg-white border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md'
                 }`}
               >
                 <div>
                   {/* Encabezado de la cita: Hora y Estado */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-sm font-extrabold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-mono">
+                    <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-mono">
                       {formatTime12(cita.hora_inicio)} - {formatTime12(cita.hora_fin)}
                     </span>
                     <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                       isCompletada 
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         : isCancelada 
-                        ? 'bg-slate-800 text-slate-400 line-through'
+                        ? 'bg-slate-100 text-slate-600 line-through'
                         : isNoAsistio 
-                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                        : 'bg-blue-100 text-blue-800 border border-blue-200'
                     }`}>
                       {cita.estado === 'completada' ? 'Completado' : cita.estado}
                     </span>
                   </div>
 
                   {/* Datos del Cliente y Servicio */}
-                  <h4 className="text-base font-bold text-white flex items-center gap-2">
+                  <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
                     <span className="truncate">{cita.cliente_nombre}</span>
                   </h4>
 
-                  <div className="mt-2 space-y-1 text-xs text-slate-300">
+                  <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
                     <p className="flex items-center gap-2">
-                      <Scissors className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                      <span className="font-medium text-slate-200">{cita.servicio_nombre}</span>
-                      <span className="text-amber-400 font-bold ml-auto">{formatCOP(cita.precio_cobrado)}</span>
+                      <Scissors className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                      <span className="font-semibold text-slate-800">{cita.servicio_nombre}</span>
+                      <span className="text-emerald-700 font-extrabold ml-auto">{formatCOP(cita.precio_cobrado)}</span>
                     </p>
-                    <p className="flex items-center gap-2 text-slate-400">
+                    <p className="flex items-center gap-2 text-slate-500">
                       <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                      <a href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-emerald-400 underline">
+                      <a href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 underline font-medium">
                         {cita.cliente_telefono}
                       </a>
                     </p>
-                    <p className="text-slate-400 text-[11px]">
-                      Barbero: <span className="text-white font-medium">{cita.barbero_nombre}</span>
+                    <p className="text-slate-500 text-[11px]">
+                      Barbero: <span className="text-slate-800 font-semibold">{cita.barbero_nombre}</span> • Fecha: <span className="text-slate-800 font-medium">{cita.fecha}</span>
                     </p>
                     {cita.notas && (
-                      <p className="text-slate-400 text-[11px] italic bg-slate-950/40 p-2 rounded-lg mt-1 border border-slate-800">
+                      <p className="text-slate-600 text-[11px] italic bg-slate-50 p-2.5 rounded-lg mt-1 border border-slate-200">
                         "{cita.notas}"
                       </p>
                     )}
@@ -344,12 +344,12 @@ export default function AdminAgenda({ barberos, servicios }) {
                 </div>
 
                 {/* Acciones de Estado */}
-                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-1 text-xs">
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1 text-xs">
                   {cita.estado !== 'completada' && (
                     <button
                       onClick={() => cambiarEstadoCita(cita.id, 'completada')}
                       title="Marcar como atendido y cobrado"
-                      className="flex-1 py-1.5 px-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-lg font-bold border border-emerald-500/30 transition-all flex items-center justify-center gap-1"
+                      className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg font-bold border border-emerald-200 hover:border-emerald-600 transition-all flex items-center justify-center gap-1 shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Completar</span>
@@ -361,22 +361,22 @@ export default function AdminAgenda({ barberos, servicios }) {
                       <button
                         onClick={() => cambiarEstadoCita(cita.id, 'no_asistio')}
                         title="Marcar como cliente no asistió"
-                        className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg font-medium transition-all"
+                        className="py-1.5 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-semibold"
                       >
                         No asistió
                       </button>
                       <button
                         onClick={() => cambiarEstadoCita(cita.id, 'cancelada')}
                         title="Cancelar cita y liberar horario"
-                        className="py-1.5 px-2 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white rounded-lg font-medium transition-all"
+                        className="py-1.5 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                       >
-                        Cancelar
+                        <XCircle className="w-4 h-4" />
                       </button>
                     </>
                   )}
 
                   {cita.estado === 'completada' && (
-                    <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 ml-auto">
+                    <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 ml-auto">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Listo para liquidación
                     </span>
@@ -389,19 +389,19 @@ export default function AdminAgenda({ barberos, servicios }) {
         </div>
       )}
 
-      {/* MODAL PARA AGENDAR CITA PRESENCIAL (WALK-IN) */}
+      {/* MODAL PARA AGENDAR CITA PRESENCIAL (WALK-IN) ESTILO SAAS */}
       {mostrarModalNueva && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-1 font-serif">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-1 font-sans">
               Agendar Turno Presencial
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-slate-500 mb-4">
               Registra un cliente que llegó directamente a la barbería o llamó por teléfono.
             </p>
 
             {errorNueva && (
-              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{errorNueva}</span>
               </div>
@@ -409,14 +409,14 @@ export default function AdminAgenda({ barberos, servicios }) {
 
             <form onSubmit={handleCrearCitaManual} className="space-y-3.5 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Barbero Asignado *
                 </label>
                 <select
                   required
                   value={nuevaCita.barbero_id}
                   onChange={(e) => setNuevaCita({ ...nuevaCita, barbero_id: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 >
                   <option value="">Selecciona barbero</option>
                   {barberos.map(b => (
@@ -426,14 +426,14 @@ export default function AdminAgenda({ barberos, servicios }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Servicio a Realizar *
                 </label>
                 <select
                   required
                   value={nuevaCita.servicio_id}
                   onChange={(e) => setNuevaCita({ ...nuevaCita, servicio_id: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 >
                   <option value="">Selecciona servicio</option>
                   {servicios.map(s => (
@@ -446,7 +446,7 @@ export default function AdminAgenda({ barberos, servicios }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Fecha *
                   </label>
                   <input
@@ -454,11 +454,11 @@ export default function AdminAgenda({ barberos, servicios }) {
                     required
                     value={nuevaCita.fecha}
                     onChange={(e) => setNuevaCita({ ...nuevaCita, fecha: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Hora Inicio *
                   </label>
                   <input
@@ -466,13 +466,13 @@ export default function AdminAgenda({ barberos, servicios }) {
                     required
                     value={nuevaCita.hora_inicio}
                     onChange={(e) => setNuevaCita({ ...nuevaCita, hora_inicio: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Nombre del Cliente *
                 </label>
                 <input
@@ -481,12 +481,12 @@ export default function AdminAgenda({ barberos, servicios }) {
                   placeholder="Nombre y apellido"
                   value={nuevaCita.cliente_nombre}
                   onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_nombre: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Teléfono / WhatsApp
                 </label>
                 <input
@@ -494,7 +494,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                   placeholder="Ej. 300 123 4567"
                   value={nuevaCita.cliente_telefono}
                   onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_telefono: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -502,14 +502,14 @@ export default function AdminAgenda({ barberos, servicios }) {
                 <button
                   type="button"
                   onClick={() => setMostrarModalNueva(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={guardandoNueva}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold disabled:opacity-50 shadow-md shadow-blue-500/20"
                 >
                   {guardandoNueva ? 'Guardando...' : 'Agendar Cita'}
                 </button>

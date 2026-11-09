@@ -111,7 +111,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-blue-600 selection:text-white">
       
       {/* Barra de Navegación Superior */}
       <Navbar
@@ -149,9 +149,9 @@ export default function App() {
       )}
 
       {/* Pie de página con acceso discreto para el dueño */}
-      <footer className="border-t border-slate-900 py-6 text-xs text-slate-500 bg-slate-950/80">
+      <footer className="border-t border-slate-200 py-6 text-xs text-slate-500 bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>
+          <p className="font-medium text-slate-500">
             {shopConfig.nombre_barberia} • Todos los derechos reservados.
           </p>
 
@@ -159,9 +159,9 @@ export default function App() {
           <button
             onClick={handleAbrirAdminDesdeFooter}
             title="Acceso exclusivo administración"
-            className="text-slate-600 hover:text-slate-400 transition-colors flex items-center gap-1.5 text-[11px] py-1 px-2 rounded-lg hover:bg-slate-900"
+            className="text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-1.5 text-[11px] py-1 px-2.5 rounded-lg hover:bg-slate-100 font-medium"
           >
-            <Lock className="w-3 h-3" />
+            <Lock className="w-3 h-3 text-slate-400" />
             <span>Acceso Administración</span>
           </button>
         </div>
