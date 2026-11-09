@@ -9,11 +9,16 @@ import {
   AlertCircle, 
   Plus, 
   Phone, 
-  Filter,
-  DollarSign,
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw
+  Filter, 
+  ChevronLeft, 
+  ChevronRight, 
+  RotateCcw,
+  UserCheck,
+  Send,
+  Copy,
+  Check,
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 
@@ -38,6 +43,16 @@ export default function AdminAgenda({ barberos, servicios }) {
   });
   const [errorNueva, setErrorNueva] = useState('');
   const [guardandoNueva, setGuardandoNueva] = useState(false);
+
+  // Modal para Reasignar Barbero
+  const [citaAReasignar, setCitaAReasignar] = useState(null);
+  const [nuevoBarberoId, setNuevoBarberoId] = useState('');
+  const [guardandoReasignacion, setGuardandoReasignacion] = useState(false);
+  const [errorReasignacion, setErrorReasignacion] = useState('');
+
+  // Modal para Enviar al Barbero (Strictly NO phone / sensitive data)
+  const [citaAEnviar, setCitaAEnviar] = useState(null);
+  const [mensajeCopiado, setMensajeCopiado] = useState(false);
 
   useEffect(() => {
     cargarCitas();
@@ -122,7 +137,64 @@ export default function AdminAgenda({ barberos, servicios }) {
     }
   }
 
-  // Navegar días
+  // Ejecutar Reasignación de Barbero
+  async function handleGuardarReasignacion(e) {
+    e.preventDefault();
+    if (!nuevoBarberoId) {
+      setErrorReasignacion('Selecciona el nuevo barbero a asignar');
+      return;
+    }
+
+    setGuardandoReasignacion(true);
+    setErrorReasignacion('');
+
+    try {
+      const res = await fetch(`/api/citas/${citaAReasignar.id}/reasignar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barbero_id: Number(nuevoBarberoId),
+          usuario: 'Administrador'
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorReasignacion(data.error || 'Error al reasignar cita');
+        return;
+      }
+
+      setCitaAReasignar(null);
+      cargarCitas();
+    } catch (err) {
+      setErrorReasignacion('Error de conexión con el servidor');
+    } finally {
+      setGuardandoReasignacion(false);
+    }
+  }
+
+  // Generar mensaje confidencial para el barbero (SIN teléfono ni datos sensibles del cliente)
+  function construirMensajeBarbero(cita) {
+    return (
+      `💈 *NUEVO TURNO ASIGNADO*\n\n` +
+      `👤 *Cliente:* ${cita.cliente_nombre}\n` +
+      `✂️ *Servicio:* ${cita.servicio_nombre}\n` +
+      `📅 *Fecha:* ${cita.fecha}\n` +
+      `⏰ *Horario:* ${formatTime12(cita.hora_inicio)} - ${formatTime12(cita.hora_fin)}\n\n` +
+      `_Por favor confirma disponibilidad para este turno en el local._`
+    );
+  }
+
+  async function handleCopiarMensaje(texto) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setMensajeCopiado(true);
+      setTimeout(() => setMensajeCopiado(false), 2500);
+    } catch (err) {
+      console.error('Error al copiar:', err);
+    }
+  }
+
   function moverDia(delta) {
     const [y, m, d] = fecha.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -326,24 +398,67 @@ export default function AdminAgenda({ barberos, servicios }) {
                       <span className="font-semibold text-slate-800">{cita.servicio_nombre}</span>
                       <span className="text-emerald-700 font-extrabold ml-auto">{formatCOP(cita.precio_cobrado)}</span>
                     </p>
+
+                    {/* Teléfono del cliente visible SOLO para el admin */}
                     <p className="flex items-center gap-2 text-slate-500">
                       <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                      <a href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 underline font-medium">
+                      <a href={`https://wa.me/${cita.cliente_telefono?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 underline font-medium">
                         {cita.cliente_telefono}
                       </a>
                     </p>
-                    <p className="text-slate-500 text-[11px]">
-                      Barbero: <span className="text-slate-800 font-semibold">{cita.barbero_nombre}</span> • Fecha: <span className="text-slate-800 font-medium">{cita.fecha}</span>
-                    </p>
+
+                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] flex items-center justify-between">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Barbero Asignado:</span>
+                        <span className="text-slate-900 font-bold">{cita.barbero_nombre}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Fecha:</span>
+                        <span className="text-slate-700 font-medium">{cita.fecha}</span>
+                      </div>
+                    </div>
+
                     {cita.notas && (
                       <p className="text-slate-600 text-[11px] italic bg-slate-50 p-2.5 rounded-lg mt-1 border border-slate-200">
                         "{cita.notas}"
                       </p>
                     )}
                   </div>
+
+                  {/* ACCIONES DE ASIGNACIÓN & ENVÍO SEGURO AL BARBERO */}
+                  {!isCancelada && (
+                    <div className="mt-3.5 pt-3 border-t border-dashed border-slate-200 grid grid-cols-2 gap-2">
+                      
+                      {/* Botón Reasignar Barbero */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCitaAReasignar(cita);
+                          setNuevoBarberoId(String(cita.barbero_id));
+                          setErrorReasignacion('');
+                        }}
+                        className="py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-blue-200 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Reasignar</span>
+                      </button>
+
+                      {/* Botón Enviar al Barbero (Confidencial: Sin teléfono ni datos sensibles) */}
+                      <button
+                        type="button"
+                        onClick={() => setCitaAEnviar(cita)}
+                        className="py-1.5 px-2 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-emerald-200 transition-all flex items-center justify-center gap-1.5"
+                        title="Enviar resumen al barbero sin datos sensibles"
+                      >
+                        <Send className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Enviar al Barbero</span>
+                      </button>
+
+                    </div>
+                  )}
                 </div>
 
-                {/* Acciones de Estado */}
+                {/* Acciones de Estado de la Cita */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1 text-xs">
                   {cita.estado !== 'completada' && (
                     <button
@@ -389,7 +504,185 @@ export default function AdminAgenda({ barberos, servicios }) {
         </div>
       )}
 
-      {/* MODAL PARA AGENDAR CITA PRESENCIAL (WALK-IN) ESTILO SAAS */}
+      {/* MODAL PARA REASIGNAR BARBERO A LA CITA */}
+      {citaAReasignar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 font-sans">
+                  Reasignar Barbero
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cambia el barbero que atenderá este turno
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl mb-4 text-xs space-y-1">
+              <p className="font-bold text-slate-800">
+                Cliente: <span className="text-blue-600">{citaAReasignar.cliente_nombre}</span>
+              </p>
+              <p className="text-slate-600">
+                Servicio: <span className="font-semibold">{citaAReasignar.servicio_nombre}</span> • Horario: {formatTime12(citaAReasignar.hora_inicio)} - {formatTime12(citaAReasignar.hora_fin)}
+              </p>
+              <p className="text-slate-500">
+                Barbero actual: <span className="font-semibold text-slate-700">{citaAReasignar.barbero_nombre}</span>
+              </p>
+            </div>
+
+            {errorReasignacion && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{errorReasignacion}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleGuardarReasignacion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                  Seleccionar Nuevo Barbero Responsable:
+                </label>
+                <select
+                  required
+                  value={nuevoBarberoId}
+                  onChange={(e) => setNuevoBarberoId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  {barberos.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.nombre} {String(b.id) === String(citaAReasignar.barbero_id) ? '(Actual)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-[11px] text-blue-800 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  El sistema registrará esta reasignación en el libro de auditoría histórico para control de administración.
+                </span>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCitaAReasignar(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoReasignacion}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50"
+                >
+                  {guardandoReasignacion ? 'Reasignando...' : 'Confirmar Reasignación'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA ENVIAR CITA AL BARBERO (STRICT CONFIDENTIALITY: SIN TELÉFONO NI DATOS PERSONALES) */}
+      {citaAEnviar && (() => {
+        const barberoAsignado = barberos.find(b => String(b.id) === String(citaAEnviar.barbero_id));
+        const textoConfidencial = construirMensajeBarbero(citaAEnviar);
+        const telefonoBarberoLimpio = barberoAsignado?.telefono ? barberoAsignado.telefono.replace(/[^0-9]/g, '') : '';
+        const whatsappUrl = telefonoBarberoLimpio 
+          ? `https://wa.me/${telefonoBarberoLimpio}?text=${encodeURIComponent(textoConfidencial)}` 
+          : null;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+              
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Send className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 font-sans">
+                    Enviar Turno a {citaAEnviar.barbero_nombre}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Notifica al barbero de forma directa y 100% confidencial
+                  </p>
+                </div>
+              </div>
+
+              {/* Mensaje de Seguridad / Privacidad de Datos */}
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Protección de Datos Activa</span>
+                  <span className="text-[11px] text-emerald-700">
+                    El mensaje generado solo contiene el nombre del cliente, horario y servicio. 
+                    <strong> NO incluye teléfono, correo ni notas privadas</strong> para resguardar la privacidad.
+                  </span>
+                </div>
+              </div>
+
+              {/* Vista previa del mensaje */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-xs text-slate-800 whitespace-pre-line leading-relaxed mb-4">
+                {textoConfidencial}
+              </div>
+
+              <div className="space-y-2">
+                {whatsappUrl ? (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition-all"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Abrir WhatsApp de {citaAEnviar.barbero_nombre}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                ) : (
+                  <p className="text-[11px] text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-center font-medium">
+                    ⚠️ {citaAEnviar.barbero_nombre} no tiene teléfono registrado. Puedes copiar el texto abajo para enviárselo por cualquier medio.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleCopiarMensaje(textoConfidencial)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  {mensajeCopiado ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">¡Mensaje Copiado al Portapapeles!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-slate-500" />
+                      <span>Copiar Texto al Portapapeles</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCitaAEnviar(null)}
+                  className="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL PARA AGENDAR CITA PRESENCIAL (WALK-IN) */}
       {mostrarModalNueva && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl">

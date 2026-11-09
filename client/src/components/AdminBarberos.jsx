@@ -1,5 +1,22 @@
 import React, { useState } from 'react';
-import { User, Plus, Edit2, Trash2, Check, X, Phone, Clock, Percent, ShieldCheck, AlertCircle, Upload } from 'lucide-react';
+import { 
+  User, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  Check, 
+  X, 
+  Phone, 
+  Clock, 
+  Percent, 
+  ShieldCheck, 
+  AlertCircle, 
+  Upload,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 import { formatTime12 } from '../utils/helpers';
 
 const DIAS_SEMANA = [
@@ -23,16 +40,22 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     porcentaje_comision: 50,
     horario_inicio: '09:00',
     horario_fin: '20:00',
-    dias_laborales: '1,2,3,4,5,6'
+    dias_laborales: '1,2,3,4,5,6',
+    pin: '1234'
   });
 
   const [guardando, setGuardando] = useState(false);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [error, setError] = useState('');
 
-  // Edición rápida de porcentajes individuales en tarjetas
+  // Edición rápida de comisiones
   const [porcentajesEditables, setPorcentajesEditables] = useState({});
   const [guardandoComisionId, setGuardandoComisionId] = useState(null);
+
+  // Edición rápida de PIN de acceso portal
+  const [pinsEditables, setPinsEditables] = useState({});
+  const [guardandoPinId, setGuardandoPinId] = useState(null);
+  const [mostrarPins, setMostrarPins] = useState({});
 
   async function handleGuardarComisionRapida(barberoId, nuevoPorcentaje) {
     const val = Number(nuevoPorcentaje);
@@ -57,6 +80,31 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       console.error('Error guardando comisión:', err);
     } finally {
       setGuardandoComisionId(null);
+    }
+  }
+
+  async function handleGuardarPinRapido(barberoId, nuevoPin) {
+    if (!nuevoPin || nuevoPin.length < 4) return;
+
+    setGuardandoPinId(barberoId);
+    try {
+      const res = await fetch(`/api/barberos/${barberoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: nuevoPin.trim() })
+      });
+      if (res.ok) {
+        if (onRecargar) onRecargar();
+        setPinsEditables(prev => {
+          const copy = { ...prev };
+          delete copy[barberoId];
+          return copy;
+        });
+      }
+    } catch (err) {
+      console.error('Error actualizando PIN:', err);
+    } finally {
+      setGuardandoPinId(null);
     }
   }
 
@@ -97,7 +145,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       porcentaje_comision: 50,
       horario_inicio: '09:00',
       horario_fin: '20:00',
-      dias_laborales: '1,2,3,4,5,6'
+      dias_laborales: '1,2,3,4,5,6',
+      pin: '1234'
     });
     setError('');
     setModalAbierto(true);
@@ -112,7 +161,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       porcentaje_comision: b.porcentaje_comision || 50,
       horario_inicio: b.horario_inicio || '09:00',
       horario_fin: b.horario_fin || '20:00',
-      dias_laborales: b.dias_laborales || '1,2,3,4,5,6'
+      dias_laborales: b.dias_laborales || '1,2,3,4,5,6',
+      pin: b.pin || '1234'
     });
     setError('');
     setModalAbierto(true);
@@ -155,8 +205,17 @@ export default function AdminBarberos({ barberos, onRecargar }) {
         return;
       }
 
+      // Si además estamos editando y cambió el PIN
+      if (barberoEditando && form.pin) {
+        await fetch(`/api/barberos/${barberoEditando.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: form.pin.trim() })
+        });
+      }
+
       setModalAbierto(false);
-      onRecargar();
+      if (onRecargar) onRecargar();
     } catch (err) {
       setError('Error de comunicación con el servidor');
     } finally {
@@ -168,70 +227,52 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     const nuevoEstado = b.activo ? 0 : 1;
     try {
       await fetch(`/api/barberos/${b.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activo: nuevoEstado })
       });
-      onRecargar();
+      if (onRecargar) onRecargar();
     } catch (err) {
-      console.error(err);
-    }
-  }
-
-  async function handleEliminar(id) {
-    if (!confirm('¿Seguro que deseas eliminar o desactivar a este barbero? Si tiene citas pasadas, su historial se conservará pero no aparecerá para nuevas reservas.')) return;
-    try {
-      const res = await fetch(`/api/barberos/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        onRecargar();
-      }
-    } catch (err) {
-      console.error(err);
+      console.error('Error al actualizar estado:', err);
     }
   }
 
   return (
     <div className="space-y-6">
       
-      {/* Encabezado y botón nuevo */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Encabezado */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
         <div>
-          <h3 className="text-xl font-bold text-white font-serif">
-            Equipo de Barberos
+          <h3 className="text-xl font-bold text-slate-900 font-sans">
+            Equipo de Barberos & Accesos
           </h3>
-          <p className="text-xs text-slate-400">
-            Administra a tu personal, horarios de atención y su porcentaje (%) de comisión para pagos.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Administra los barberos, sus comisiones individuales y sus claves PIN para su portal personal confidencial.
           </p>
         </div>
         <button
           onClick={abrirModalNuevo}
-          className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all"
+          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Agregar Barbero</span>
         </button>
       </div>
 
-      {/* Mensaje de comisiones individuales */}
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3 text-xs text-amber-300">
-        <Percent className="w-5 h-5 text-amber-400 flex-shrink-0" />
-        <div>
-          <span className="font-bold block text-white text-sm">Comisiones Individuales por Barbero</span>
-          <span>Cada barbero gana un porcentaje personalizado según su experiencia o acuerdo. Modifícalo directamente en la tarjeta de cada uno o en el botón de editar.</span>
-        </div>
-      </div>
-
-      {/* Lista de Barberos */}
+      {/* Tarjetas de Barberos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {barberos.map((b) => {
           const dias = b.dias_laborales ? b.dias_laborales.split(',').map(Number) : [];
+          const pinVisible = mostrarPins[b.id];
+          const pinActual = pinsEditables[b.id] ?? (b.pin || '1234');
+
           return (
             <div
               key={b.id}
               className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
                 b.activo
-                  ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-lg'
-                  : 'bg-slate-950/60 border-slate-800/60 opacity-60'
+                  ? 'bg-white border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md'
+                  : 'bg-slate-50 border-slate-200 opacity-60'
               }`}
             >
               <div>
@@ -239,34 +280,40 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   <img
                     src={b.foto_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&h=150&fit=crop&crop=faces'}
                     alt={b.nombre}
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-700"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-100 shadow-xs"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-white text-base truncate">
+                      <h4 className="font-bold text-slate-900 text-base truncate font-sans">
                         {b.nombre}
                       </h4>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        b.activo ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                        b.activo ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
                       }`}>
                         {b.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
-                    {b.telefono && (
-                      <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
-                        <Phone className="w-3.5 h-3.5 text-amber-500" />
+                    {b.telefono ? (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                        <Phone className="w-3.5 h-3.5 text-blue-600" />
                         <span>{b.telefono}</span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-600 italic mt-1">
+                        Sin teléfono registrado
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Detalles: Comisión Individual y Horario */}
-                <div className="space-y-2.5 text-xs bg-slate-950/40 p-3.5 rounded-xl border border-slate-800/80">
-                  <div className="flex justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-amber-500/20">
-                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                      <Percent className="w-3.5 h-3.5 text-amber-400" />
-                      Comisión Individual:
+                {/* Detalles: Comisión y Horario */}
+                <div className="space-y-2.5 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                  
+                  {/* Comisión Individual Editable */}
+                  <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-200">
+                    <span className="text-slate-700 font-semibold flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5 text-blue-600" />
+                      Comisión:
                     </span>
                     <div className="flex items-center gap-1.5">
                       <input
@@ -275,79 +322,110 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                         max="100"
                         value={porcentajesEditables[b.id] ?? b.porcentaje_comision}
                         onChange={(e) => setPorcentajesEditables(prev => ({ ...prev, [b.id]: e.target.value }))}
-                        className="w-14 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-2 py-1 text-center font-black text-amber-400 text-xs focus:outline-none"
+                        className="w-14 bg-slate-50 border border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-center font-extrabold text-blue-700 text-xs focus:outline-none"
                       />
-                      <span className="text-amber-400 font-bold text-xs">%</span>
+                      <span className="text-blue-700 font-bold text-xs">%</span>
                       {porcentajesEditables[b.id] !== undefined && Number(porcentajesEditables[b.id]) !== b.porcentaje_comision && (
                         <button
                           type="button"
                           disabled={guardandoComisionId === b.id}
                           onClick={() => handleGuardarComisionRapida(b.id, porcentajesEditables[b.id])}
-                          className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-black transition-all shadow-md shadow-amber-500/20"
+                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
                         >
                           {guardandoComisionId === b.id ? '...' : 'Guardar'}
                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* PIN de Acceso al Portal Personal */}
+                  <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-200">
+                    <span className="text-slate-700 font-semibold flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                      PIN Portal:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type={pinVisible ? 'text' : 'password'}
+                        maxLength={6}
+                        value={pinActual}
+                        onChange={(e) => setPinsEditables(prev => ({ ...prev, [b.id]: e.target.value }))}
+                        className="w-16 bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-lg px-2 py-1 text-center font-mono font-extrabold text-slate-800 text-xs focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMostrarPins(prev => ({ ...prev, [b.id]: !prev[b.id] }))}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                        title={pinVisible ? 'Ocultar PIN' : 'Ver PIN'}
+                      >
+                        {pinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                      {pinsEditables[b.id] !== undefined && pinsEditables[b.id] !== b.pin && (
+                        <button
+                          type="button"
+                          disabled={guardandoPinId === b.id}
+                          onClick={() => handleGuardarPinRapido(b.id, pinsEditables[b.id])}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
+                        >
+                          {guardandoPinId === b.id ? '...' : 'Guardar'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Horario */}
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400 flex items-center gap-1">
+                    <span className="text-slate-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
                       Horario:
                     </span>
-                    <span className="font-semibold text-slate-200">
+                    <span className="font-semibold text-slate-700">
                       {formatTime12(b.horario_inicio)} - {formatTime12(b.horario_fin)}
                     </span>
                   </div>
 
                   {/* Días laborales */}
-                  <div className="pt-1 border-t border-slate-800/60 flex items-center gap-1">
-                    <span className="text-slate-500 text-[10px] mr-1">Días:</span>
+                  <div className="pt-1 border-t border-slate-200 flex items-center gap-1">
+                    <span className="text-slate-400 text-[10px] mr-1">Días:</span>
                     {DIAS_SEMANA.map((d) => (
                       <span
                         key={d.id}
                         className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
                           dias.includes(d.id)
-                            ? 'bg-amber-500/20 text-amber-300 font-bold'
-                            : 'text-slate-600'
+                            ? 'bg-blue-100 text-blue-700 font-bold'
+                            : 'bg-slate-100 text-slate-400 opacity-50'
                         }`}
                       >
                         {d.nombre}
                       </span>
                     ))}
                   </div>
+
                 </div>
               </div>
 
-              {/* Acciones */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              {/* Botones de acción */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <button
+                  type="button"
                   onClick={() => handleToggleActivo(b)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-colors ${
                     b.activo
-                      ? 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
-                      : 'text-emerald-400 hover:bg-emerald-500/20'
+                      ? 'text-slate-600 hover:text-rose-600 hover:bg-rose-50'
+                      : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                   }`}
                 >
-                  {b.activo ? 'Pausar / Inactivar' : 'Reactivar'}
+                  {b.activo ? 'Desactivar' : 'Activar Barbero'}
                 </button>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => abrirModalEditar(b)}
-                    className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                    title="Editar información"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleEliminar(b.id)}
-                    className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                    title="Eliminar barbero"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => abrirModalEditar(b)}
+                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                  title="Editar datos del barbero"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
               </div>
 
             </div>
@@ -357,17 +435,17 @@ export default function AdminBarberos({ barberos, onRecargar }) {
 
       {/* MODAL CREAR / EDITAR BARBERO */}
       {modalAbierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-white mb-1 font-serif">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900 mb-1 font-sans">
               {barberoEditando ? 'Editar Barbero' : 'Nuevo Barbero'}
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Configura sus datos de contacto, horario laboral y su porcentaje de comisión para liquidaciones.
+            <p className="text-xs text-slate-500 mb-4">
+              Configura sus datos de contacto, horario laboral, comisión y PIN de acceso confidencial.
             </p>
 
             {error && (
-              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -375,7 +453,7 @@ export default function AdminBarberos({ barberos, onRecargar }) {
 
             <form onSubmit={handleGuardar} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Nombre Completo *
                 </label>
                 <input
@@ -384,13 +462,13 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   placeholder="Ej. Mateo Gómez"
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Teléfono / WhatsApp
                   </label>
                   <input
@@ -398,11 +476,12 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                     placeholder="Ej. 315 222 3344"
                     value={form.telefono}
                     onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-amber-400 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-semibold text-blue-700 uppercase mb-1 flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5" />
                     % Comisión *
                   </label>
@@ -415,21 +494,44 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                     placeholder="Ej. 50"
                     value={form.porcentaje_comision}
                     onChange={(e) => setForm({ ...form, porcentaje_comision: e.target.value })}
-                    className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-white font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-xl px-3 py-2 text-blue-700 font-bold focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
+              {/* PIN de Acceso al Portal Personal */}
+              <div>
+                <label className="block text-xs font-semibold text-emerald-700 uppercase mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    PIN de Acceso al Portal Personal *
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">Por defecto: 1234</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  placeholder="1234"
+                  value={form.pin}
+                  onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/[^0-9]/g, '') })}
+                  className="w-full bg-slate-50 border border-emerald-200 rounded-xl px-3 py-2 text-emerald-800 font-mono font-bold tracking-widest focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  El barbero usará este PIN para ver sus citas asignadas y sus ganancias personales sin ver datos de clientes ni utilidades del negocio.
+                </p>
+              </div>
+
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-400 uppercase">
+                <label className="block text-xs font-semibold text-slate-700 uppercase">
                   Foto de Perfil del Barbero
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
                     {form.foto_url ? (
                       <img src={form.foto_url} alt="Barbero" className="w-full h-full object-cover" />
                     ) : (
-                      <User className="w-6 h-6 text-slate-600" />
+                      <User className="w-6 h-6 text-slate-400" />
                     )}
                   </div>
                   <div className="flex-1">
@@ -443,17 +545,17 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                     />
                     <label
                       htmlFor="foto-barbero-upload"
-                      className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 transition-colors"
+                      className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 border border-slate-200 transition-colors"
                     >
                       <Upload className={`w-3.5 h-3.5 ${subiendoFoto ? 'animate-bounce' : ''}`} />
-                      <span>{subiendoFoto ? 'Subiendo...' : 'Subir foto desde celular/PC'}</span>
+                      <span>{subiendoFoto ? 'Subiendo...' : 'Subir foto'}</span>
                     </label>
                     <input
                       type="text"
                       placeholder="O pegar URL de imagen..."
                       value={form.foto_url}
                       onChange={(e) => setForm({ ...form, foto_url: e.target.value })}
-                      className="w-full mt-1.5 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] text-slate-300 font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full mt-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] text-slate-600 font-mono focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -461,32 +563,32 @@ export default function AdminBarberos({ barberos, onRecargar }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Hora Entrada
                   </label>
                   <input
                     type="time"
                     value={form.horario_inicio}
                     onChange={(e) => setForm({ ...form, horario_inicio: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Hora Salida
                   </label>
                   <input
                     type="time"
                     value={form.horario_fin}
                     onChange={(e) => setForm({ ...form, horario_fin: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {/* Días laborales */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1.5">
                   Días de la semana que atiende citas
                 </label>
                 <div className="flex gap-2">
@@ -500,8 +602,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                         onClick={() => toggleDia(d.id)}
                         className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
                           isChecked
-                            ? 'bg-amber-500 text-slate-950 border-amber-400'
-                            : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-700'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         {d.nombre}
@@ -515,14 +617,14 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                 <button
                   type="button"
                   onClick={() => setModalAbierto(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={guardando}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold disabled:opacity-50 shadow-md shadow-blue-500/20"
                 >
                   {guardando ? 'Guardando...' : 'Guardar Barbero'}
                 </button>

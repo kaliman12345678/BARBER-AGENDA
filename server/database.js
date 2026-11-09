@@ -134,6 +134,15 @@ function initDatabase() {
       valor TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS auditoria (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo_evento TEXT NOT NULL, -- 'CITA_CREADA', 'CITA_REASIGNADA', 'CITA_ESTADO', 'VENTA_PRODUCTO', 'COSTO_REGISTRADO', 'LIQUIDACION'
+      descripcion TEXT NOT NULL,
+      usuario TEXT DEFAULT 'admin', -- 'admin', 'cliente', o 'barbero:ID'
+      detalles_json TEXT,
+      fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS galeria_multimedia (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       titulo TEXT NOT NULL,
@@ -165,6 +174,14 @@ function initDatabase() {
   } catch (e) {}
   try {
     db.prepare("ALTER TABLE costos ADD COLUMN barbero_id INTEGER").run();
+  } catch (e) {}
+
+  // Migración segura para autenticación individual de barberos
+  try {
+    db.prepare("ALTER TABLE barberos ADD COLUMN pin TEXT DEFAULT '1234'").run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE barberos ADD COLUMN email TEXT").run();
   } catch (e) {}
 
   // Seed de productos de venta si no hay

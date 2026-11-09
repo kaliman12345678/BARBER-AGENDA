@@ -202,7 +202,7 @@ app.put('/api/barberos/:id', (req, res) => {
 
 app.patch('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
-  const { porcentaje_comision, activo } = req.body;
+  const { porcentaje_comision, activo, pin } = req.body;
 
   try {
     const barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
@@ -214,9 +214,166 @@ app.patch('/api/barberos/:id', (req, res) => {
     if (activo !== undefined) {
       db.prepare('UPDATE barberos SET activo = ? WHERE id = ?').run(activo ? 1 : 0, id);
     }
+    if (pin !== undefined && pin !== '') {
+      db.prepare('UPDATE barberos SET pin = ? WHERE id = ?').run(String(pin).trim(), id);
+    }
 
     const actualizado = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
     res.json({ success: true, message: 'Barbero actualizado', barbero: actualizado });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Autenticación de Barbero (Para su portal privado)
+app.post('/api/barberos/login', (req, res) => {
+  const { barbero_id, pin } = req.body;
+  if (!barbero_id || !pin) {
+    return res.status(400).json({ error: 'barbero_id y pin son requeridos' });
+  }
+
+  try {
+    const barbero = db.prepare('SELECT id, nombre, telefono, foto_url, porcentaje_comision, pin, activo FROM barberos WHERE id = ?').get(barbero_id);
+    if (!barbero) {
+      return res.status(404).json({ error: 'Barbero no encontrado' });
+    }
+    if (!barbero.activo) {
+      return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
+    }
+
+    if (String(barbero.pin || '1234') !== String(pin).trim()) {
+      return res.status(401).json({ error: 'PIN incorrecto' });
+    }
+
+    // Retornar perfil sin exponer el PIN
+    const { pin: _, ...perfilSeguro } = barbero;
+    res.json({
+      success: true,
+      message: `Bienvenido ${barbero.nombre}`,
+      token: `barbero_session_${barbero.id}_${Date.now()}`,
+      barbero: perfilSeguro
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Portal Barbero: Citas asignadas a este barbero (SIN teléfono ni datos sensibles)
+app.get('/api/barbero-portal/citas', (req, res) => {
+  const { barbero_id, fecha, desde, hasta } = req.query;
+  if (!barbero_id) {
+    return res.status(400).json({ error: 'barbero_id es requerido' });
+  }
+
+  try {
+    let sql = `
+      SELECT 
+        c.id,
+        c.fecha,
+        c.hora_inicio,
+        c.hora_fin,
+        c.estado,
+        c.precio_cobrado,
+        c.notas,
+        c.cliente_nombre, -- SOLO el nombre de pila
+        s.nombre as servicio_nombre,
+        s.duracion_minutos
+      FROM citas c
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barbero_id = ?
+    `;
+    const params = [barbero_id];
+
+    if (fecha) {
+      sql += ' AND c.fecha = ?';
+      params.push(fecha);
+    }
+    if (desde && hasta) {
+      sql += ' AND c.fecha BETWEEN ? AND ?';
+      params.push(desde, hasta);
+    }
+
+    sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
+    const citas = db.prepare(sql).all(...params);
+
+    res.json(citas);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Portal Barbero: Métricas personales de utilidad y rentabilidad propia (NO ve finanzas del local)
+app.get('/api/barbero-portal/balance', (req, res) => {
+  const { barbero_id, desde, hasta } = req.query;
+  if (!barbero_id) {
+    return res.status(400).json({ error: 'barbero_id es requerido' });
+  }
+
+  try {
+    const barbero = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ?').get(barbero_id);
+    if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
+
+    // 1. Citas completadas de este barbero
+    let sqlCitas = `SELECT COUNT(*) as count, SUM(precio_cobrado) as total FROM citas WHERE barbero_id = ? AND estado = 'completada'`;
+    const paramsCitas = [barbero_id];
+    if (desde && hasta) {
+      sqlCitas += ' AND fecha BETWEEN ? AND ?';
+      paramsCitas.push(desde, hasta);
+    }
+    const citasData = db.prepare(sqlCitas).get(...paramsCitas);
+    const totalServicios = citasData.count || 0;
+    const totalBrutoServicios = citasData.total || 0;
+
+    // 2. Ventas de productos realizadas por este barbero
+    let sqlProd = `SELECT COUNT(*) as count, SUM(total_venta) as total_venta, SUM(monto_comision) as total_comision FROM ventas_productos WHERE barbero_id = ?`;
+    const paramsProd = [barbero_id];
+    if (desde && hasta) {
+      sqlProd += ' AND fecha BETWEEN ? AND ?';
+      paramsProd.push(desde, hasta);
+    }
+    const prodData = db.prepare(sqlProd).get(...paramsProd);
+    const totalVentasProductos = prodData.total_venta || 0;
+    const comisionProductos = prodData.total_comision || 0;
+
+    // 3. Liquidaciones recibidas/pagadas
+    let sqlLiq = `SELECT SUM(total_pagado) as total_pagado, COUNT(*) as count FROM liquidaciones WHERE barbero_id = ?`;
+    const paramsLiq = [barbero_id];
+    if (desde && hasta) {
+      sqlLiq += ' AND fecha_pago BETWEEN ? AND ?';
+      paramsLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
+    }
+    const liqData = db.prepare(sqlLiq).get(...paramsLiq);
+    const totalYaPagado = liqData.total_pagado || 0;
+
+    // 4. Citas pendientes por liquidar
+    let sqlPend = `SELECT COUNT(*) as count, SUM(precio_cobrado) as total FROM citas WHERE barbero_id = ? AND estado = 'completada' AND liquidacion_id IS NULL`;
+    const paramsPend = [barbero_id];
+    if (desde && hasta) {
+      sqlPend += ' AND fecha BETWEEN ? AND ?';
+      paramsPend.push(desde, hasta);
+    }
+    const pendData = db.prepare(sqlPend).get(...paramsPend);
+    const brutoPendiente = pendData.total || 0;
+    const comisionServiciosPendiente = Math.round(brutoPendiente * ((barbero.porcentaje_comision || 50) / 100));
+
+    const comisionServiciosTotal = Math.round(totalBrutoServicios * ((barbero.porcentaje_comision || 50) / 100));
+    const gananciaTotalBarbero = comisionServiciosTotal + comisionProductos;
+
+    res.json({
+      barbero,
+      total_servicios: totalServicios,
+      total_bruto_generado: totalBrutoServicios + totalVentasProductos,
+      total_bruto_servicios: totalBrutoServicios,
+      total_bruto_productos: totalVentasProductos,
+      porcentaje_comision: barbero.porcentaje_comision || 50,
+      ganancia_total_barbero: gananciaTotalBarbero,
+      comision_servicios: comisionServiciosTotal,
+      comision_productos: comisionProductos,
+      total_ya_cobrado: totalYaPagado,
+      pendiente_por_cobrar: comisionServiciosPendiente,
+      servicios_pendientes_count: pendData.count || 0
+    });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -501,6 +658,20 @@ app.post('/api/citas', (req, res) => {
       notas || ''
     );
 
+    const barberoAsignado = db.prepare('SELECT nombre FROM barberos WHERE id = ?').get(barbero_id);
+    const nombreBarbero = barberoAsignado ? barberoAsignado.nombre : 'un barbero';
+
+    // Registrar en auditoría
+    try {
+      db.prepare(`
+        INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json)
+        VALUES ('CITA_CREADA', ?, 'cliente', ?)
+      `).run(
+        `Nueva cita agendada para ${cliente_nombre.trim()} con ${nombreBarbero} (${fecha} a las ${hora_inicio})`,
+        JSON.stringify({ cita_id: result.lastInsertRowid, barbero_id, servicio_id, fecha, hora_inicio })
+      );
+    } catch (e) {}
+
     res.status(201).json({
       id: result.lastInsertRowid,
       message: 'Turno agendado exitosamente',
@@ -513,6 +684,48 @@ app.post('/api/citas', (req, res) => {
       }
     });
 
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reasignar cita a otro barbero (Permite al admin cambiar de barbero a su criterio)
+app.patch('/api/citas/:id/reasignar', (req, res) => {
+  const { id } = req.params;
+  const targetBarberoId = req.body.nuevo_barbero_id || req.body.barbero_id;
+  const { motivo, usuario } = req.body;
+
+  if (!targetBarberoId) {
+    return res.status(400).json({ error: 'barbero_id o nuevo_barbero_id es requerido' });
+  }
+
+  try {
+    const cita = db.prepare('SELECT c.*, b.nombre as barbero_antiguo_nombre FROM citas c JOIN barberos b ON c.barbero_id = b.id WHERE c.id = ?').get(id);
+    if (!cita) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    const nuevoBarbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(targetBarberoId);
+    if (!nuevoBarbero) return res.status(404).json({ error: 'Nuevo barbero no encontrado' });
+
+    // Actualizar barbero en la cita
+    db.prepare('UPDATE citas SET barbero_id = ? WHERE id = ?').run(targetBarberoId, id);
+
+    // Registrar en auditoría
+    try {
+      db.prepare(`
+        INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json)
+        VALUES ('CITA_REASIGNADA', ?, ?, ?)
+      `).run(
+        `Cita de ${cita.cliente_nombre} reasignada de ${cita.barbero_antiguo_nombre} a ${nuevoBarbero.nombre}. Motivo: ${motivo || 'Decisión administrativa'}`,
+        usuario || 'Administrador',
+        JSON.stringify({ cita_id: id, barbero_anterior: cita.barbero_id, barbero_nuevo: targetBarberoId, motivo })
+      );
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: `Cita reasignada a ${nuevoBarbero.nombre} con éxito`,
+      nuevo_barbero: nuevoBarbero
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -532,6 +745,19 @@ app.patch('/api/citas/:id/estado', (req, res) => {
     } else {
       db.prepare('UPDATE citas SET estado = ? WHERE id = ?').run(estado, id);
     }
+
+    try {
+      const c = db.prepare('SELECT c.cliente_nombre, b.nombre as barbero_nombre FROM citas c JOIN barberos b ON c.barbero_id = b.id WHERE c.id = ?').get(id);
+      if (c) {
+        db.prepare('INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json) VALUES (?, ?, ?, ?)').run(
+          'CITA_ESTADO',
+          `Cita de ${c.cliente_nombre} con ${c.barbero_nombre} cambiada a estado: ${estado.toUpperCase()}`,
+          'admin',
+          JSON.stringify({ cita_id: id, nuevo_estado: estado })
+        );
+      }
+    } catch (e) {}
+
     res.json({ success: true, message: `Estado actualizado a ${estado}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1406,6 +1632,52 @@ app.delete('/api/multimedia/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM galeria_multimedia WHERE id = ?').run(id);
     res.json({ success: true, message: 'Publicación eliminada' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ----------------------------------------------------
+// 11. AUDITORÍA E HISTORIAL TOTAL DE MOVIMIENTOS
+// ----------------------------------------------------
+app.get('/api/auditoria', (req, res) => {
+  const { tipo, desde, hasta, limite } = req.query;
+  try {
+    let sql = 'SELECT * FROM auditoria WHERE 1=1';
+    const params = [];
+
+    if (tipo) {
+      sql += ' AND tipo_evento = ?';
+      params.push(tipo);
+    }
+    if (desde && hasta) {
+      sql += ' AND fecha_hora BETWEEN ? AND ?';
+      params.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
+    }
+
+    sql += ' ORDER BY fecha_hora DESC LIMIT ?';
+    params.push(limite ? Number(limite) : 200);
+
+    const registros = db.prepare(sql).all(...params);
+    res.json(registros);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint SSE / Long-Polling para Notificaciones en Vivo de Nuevas Citas
+app.get('/api/notificaciones/recientes', (req, res) => {
+  try {
+    // Últimas citas creadas en las últimas 24 horas
+    const recientes = db.prepare(`
+      SELECT c.id, c.cliente_nombre, c.fecha, c.hora_inicio, c.creado_en, b.nombre as barbero_nombre, s.nombre as servicio_nombre
+      FROM citas c
+      JOIN barberos b ON c.barbero_id = b.id
+      JOIN servicios s ON c.servicio_id = s.id
+      ORDER BY c.id DESC
+      LIMIT 10
+    `).all();
+    res.json(recientes);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

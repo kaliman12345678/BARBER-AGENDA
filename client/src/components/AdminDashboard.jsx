@@ -15,7 +15,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Package,
-  Calculator
+  Calculator,
+  History
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -29,6 +30,8 @@ import AdminConfig from './AdminConfig';
 import AdminMediaManager from './AdminMediaManager';
 import AdminProductos from './AdminProductos';
 import AdminRentabilidad from './AdminRentabilidad';
+import AdminAuditoria from './AdminAuditoria';
+import AdminNotifications from './AdminNotifications';
 
 export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [activeTab, setActiveTab] = useState('agenda');
@@ -66,6 +69,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
     { id: 'rentabilidad', label: 'Rentabilidad & Proyección', icon: Calculator, badge: 'Simulador' },
     { id: 'barberos', label: 'Equipo Barberos', icon: Users },
     { id: 'servicios', label: 'Servicios & Tarifas', icon: Scissors },
+    { id: 'auditoria', label: 'Auditoría & Historial', icon: History, badge: 'Seguridad' },
     { id: 'media', label: 'Galería & Redes', icon: InstagramIcon, badge: 'Social' },
     { id: 'config', label: 'Ajustes del Local', icon: Settings },
   ];
@@ -74,16 +78,45 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const ActiveIcon = activeTabObj.icon;
 
   return (
-    <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-6">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-4">
       
+      {/* Barra superior de estado & Notificaciones en tiempo real */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl px-4 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+            <ActiveIcon className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-extrabold text-slate-900 font-sans leading-tight">
+              {activeTabObj.label}
+            </h2>
+            <p className="text-[11px] text-slate-400">
+              {shopConfig?.nombre_barberia || 'The Barber Club'} • Panel de Administración
+            </p>
+          </div>
+        </div>
+
+        {/* Campana de Notificaciones en Vivo de nuevas citas */}
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>En Vivo</span>
+          </div>
+
+          <AdminNotifications 
+            onVerCitaEnAgenda={() => setActiveTab('agenda')} 
+          />
+        </div>
+      </div>
+
       {/* Botón flotante / barra móvil para abrir el menú desplegable en pantallas pequeñas */}
-      <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+      <div className="md:hidden bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between shadow-xs">
         <button
           onClick={() => setMobileMenuOpen(true)}
           className="flex items-center gap-2.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors"
         >
           <Menu className="w-4 h-4 text-blue-600" />
-          <span>Menú de Opciones</span>
+          <span>Menú de Módulos</span>
         </button>
 
         <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
@@ -97,7 +130,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
         <div className="fixed inset-0 z-50 md:hidden animate-fadeIn">
           {/* Fondo oscuro backdrop */}
           <div 
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
             onClick={() => setMobileMenuOpen(false)}
           ></div>
 
@@ -132,7 +165,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
                       }}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                         isActive
-                          ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/60 shadow-sm'
+                          ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/60 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                       }`}
                     >
@@ -165,7 +198,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
         
         {/* SIDEBAR VERTICAL EN ESCRITORIO (A LA IZQUIERDA) ESTILO KONNEXA SAAS */}
         <aside 
-          className={`hidden md:flex flex-col bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-sm sticky top-24 transition-all duration-300 flex-shrink-0 ${
+          className={`hidden md:flex flex-col bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs sticky top-24 transition-all duration-300 flex-shrink-0 ${
             sidebarExpanded ? 'w-64' : 'w-20'
           }`}
         >
@@ -208,7 +241,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
                       : 'justify-center p-2.5'
                   } ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/80 shadow-sm'
+                      ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/80 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
@@ -275,6 +308,16 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               />
             )}
 
+            {activeTab === 'balance' && (
+              <AdminBalance />
+            )}
+
+            {activeTab === 'rentabilidad' && (
+              <AdminRentabilidad 
+                barberos={barberos}
+              />
+            )}
+
             {activeTab === 'barberos' && (
               <AdminBarberos 
                 barberos={barberos} 
@@ -289,19 +332,13 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               />
             )}
 
+            {activeTab === 'auditoria' && (
+              <AdminAuditoria />
+            )}
+
             {activeTab === 'media' && (
               <AdminMediaManager 
                 barberos={barberos} 
-              />
-            )}
-
-            {activeTab === 'balance' && (
-              <AdminBalance />
-            )}
-
-            {activeTab === 'rentabilidad' && (
-              <AdminRentabilidad 
-                barberos={barberos}
               />
             )}
 
