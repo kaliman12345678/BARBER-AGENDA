@@ -2,6 +2,7 @@
   "name": "barber-api",
   "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "main": "index.js",
   "dependencies": {
     "cors": "^2.8.5",
