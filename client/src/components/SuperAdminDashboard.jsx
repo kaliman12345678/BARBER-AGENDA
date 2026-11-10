@@ -454,7 +454,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     sessionStorage.setItem('barberia_admin_token', 'auth-admin-session-token');
     sessionStorage.setItem('current_barberia_slug', barberia.slug);
     if (onSeleccionarBarberia) {
-      onSeleccionarBarberia(barberia.slug);
+      onSeleccionarBarberia(barberia.slug, true);
     } else {
       window.location.href = `/?b=${barberia.slug}&admin=1`;
     }

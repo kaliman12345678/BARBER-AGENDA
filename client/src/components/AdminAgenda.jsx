@@ -141,7 +141,7 @@ export default function AdminAgenda({ barberos, servicios }) {
         servicio_id: servicios[0]?.id || '',
         cliente_nombre: '',
         cliente_telefono: '',
-        fecha: fecha,
+        fecha: getTodayStr(),
         hora_inicio: '10:00',
         notas: ''
       });
@@ -211,16 +211,6 @@ export default function AdminAgenda({ barberos, servicios }) {
     }
   }
 
-  function moverDia(delta) {
-    const [y, m, d] = fecha.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() + delta);
-    const ny = date.getFullYear();
-    const nm = String(date.getMonth() + 1).padStart(2, '0');
-    const nd = String(date.getDate()).padStart(2, '0');
-    setFecha(`${ny}-${nm}-${nd}`);
-  }
-
   return (
     <div className="space-y-4">
       
@@ -275,11 +265,11 @@ export default function AdminAgenda({ barberos, servicios }) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold text-slate-900 capitalize font-sans">
-            {vistaModo === 'dia' ? formatDateReadable(fecha) : 'Historial de Citas Agendadas'}
+            Historial de Citas Agendadas
           </h3>
           <p className="text-xs text-slate-500">
             Total de turnos visibles: <span className="text-blue-600 font-bold">{citas.length}</span>
-            {vistaModo === 'todas' && <span className="text-slate-400 ml-1">(ordenadas cronológicamente por las más recientes)</span>}
+            <span className="text-slate-400 ml-1">(ordenadas cronológicamente por las más recientes)</span>
           </p>
         </div>
         <button

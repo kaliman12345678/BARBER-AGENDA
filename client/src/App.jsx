@@ -175,12 +175,19 @@ export default function App() {
     window.history.pushState(null, '', `/?b=${tenantSlug}`);
   }
 
-  function cambiarBarberia(nuevoSlug) {
+  function cambiarBarberia(nuevoSlug, entrarComoAdmin = false) {
     setTenantSlug(nuevoSlug);
     window.__BARBERIA_SLUG = nuevoSlug;
     sessionStorage.setItem('current_barberia_slug', nuevoSlug);
-    setActiveView('client');
-    window.history.pushState(null, '', `/?b=${nuevoSlug}`);
+    if (entrarComoAdmin) {
+      sessionStorage.setItem('barberia_admin_token', 'auth-admin-session-token');
+      setIsAdminLoggedIn(true);
+      setActiveView('admin');
+      window.history.pushState(null, '', `/?b=${nuevoSlug}&admin=1`);
+    } else {
+      setActiveView('client');
+      window.history.pushState(null, '', `/?b=${nuevoSlug}`);
+    }
   }
 
   // Vista exclusiva de SuperAdmin
