@@ -4,15 +4,18 @@ const fs = require('fs');
 
 let dbAdapter;
 
-if (process.env.DATABASE_URL) {
+const SUPABASE_DEFAULT_URL = 'postgresql://postgres:misservicioS%231@db.hxkyinybjephrgcunxom.supabase.co:5432/postgres';
+const effectiveDbUrl = process.env.DATABASE_URL || (process.env.VERCEL ? SUPABASE_DEFAULT_URL : null);
+
+if (effectiveDbUrl) {
   // ----------------------------------------------------
   // CONEXIÓN A SUPABASE POSTGRESQL (PRODUCCIÓN & NUBE)
   // ----------------------------------------------------
   const { Pool } = require('pg');
-  console.log('🔌 Conectando a Supabase PostgreSQL mediante DATABASE_URL...');
+  console.log('🔌 Conectando a Supabase PostgreSQL...');
 
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: effectiveDbUrl,
     ssl: { rejectUnauthorized: false }
   });
 

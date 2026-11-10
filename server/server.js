@@ -14,6 +14,10 @@ app.use(express.json());
 
 // Normalización de rutas para Vercel Serverless
 app.use((req, res, next) => {
+  const original = req.headers['x-matched-path'] || req.originalUrl;
+  if ((req.url === '/api/index.js' || req.url === '/api/index' || req.url === '/api' || req.url === '/') && original && original !== '/api/index.js') {
+    req.url = original;
+  }
   if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/uploads') && !req.url.startsWith('/assets')) {
     req.url = '/api' + req.url;
   }
@@ -21,11 +25,22 @@ app.use((req, res, next) => {
 });
 
 // Directorio para almacenar imágenes y videos subidos por el usuario
-const uploadsDir = path.resolve(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.resolve(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Advertencia creando uploadsDir:', e.message);
 }
 app.use('/uploads', express.static(uploadsDir));
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', serverless: !!process.env.VERCEL, timestamp: new Date().toISOString() });
+});
+app.get('/api/index.js', (req, res) => {
+  res.json({ status: 'ok', message: 'API ready' });
+});
 
 // Configuración de Multer para carga de archivos
 const storage = multer.diskStorage({
