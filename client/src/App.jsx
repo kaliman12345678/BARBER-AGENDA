@@ -227,6 +227,7 @@ export default function App() {
         onAbrirLogin={() => setShowLoginModal(true)}
         shopName={shopConfig.nombre_barberia}
         shopPhone={shopConfig.telefono_barberia}
+        shopLogo={shopConfig.logo_url}
       />
 
       {/* Contenido Principal */}

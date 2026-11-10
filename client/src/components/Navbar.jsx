@@ -10,7 +10,8 @@ export default function Navbar({
   onLogoutBarbero,
   onAbrirLogin,
   shopName = 'The Barber Club', 
-  shopPhone = '' 
+  shopPhone = '',
+  shopLogo = ''
 }) {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
@@ -30,9 +31,17 @@ export default function Navbar({
             }}
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group"
           >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-white transform -rotate-45" />
-            </div>
+            {shopLogo ? (
+              <img
+                src={shopLogo}
+                alt={shopName}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shadow-sm border border-slate-200 group-hover:scale-105 transition-transform shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+                <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-white transform -rotate-45" />
+              </div>
+            )}
             <div className="min-w-0">
               <span className="text-sm sm:text-base font-extrabold tracking-tight text-slate-900 block font-sans truncate max-w-[170px] sm:max-w-xs">
                 {shopName}

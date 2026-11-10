@@ -16,6 +16,7 @@ import {
 import confetti from 'canvas-confetti';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr, getNextDays } from '../utils/helpers';
 import ClientMediaFeed from './ClientMediaFeed';
+import ClientReviewsSection from './ClientReviewsSection';
 
 export default function ClientBooking({ shopConfig }) {
   // Datos maestros
@@ -224,16 +225,26 @@ export default function ClientBooking({ shopConfig }) {
     <div className="max-w-4xl mx-auto px-4 py-8">
       
       {/* Encabezado Principal */}
-      <div className="text-center mb-6 sm:mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold tracking-wider uppercase mb-2 sm:mb-3">
+      <div className="text-center mb-6 sm:mb-8 space-y-2">
+        {shopConfig.logo_url && (
+          <div className="flex justify-center mb-2">
+            <img
+              src={shopConfig.logo_url}
+              alt={shopConfig.nombre_barberia}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-md border-2 border-white ring-2 ring-blue-500/20"
+            />
+          </div>
+        )}
+
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold tracking-wider uppercase mb-1">
           <Sparkles className="w-3.5 h-3.5" />
           Agenda tu Cita en Línea
         </div>
         <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight font-sans">
           {shopConfig.nombre_barberia || 'The Barber Club'}
         </h1>
-        <p className="text-slate-500 text-xs sm:text-sm mt-1 sm:mt-2 max-w-lg mx-auto">
-          Selecciona a tu barbero de confianza, el servicio deseado y elige tu horario disponible al instante.
+        <p className="text-slate-500 text-xs sm:text-sm max-w-lg mx-auto">
+          {shopConfig.eslogan_barberia || 'Selecciona a tu barbero de confianza, el servicio deseado y elige tu horario disponible al instante.'}
         </p>
       </div>
 
@@ -785,6 +796,9 @@ export default function ClientBooking({ shopConfig }) {
           </div>
         </div>
       )}
+
+      {/* SECCIÓN PÚBLICA DE RESEÑAS Y CALIFICACIONES DE CLIENTES */}
+      <ClientReviewsSection shopConfig={shopConfig} />
 
     </div>
   );

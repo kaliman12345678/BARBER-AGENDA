@@ -18,7 +18,8 @@ import {
   Calculator,
   History,
   Crown,
-  Award
+  Award,
+  Star
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -35,6 +36,8 @@ import AdminRentabilidad from './AdminRentabilidad';
 import AdminAuditoria from './AdminAuditoria';
 import AdminNotifications from './AdminNotifications';
 import AdminClientes from './AdminClientes';
+import AdminResenas from './AdminResenas';
+import ThemeSelector, { THEMES } from './ThemeSelector';
 
 export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [activeTab, setActiveTab] = useState('agenda');
@@ -42,6 +45,14 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [barberos, setBarberos] = useState([]);
   const [servicios, setServicios] = useState([]);
+  const [temaActual, setTemaActual] = useState(() => localStorage.getItem('barberia_tema_admin') || 'claro');
+
+  function handleCambiarTema(nuevoTema) {
+    setTemaActual(nuevoTema);
+    localStorage.setItem('barberia_tema_admin', nuevoTema);
+  }
+
+  const temaObj = THEMES.find(t => t.id === temaActual) || THEMES[0];
 
   useEffect(() => {
     cargarCatalogos();
@@ -78,6 +89,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
     { id: 'servicios', label: 'Servicios & Tarifas', icon: Scissors, visible: true },
     { id: 'auditoria', label: 'Auditoría & Historial', icon: History, badge: 'Seguridad', visible: modulos.auditoria !== false },
     { id: 'media', label: 'Galería & Redes', icon: InstagramIcon, badge: 'Social', visible: modulos.galeria !== false },
+    { id: 'resenas', label: 'Reseñas & Reputación', icon: Star, badge: 'Públicas', visible: true },
     { id: 'config', label: 'Ajustes del Local', icon: Settings, visible: true },
   ];
 
@@ -100,17 +112,17 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
     'bg-slate-500/10 text-slate-600 border-slate-300';
 
   return (
-    <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-4">
+    <div className={`max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-4 min-h-screen transition-colors duration-300 ${temaObj.containerClass}`}>
       
       {/* Barra superior de estado & Notificaciones en tiempo real */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl px-4 py-3 flex items-center justify-between shadow-xs">
+      <div className={`border rounded-2xl px-4 py-3 flex items-center justify-between shadow-xs transition-colors duration-300 ${temaObj.headerClass}`}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
             <ActiveIcon className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-slate-900 font-sans leading-tight">
+              <h2 className="text-sm font-extrabold font-sans leading-tight">
                 {activeTabObj.label}
               </h2>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold flex items-center gap-1 ${planColorClass}`}>
@@ -118,14 +130,19 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
                 <span>Plan {planName}</span>
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] opacity-70">
               {shopConfig?.nombre_barberia || 'The Barber Club'} • Panel de Administración
             </p>
           </div>
         </div>
 
-        {/* Campana de Notificaciones en Vivo de nuevas citas */}
-        <div className="flex items-center gap-3">
+        {/* Notificaciones & Selector de Tema exclusivo */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <ThemeSelector 
+            temaActual={temaActual} 
+            onCambiarTema={handleCambiarTema} 
+          />
+
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>En Vivo</span>
@@ -369,6 +386,12 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
             {activeTab === 'media' && (
               <AdminMediaManager 
                 barberos={barberos} 
+              />
+            )}
+
+            {activeTab === 'resenas' && (
+              <AdminResenas 
+                shopConfig={shopConfig} 
               />
             )}
 

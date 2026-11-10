@@ -45,6 +45,7 @@ import {
   Save
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
+import ThemeSelector, { THEMES } from './ThemeSelector';
 
 const COLOR_PRESETS = [
   { name: 'Azul EXAKTA', hex: '#2563eb' },
@@ -65,6 +66,14 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [seccionActiva, setSeccionActiva] = useState('inicio');
   const [filtroTiempo, setFiltroTiempo] = useState('hoy');
   const [sidebarMovilAbierto, setSidebarMovilAbierto] = useState(false);
+  const [temaActual, setTemaActual] = useState(() => localStorage.getItem('barberia_tema_superadmin') || 'claro');
+
+  function handleCambiarTema(nuevoTema) {
+    setTemaActual(nuevoTema);
+    localStorage.setItem('barberia_tema_superadmin', nuevoTema);
+  }
+
+  const temaObj = THEMES.find(t => t.id === temaActual) || THEMES[0];
 
   // Datos
   const [barberias, setBarberias] = useState([]);
@@ -746,10 +755,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className={`min-h-screen flex font-sans antialiased selection:bg-blue-600 selection:text-white transition-colors duration-300 ${temaObj.containerClass}`}>
 
       {/* SIDEBAR ESCRITORIO */}
-      <aside className="hidden md:flex w-64 bg-white border-r border-slate-200/90 flex-col justify-between shrink-0 sticky top-0 h-screen z-30">
+      <aside className={`hidden md:flex w-64 border-r flex-col justify-between shrink-0 sticky top-0 h-screen z-30 transition-colors duration-300 ${temaObj.sidebarClass}`}>
         <SidebarContent />
       </aside>
 
@@ -760,7 +769,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
             onClick={() => setSidebarMovilAbierto(false)}
           />
-          <div className="fixed inset-y-0 left-0 max-w-xs w-full bg-white shadow-2xl z-10 animate-slideInRight">
+          <div className={`fixed inset-y-0 left-0 max-w-xs w-full shadow-2xl z-10 animate-slideInRight transition-colors duration-300 ${temaObj.sidebarClass}`}>
             <SidebarContent />
           </div>
         </div>
@@ -770,28 +779,34 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* HEADER SUPERIOR */}
-        <header className="h-16 bg-white border-b border-slate-200/90 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-20">
+        <header className={`h-16 border-b px-4 sm:px-8 flex items-center justify-between sticky top-0 z-20 transition-colors duration-300 ${temaObj.headerClass}`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarMovilAbierto(true)}
-              className="md:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
+              className="md:hidden p-2 opacity-70 hover:opacity-100 rounded-xl hover:bg-slate-500/10 transition-colors"
             >
               <Menu className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm text-slate-900">EXAKTA</span>
-              <span className="text-slate-300">/</span>
-              <span className="text-xs text-slate-500 font-medium capitalize">{seccionActiva}</span>
+              <span className="font-extrabold text-sm tracking-tight">EXAKTA</span>
+              <span className="opacity-30">/</span>
+              <span className="text-xs opacity-70 font-medium capitalize">{seccionActiva}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Selector de temas personalizable exclusivo SuperAdmin */}
+            <ThemeSelector 
+              temaActual={temaActual} 
+              onCambiarTema={handleCambiarTema} 
+            />
+
             <div className="text-right hidden sm:block">
-              <span className="text-[11px] text-slate-500 font-medium capitalize block leading-tight">
+              <span className="text-[11px] opacity-70 font-medium capitalize block leading-tight">
                 {fechaHoyStr}
               </span>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-[10px] opacity-50 font-mono">
                 {horaHoyStr}
               </span>
             </div>

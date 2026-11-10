@@ -412,7 +412,7 @@ app.post('/api/auth/verify-pin', async (req, res) => {
 });
 
 app.put('/api/configuracion', async (req, res) => {
-  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan } = req.body;
+  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url } = req.body;
   try {
     const tenantId = await getTenantId(req);
 
@@ -423,7 +423,8 @@ app.put('/api/configuracion', async (req, res) => {
           direccion = COALESCE(?, direccion),
           pin_admin = COALESCE(?, pin_admin),
           color_primario = COALESCE(?, color_primario),
-          eslogan = COALESCE(?, eslogan)
+          eslogan = COALESCE(?, eslogan),
+          logo_url = COALESCE(?, logo_url)
       WHERE id = ?
     `);
     await stmt.run(
@@ -433,6 +434,7 @@ app.put('/api/configuracion', async (req, res) => {
       pin_admin || null,
       color_primario || null,
       eslogan || null,
+      logo_url !== undefined ? logo_url : null,
       tenantId
     );
 
@@ -440,8 +442,18 @@ app.put('/api/configuracion', async (req, res) => {
     if (nombre_barberia) await update.run('nombre_barberia', nombre_barberia);
     if (telefono_barberia) await update.run('telefono_barberia', telefono_barberia);
     if (direccion_barberia) await update.run('direccion_barberia', direccion_barberia);
+    if (logo_url) await update.run('logo_url', logo_url);
 
-    res.json({ success: true, message: 'Configuración actualizada' });
+    const mem = memoryBarberias.find(b => Number(b.id) === Number(tenantId));
+    if (mem) {
+      if (nombre_barberia) mem.nombre = nombre_barberia;
+      if (telefono_barberia) mem.telefono = telefono_barberia;
+      if (direccion_barberia) mem.direccion = direccion_barberia;
+      if (logo_url !== undefined) mem.logo_url = logo_url;
+      if (color_primario) mem.color_primario = color_primario;
+    }
+
+    res.json({ success: true, message: 'Configuración actualizada exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2009,6 +2021,121 @@ app.patch('/api/clientes/:id', async (req, res) => {
   };
   memoryClientes.unshift(newClient);
   res.json({ success: true, cliente: newClient });
+});
+
+// ----------------------------------------------------
+// 6.2 RESEÑAS & CALIFICACIONES DE CLIENTES (PÚBLICAS)
+// ----------------------------------------------------
+let memoryResenas = [
+  {
+    id: 1,
+    barberia_id: 1,
+    cliente_nombre: 'Alejandro Restrepo',
+    calificacion: 5,
+    comentario: '¡Excelente servicio! Carlos me hizo el mejor degradado que he tenido, y la atención con bebida y música es de 10 estrellas.',
+    servicio_nombre: 'Corte Clásico / Fade',
+    fecha: '2026-11-08',
+    aprobada: 1
+  },
+  {
+    id: 2,
+    barberia_id: 1,
+    cliente_nombre: 'David Morales',
+    calificacion: 5,
+    comentario: 'Puntuales, pulcros y el arreglo de barba con navaja caliente es una experiencia premium. Muy recomendado.',
+    servicio_nombre: 'Arreglo de Barba VIP',
+    fecha: '2026-11-06',
+    aprobada: 1
+  },
+  {
+    id: 3,
+    barberia_id: 1,
+    cliente_nombre: 'Camilo Torres',
+    calificacion: 4,
+    comentario: 'Gran ambiente y barberos muy capacitados. La reserva por la app fue súper rápida y sin filas.',
+    servicio_nombre: 'Combo Corte + Barba',
+    fecha: '2026-11-04',
+    aprobada: 1
+  }
+];
+
+app.get('/api/resenas', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  try {
+    let sql = `
+      SELECT r.* 
+      FROM resenas r 
+      WHERE r.barberia_id = ? 
+      ORDER BY r.id DESC
+    `;
+    let rows = [];
+    try {
+      rows = await db.prepare(sql).all(tenantId);
+    } catch (_) {}
+
+    const memRows = memoryResenas.filter(r => r.barberia_id === tenantId);
+    const combinadas = (rows && rows.length > 0) ? rows : memRows;
+
+    const promedio = combinadas.length > 0
+      ? (combinadas.reduce((acc, r) => acc + Number(r.calificacion || 5), 0) / combinadas.length).toFixed(1)
+      : '5.0';
+
+    res.json({
+      resenas: combinadas,
+      total: combinadas.length,
+      promedio: Number(promedio)
+    });
+  } catch (err) {
+    console.warn('Error en GET /api/resenas:', err.message);
+    const fall = memoryResenas.filter(r => r.barberia_id === tenantId);
+    res.json({ resenas: fall, total: fall.length, promedio: 4.9 });
+  }
+});
+
+app.post('/api/resenas', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { cliente_nombre, calificacion, comentario, servicio_nombre } = req.body;
+
+  if (!cliente_nombre || !calificacion || !comentario) {
+    return res.status(400).json({ error: 'Nombre, calificación y comentario son obligatorios' });
+  }
+
+  const nuevaResena = {
+    id: Date.now(),
+    barberia_id: tenantId,
+    cliente_nombre: cliente_nombre.trim(),
+    calificacion: Math.min(5, Math.max(1, Number(calificacion) || 5)),
+    comentario: comentario.trim(),
+    servicio_nombre: servicio_nombre || 'Servicio de Barbería',
+    fecha: new Date().toISOString().split('T')[0],
+    aprobada: 1
+  };
+
+  try {
+    await db.prepare(`
+      INSERT INTO resenas (barberia_id, cliente_nombre, calificacion, comentario, servicio_nombre, fecha, aprobada)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).run(tenantId, nuevaResena.cliente_nombre, nuevaResena.calificacion, nuevaResena.comentario, nuevaResena.servicio_nombre, nuevaResena.fecha);
+  } catch (_) {}
+
+  memoryResenas.unshift(nuevaResena);
+  res.status(201).json({ success: true, resena: nuevaResena });
+});
+
+app.delete('/api/resenas/:id', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+
+  try {
+    await db.prepare('DELETE FROM resenas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+  } catch (_) {}
+
+  const idx = memoryResenas.findIndex(r => r.barberia_id === tenantId && String(r.id) === String(id));
+  if (idx !== -1) {
+    memoryResenas.splice(idx, 1);
+  }
+
+  res.json({ success: true, message: 'Reseña eliminada' });
 });
 
 // ----------------------------------------------------
