@@ -8,6 +8,7 @@ const originalFetch = window.fetch;
 window.fetch = async (input, init = {}) => {
   const currentSlug = window.__BARBERIA_SLUG || sessionStorage.getItem('current_barberia_slug') || 'the-barber-club';
   const newInit = { ...init };
+  newInit.credentials = 'same-origin';
   newInit.headers = {
     ...newInit.headers,
     'x-barberia-slug': currentSlug,
