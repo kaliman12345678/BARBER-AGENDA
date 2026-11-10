@@ -10,8 +10,27 @@ db.pragma('foreign_keys = ON');
 
 function initDatabase() {
   db.exec(`
+    -- 0. TABLA MULTI-TENANT DE BARBERÍAS (PLAN B)
+    CREATE TABLE IF NOT EXISTS barberias (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT UNIQUE NOT NULL,
+      nombre TEXT NOT NULL,
+      eslogan TEXT,
+      logo_url TEXT,
+      color_primario TEXT DEFAULT '#2563eb',
+      color_secundario TEXT DEFAULT '#1e293b',
+      telefono TEXT,
+      direccion TEXT,
+      plan TEXT DEFAULT 'vip', -- 'basico', 'pro', 'vip'
+      modulos_activos TEXT, -- JSON con { agenda, portal_barberos, liquidaciones, costos, productos, rentabilidad, galeria, auditoria }
+      pin_admin TEXT DEFAULT '1234',
+      activo INTEGER DEFAULT 1,
+      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS barberos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       nombre TEXT NOT NULL,
       telefono TEXT,
       foto_url TEXT,
@@ -20,32 +39,38 @@ function initDatabase() {
       horario_fin TEXT DEFAULT '20:00',
       dias_laborales TEXT DEFAULT '1,2,3,4,5,6', -- 1=Lunes, 7=Domingo
       activo INTEGER DEFAULT 1,
-      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS servicios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       nombre TEXT NOT NULL,
       precio_cop INTEGER NOT NULL,
       duracion_minutos INTEGER NOT NULL DEFAULT 45,
       descripcion TEXT,
       activo INTEGER DEFAULT 1,
-      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS bloqueos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       barbero_id INTEGER, -- NULL significa bloqueo para toda la barbería
       fecha TEXT NOT NULL, -- YYYY-MM-DD
       hora_inicio TEXT NOT NULL, -- HH:mm
       hora_fin TEXT NOT NULL, -- HH:mm
       motivo TEXT NOT NULL,
       creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS liquidaciones (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       barbero_id INTEGER NOT NULL,
       fecha_inicio TEXT NOT NULL,
       fecha_fin TEXT NOT NULL,
@@ -58,11 +83,13 @@ function initDatabase() {
       metodo_pago TEXT DEFAULT 'Efectivo',
       fecha_pago DATETIME DEFAULT CURRENT_TIMESTAMP,
       notas TEXT,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE RESTRICT
     );
 
     CREATE TABLE IF NOT EXISTS citas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       barbero_id INTEGER NOT NULL,
       servicio_id INTEGER NOT NULL,
       cliente_nombre TEXT NOT NULL,
@@ -75,6 +102,7 @@ function initDatabase() {
       notas TEXT,
       liquidacion_id INTEGER,
       creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE RESTRICT,
       FOREIGN KEY (servicio_id) REFERENCES servicios (id) ON DELETE RESTRICT,
       FOREIGN KEY (liquidacion_id) REFERENCES liquidaciones (id) ON DELETE SET NULL
@@ -82,6 +110,7 @@ function initDatabase() {
 
     CREATE TABLE IF NOT EXISTS costos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       tipo TEXT DEFAULT 'egreso', -- 'egreso' o 'ingreso'
       categoria TEXT NOT NULL,
       descripcion TEXT NOT NULL,
@@ -91,11 +120,13 @@ function initDatabase() {
       barbero_id INTEGER,
       notas TEXT,
       creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS productos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       nombre TEXT NOT NULL,
       foto_url TEXT,
       stock INTEGER NOT NULL DEFAULT 0,
@@ -105,11 +136,13 @@ function initDatabase() {
       categoria TEXT DEFAULT 'Cuidado Capilar',
       descripcion TEXT,
       activo INTEGER DEFAULT 1,
-      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS ventas_productos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       producto_id INTEGER NOT NULL,
       cantidad INTEGER NOT NULL DEFAULT 1,
       precio_unitario INTEGER NOT NULL,
@@ -124,6 +157,7 @@ function initDatabase() {
       notas TEXT,
       liquidacion_id INTEGER,
       creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE RESTRICT,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE SET NULL,
       FOREIGN KEY (liquidacion_id) REFERENCES liquidaciones (id) ON DELETE SET NULL
@@ -136,15 +170,18 @@ function initDatabase() {
 
     CREATE TABLE IF NOT EXISTS auditoria (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       tipo_evento TEXT NOT NULL, -- 'CITA_CREADA', 'CITA_REASIGNADA', 'CITA_ESTADO', 'VENTA_PRODUCTO', 'COSTO_REGISTRADO', 'LIQUIDACION'
       descripcion TEXT NOT NULL,
       usuario TEXT DEFAULT 'admin', -- 'admin', 'cliente', o 'barbero:ID'
       detalles_json TEXT,
-      fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP
+      fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS galeria_multimedia (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barberia_id INTEGER DEFAULT 1,
       titulo TEXT NOT NULL,
       tipo TEXT DEFAULT 'imagen', -- 'imagen', 'video', 'instagram', 'youtube', 'tiktok'
       url_media TEXT NOT NULL,
@@ -154,6 +191,7 @@ function initDatabase() {
       orden INTEGER DEFAULT 0,
       activo INTEGER DEFAULT 1,
       creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (barberia_id) REFERENCES barberias (id) ON DELETE CASCADE,
       FOREIGN KEY (barbero_id) REFERENCES barberos (id) ON DELETE SET NULL
     );
   `);
@@ -164,9 +202,52 @@ function initDatabase() {
   setConfig.run('telefono_barberia', '+57 300 123 4567');
   setConfig.run('direccion_barberia', 'Calle Principal # 10 - 20');
   setConfig.run('pin_admin', '1234');
+  setConfig.run('pin_superadmin', '9999'); // Clave de acceso a /superadmin
   setConfig.run('intervalo_minutos', '30'); // Granularidad del selector de horas
   setConfig.run('hora_apertura', '08:00');
   setConfig.run('hora_cierre', '20:00');
+
+  // Inicializar barbería #1 por defecto (The Barber Club) con Plan VIP completo
+  try {
+    const modulosVip = JSON.stringify({
+      agenda: true,
+      max_barberos: 999,
+      portal_barberos: true,
+      liquidaciones: true,
+      costos: true,
+      notificaciones_audio: true,
+      productos: true,
+      rentabilidad: true,
+      galeria: true,
+      auditoria: true
+    });
+
+    const bCount = db.prepare('SELECT COUNT(*) as count FROM barberias').get().count;
+    if (bCount === 0) {
+      db.prepare(`
+        INSERT INTO barberias (id, slug, nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo)
+        VALUES (1, 'the-barber-club', 'The Barber Club', 'Estilo clásico con técnica moderna', '', '#2563eb', '#1e293b', '+57 300 123 4567', 'Calle Principal # 10 - 20', 'vip', ?, '1234', 1)
+      `).run(modulosVip);
+    }
+  } catch (e) {
+    console.error('Error inicializando barberia #1:', e);
+  }
+
+  // Migración segura para añadir columna barberia_id a todas las tablas existentes
+  const tablasConTenant = [
+    'barberos', 'servicios', 'bloqueos', 'liquidaciones', 
+    'citas', 'costos', 'productos', 'ventas_productos', 
+    'auditoria', 'galeria_multimedia'
+  ];
+
+  for (const tabla of tablasConTenant) {
+    try {
+      db.prepare(`ALTER TABLE ${tabla} ADD COLUMN barberia_id INTEGER DEFAULT 1`).run();
+    } catch (e) {}
+    try {
+      db.prepare(`UPDATE ${tabla} SET barberia_id = 1 WHERE barberia_id IS NULL`).run();
+    } catch (e) {}
+  }
 
   // Migración segura para columnas añadidas en costos
   try {

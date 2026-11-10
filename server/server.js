@@ -55,21 +55,22 @@ if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
 }
 
-// Helper para convertir HH:mm a minutos desde las 00:00
+// ----------------------------------------------------
+// HELPERS GENERALES Y MULTI-TENANT
+// ----------------------------------------------------
+
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
   const [hours, minutes] = timeStr.split(':').map(Number);
   return hours * 60 + minutes;
 }
 
-// Helper para convertir minutos a HH:mm
 function minutesToTime(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-// Helper para verificar solapamiento entre dos intervalos [inicio1, fin1] y [inicio2, fin2]
 function checkOverlap(start1, end1, start2, end2) {
   const s1 = timeToMinutes(start1);
   const e1 = timeToMinutes(end1);
@@ -78,32 +79,186 @@ function checkOverlap(start1, end1, start2, end2) {
   return Math.max(s1, s2) < Math.min(e1, e2);
 }
 
+function getDefaultModulesForPlan(plan) {
+  if (plan === 'basico') {
+    return {
+      agenda: true,
+      max_barberos: 2,
+      portal_barberos: false,
+      liquidaciones: false,
+      costos: false,
+      notificaciones_audio: true,
+      productos: false,
+      rentabilidad: false,
+      galeria: false,
+      auditoria: false
+    };
+  } else if (plan === 'pro') {
+    return {
+      agenda: true,
+      max_barberos: 5,
+      portal_barberos: true,
+      liquidaciones: true,
+      costos: true,
+      notificaciones_audio: true,
+      productos: true,
+      rentabilidad: false,
+      galeria: true,
+      auditoria: false
+    };
+  } else {
+    // vip
+    return {
+      agenda: true,
+      max_barberos: 999,
+      portal_barberos: true,
+      liquidaciones: true,
+      costos: true,
+      notificaciones_audio: true,
+      productos: true,
+      rentabilidad: true,
+      galeria: true,
+      auditoria: true
+    };
+  }
+}
+
+// Helper para extraer la barbería (tenant) a partir del request
+function getTenant(req) {
+  const slug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug;
+  const id = req.headers['x-barberia-id'] || req.query.barberia_id;
+
+  if (id) {
+    const b = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    if (b) return b;
+  }
+  if (slug) {
+    const b = db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
+    if (b) return b;
+  }
+  // Fallback a barberia id = 1 o primera existente
+  const def = db.prepare('SELECT * FROM barberias WHERE id = 1').get() || db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get();
+  return def || {
+    id: 1,
+    slug: 'the-barber-club',
+    nombre: 'The Barber Club',
+    plan: 'vip',
+    modulos_activos: JSON.stringify(getDefaultModulesForPlan('vip')),
+    activo: 1,
+    pin_admin: '1234'
+  };
+}
+
+function getTenantId(req) {
+  const tenant = getTenant(req);
+  return tenant ? tenant.id : 1;
+}
+
+// Helper para registrar eventos de auditoría por barbería
+function registrarAuditoria(tenantId, tipo_evento, descripcion, usuario, detalles_json) {
+  try {
+    db.prepare('INSERT INTO auditoria (barberia_id, tipo_evento, descripcion, usuario, detalles_json) VALUES (?, ?, ?, ?, ?)').run(
+      tenantId || 1,
+      tipo_evento,
+      descripcion,
+      usuario || 'Administración',
+      typeof detalles_json === 'object' ? JSON.stringify(detalles_json) : (detalles_json || null)
+    );
+  } catch (e) {
+    console.error('Error registrando auditoria:', e.message);
+  }
+}
+
 // ----------------------------------------------------
-// 1. CONFIGURACIÓN Y AUTENTICACIÓN
+// 1. CONFIGURACIÓN Y AUTENTICACIÓN MULTI-TENANT
 // ----------------------------------------------------
+
+// Información pública y configuración de la barbería actual
+app.get('/api/barberias/info', (req, res) => {
+  try {
+    const tenant = getTenant(req);
+    let modulos = {};
+    try {
+      modulos = typeof tenant.modulos_activos === 'string' ? JSON.parse(tenant.modulos_activos) : (tenant.modulos_activos || {});
+    } catch (e) {
+      modulos = getDefaultModulesForPlan(tenant.plan);
+    }
+
+    res.json({
+      id: tenant.id,
+      slug: tenant.slug,
+      nombre: tenant.nombre,
+      eslogan: tenant.eslogan || '',
+      logo_url: tenant.logo_url || '',
+      color_primario: tenant.color_primario || '#2563eb',
+      color_secundario: tenant.color_secundario || '#1e293b',
+      telefono: tenant.telefono || '',
+      direccion: tenant.direccion || '',
+      plan: tenant.plan || 'basico',
+      modulos_activos: modulos,
+      activo: tenant.activo
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Configuración general combinada con la barbería activa
 app.get('/api/configuracion', (req, res) => {
   try {
+    const tenant = getTenant(req);
     const rows = db.prepare('SELECT clave, valor FROM configuracion').all();
     const config = {};
     rows.forEach(r => {
-      // No exponer el pin_admin directamente
-      if (r.clave !== 'pin_admin') {
+      if (r.clave !== 'pin_admin' && r.clave !== 'pin_superadmin') {
         config[r.clave] = r.valor;
       }
     });
+
+    if (tenant) {
+      config.barberia_id = tenant.id;
+      config.slug = tenant.slug;
+      config.nombre_barberia = tenant.nombre;
+      config.eslogan_barberia = tenant.eslogan || '';
+      config.logo_url = tenant.logo_url || '';
+      config.color_primario = tenant.color_primario || '#2563eb';
+      config.color_secundario = tenant.color_secundario || '#1e293b';
+      config.telefono_barberia = tenant.telefono || config.telefono_barberia || '';
+      config.direccion_barberia = tenant.direccion || config.direccion_barberia || '';
+      config.plan = tenant.plan || 'basico';
+      config.activo = tenant.activo;
+      try {
+        config.modulos_activos = typeof tenant.modulos_activos === 'string' ? JSON.parse(tenant.modulos_activos) : (tenant.modulos_activos || {});
+      } catch (e) {
+        config.modulos_activos = getDefaultModulesForPlan(tenant.plan);
+      }
+    }
+
     res.json(config);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Verificar PIN del Administrador (dueño de la barbería)
 app.post('/api/auth/verify-pin', (req, res) => {
   const { pin } = req.body;
   try {
-    const row = db.prepare('SELECT valor FROM configuracion WHERE clave = ?').get('pin_admin');
-    const masterPin = row ? row.valor : '1234';
-    if (String(pin).trim() === String(masterPin).trim()) {
-      res.json({ success: true, token: 'auth-admin-session-token' });
+    const tenant = getTenant(req);
+    const tenantPin = tenant && tenant.pin_admin ? tenant.pin_admin : '1234';
+
+    // PIN Maestro SuperAdmin
+    const superRow = db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
+    const superPin = superRow ? superRow.valor : '9999';
+
+    if (String(pin).trim() === String(tenantPin).trim() || String(pin).trim() === String(superPin).trim()) {
+      res.json({
+        success: true,
+        token: 'auth-admin-session-token',
+        barberia_id: tenant.id,
+        barberia_nombre: tenant.nombre,
+        is_superadmin: String(pin).trim() === String(superPin).trim()
+      });
     } else {
       res.status(401).json({ success: false, message: 'PIN incorrecto' });
     }
@@ -112,30 +267,307 @@ app.post('/api/auth/verify-pin', (req, res) => {
   }
 });
 
+// Actualizar configuración por parte del Administrador de la barbería
 app.put('/api/configuracion', (req, res) => {
-  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin } = req.body;
+  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan } = req.body;
   try {
+    const tenantId = getTenantId(req);
+
+    // Guardar en tabla barberias
+    const stmt = db.prepare(`
+      UPDATE barberias
+      SET nombre = COALESCE(?, nombre),
+          telefono = COALESCE(?, telefono),
+          direccion = COALESCE(?, direccion),
+          pin_admin = COALESCE(?, pin_admin),
+          color_primario = COALESCE(?, color_primario),
+          eslogan = COALESCE(?, eslogan)
+      WHERE id = ?
+    `);
+    stmt.run(
+      nombre_barberia || null,
+      telefono_barberia || null,
+      direccion_barberia || null,
+      pin_admin || null,
+      color_primario || null,
+      eslogan || null,
+      tenantId
+    );
+
+    // Actualizar también tabla configuracion para compatibilidad
     const update = db.prepare('INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)');
     if (nombre_barberia) update.run('nombre_barberia', nombre_barberia);
     if (telefono_barberia) update.run('telefono_barberia', telefono_barberia);
     if (direccion_barberia) update.run('direccion_barberia', direccion_barberia);
-    if (pin_admin) update.run('pin_admin', pin_admin);
+
     res.json({ success: true, message: 'Configuración actualizada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Actualizar branding/personalización de la barbería
+app.patch('/api/barberias/config', (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, pin_admin } = req.body;
+
+    const stmt = db.prepare(`
+      UPDATE barberias
+      SET nombre = COALESCE(?, nombre),
+          eslogan = COALESCE(?, eslogan),
+          logo_url = COALESCE(?, logo_url),
+          color_primario = COALESCE(?, color_primario),
+          color_secundario = COALESCE(?, color_secundario),
+          telefono = COALESCE(?, telefono),
+          direccion = COALESCE(?, direccion),
+          pin_admin = COALESCE(?, pin_admin)
+      WHERE id = ?
+    `);
+    stmt.run(
+      nombre || null,
+      eslogan !== undefined ? eslogan : null,
+      logo_url !== undefined ? logo_url : null,
+      color_primario || null,
+      color_secundario || null,
+      telefono || null,
+      direccion || null,
+      pin_admin || null,
+      tenantId
+    );
+
+    const updated = db.prepare('SELECT * FROM barberias WHERE id = ?').get(tenantId);
+    res.json({ success: true, message: 'Barbería actualizada', barberia: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ----------------------------------------------------
-// 2. BARBEROS
+// 2. SUPERADMIN: GESTIÓN DE CLIENTES & PLANES (SAAS)
+// ----------------------------------------------------
+
+// Login SuperAdmin con PIN Maestro
+app.post('/api/superadmin/login', (req, res) => {
+  const { pin } = req.body;
+  try {
+    const row = db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
+    const masterPin = row ? row.valor : '9999';
+
+    if (String(pin).trim() === String(masterPin).trim()) {
+      res.json({ success: true, token: 'superadmin-master-session-token' });
+    } else {
+      res.status(401).json({ success: false, message: 'PIN Maestro incorrecto' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listar todas las barberías registradas con métricas rápidas
+app.get('/api/superadmin/barberias', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
+    const result = rows.map(b => {
+      let modulos = {};
+      try {
+        modulos = typeof b.modulos_activos === 'string' ? JSON.parse(b.modulos_activos) : (b.modulos_activos || {});
+      } catch (e) {
+        modulos = getDefaultModulesForPlan(b.plan);
+      }
+      const barberosCount = db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ?').get(b.id).count;
+      const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(b.id).count;
+      return {
+        ...b,
+        modulos_activos: modulos,
+        total_barberos: barberosCount,
+        total_citas: citasCount
+      };
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Crear una nueva barbería (Alta de cliente en el SaaS)
+app.post('/api/superadmin/barberias', (req, res) => {
+  const {
+    nombre,
+    slug,
+    eslogan,
+    logo_url,
+    color_primario,
+    color_secundario,
+    telefono,
+    direccion,
+    plan,
+    modulos_activos,
+    pin_admin
+  } = req.body;
+
+  if (!nombre) return res.status(400).json({ error: 'El nombre de la barbería es obligatorio' });
+
+  try {
+    let finalSlug = slug ? slug.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') : '';
+    if (!finalSlug) {
+      finalSlug = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    // Verificar unicidad de slug
+    const existe = db.prepare('SELECT id FROM barberias WHERE slug = ?').get(finalSlug);
+    if (existe) {
+      finalSlug = `${finalSlug}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const planElegido = plan || 'basico';
+    const modulosFinales = modulos_activos ? JSON.stringify(modulos_activos) : JSON.stringify(getDefaultModulesForPlan(planElegido));
+
+    const stmt = db.prepare(`
+      INSERT INTO barberias (
+        slug, nombre, eslogan, logo_url, color_primario, color_secundario,
+        telefono, direccion, plan, modulos_activos, pin_admin, activo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `);
+
+    const result = stmt.run(
+      finalSlug,
+      nombre.trim(),
+      eslogan || 'Tu estilo en las mejores manos',
+      logo_url || '',
+      color_primario || '#2563eb',
+      color_secundario || '#1e293b',
+      telefono || '',
+      direccion || '',
+      planElegido,
+      modulosFinales,
+      pin_admin || '1234'
+    );
+
+    const nuevaId = result.lastInsertRowid;
+
+    // Crear 2 servicios iniciales predeterminados
+    const stmtServ = db.prepare('INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo) VALUES (?, ?, ?, ?, ?, 1)');
+    stmtServ.run(nuevaId, 'Corte Clásico', 25000, 45, 'Corte tradicional de cabello con tijera y máquina.');
+    stmtServ.run(nuevaId, 'Corte y Barba Completa', 35000, 60, 'Perfilado de barba con toalla caliente y corte.');
+
+    // Crear 1 barbero principal inicial
+    const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
+    stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+
+    const nuevaBarberia = db.prepare('SELECT * FROM barberias WHERE id = ?').get(nuevaId);
+    res.json({
+      success: true,
+      message: 'Barbería creada exitosamente con servicios y barbero inicial',
+      barberia: {
+        ...nuevaBarberia,
+        modulos_activos: JSON.parse(nuevaBarberia.modulos_activos)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Editar barbería (activar/suspender, cambiar plan o módulos individuales)
+app.patch('/api/superadmin/barberias/:id', (req, res) => {
+  const { id } = req.params;
+  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo } = req.body;
+
+  try {
+    const actual = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    if (!actual) return res.status(404).json({ error: 'Barbería no encontrada' });
+
+    let modulosStr = null;
+    if (modulos_activos !== undefined) {
+      modulosStr = typeof modulos_activos === 'string' ? modulos_activos : JSON.stringify(modulos_activos);
+    } else if (plan !== undefined && plan !== actual.plan) {
+      modulosStr = JSON.stringify(getDefaultModulesForPlan(plan));
+    }
+
+    const stmt = db.prepare(`
+      UPDATE barberias
+      SET nombre = COALESCE(?, nombre),
+          slug = COALESCE(?, slug),
+          eslogan = COALESCE(?, eslogan),
+          logo_url = COALESCE(?, logo_url),
+          color_primario = COALESCE(?, color_primario),
+          color_secundario = COALESCE(?, color_secundario),
+          telefono = COALESCE(?, telefono),
+          direccion = COALESCE(?, direccion),
+          plan = COALESCE(?, plan),
+          modulos_activos = COALESCE(?, modulos_activos),
+          pin_admin = COALESCE(?, pin_admin),
+          activo = COALESCE(?, activo)
+      WHERE id = ?
+    `);
+
+    stmt.run(
+      nombre !== undefined ? nombre : null,
+      slug !== undefined ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') : null,
+      eslogan !== undefined ? eslogan : null,
+      logo_url !== undefined ? logo_url : null,
+      color_primario !== undefined ? color_primario : null,
+      color_secundario !== undefined ? color_secundario : null,
+      telefono !== undefined ? telefono : null,
+      direccion !== undefined ? direccion : null,
+      plan !== undefined ? plan : null,
+      modulosStr,
+      pin_admin !== undefined ? pin_admin : null,
+      activo !== undefined ? (activo ? 1 : 0) : null,
+      id
+    );
+
+    const updated = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    res.json({
+      success: true,
+      message: 'Barbería actualizada correctamente',
+      barberia: {
+        ...updated,
+        modulos_activos: JSON.parse(updated.modulos_activos || '{}')
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar barbería
+app.delete('/api/superadmin/barberias/:id', (req, res) => {
+  const { id } = req.params;
+  if (Number(id) === 1) {
+    return res.status(400).json({ error: 'No se puede eliminar la barbería principal del sistema (ID 1).' });
+  }
+  try {
+    db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM liquidaciones WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM barberos WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM servicios WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM costos WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM ventas_productos WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM productos WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM galeria_multimedia WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM auditoria WHERE barberia_id = ?').run(id);
+    db.prepare('DELETE FROM barberias WHERE id = ?').run(id);
+
+    res.json({ success: true, message: 'Barbería eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ----------------------------------------------------
+// 3. BARBEROS (EQUIPO)
 // ----------------------------------------------------
 app.get('/api/barberos', (req, res) => {
   try {
+    const tenantId = getTenantId(req);
     const todos = req.query.todos === 'true';
     const query = todos 
-      ? 'SELECT * FROM barberos ORDER BY nombre ASC'
-      : 'SELECT * FROM barberos WHERE activo = 1 ORDER BY nombre ASC';
-    const barberos = db.prepare(query).all();
+      ? 'SELECT * FROM barberos WHERE barberia_id = ? ORDER BY nombre ASC'
+      : 'SELECT * FROM barberos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
+    const barberos = db.prepare(query).all(tenantId);
     res.json(barberos);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -147,15 +579,33 @@ app.post('/api/barberos', (req, res) => {
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
   try {
+    const tenantId = getTenantId(req);
+    const tenant = getTenant(req);
+
+    // Validación de cupos según el plan
+    let modulos = {};
+    try {
+      modulos = typeof tenant.modulos_activos === 'string' ? JSON.parse(tenant.modulos_activos) : (tenant.modulos_activos || {});
+    } catch (e) {}
+    const maxBarberos = modulos.max_barberos || (tenant.plan === 'basico' ? 2 : tenant.plan === 'pro' ? 5 : 999);
+    const currentCount = db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ? AND activo = 1').get(tenantId).count;
+
+    if (currentCount >= maxBarberos) {
+      return res.status(400).json({
+        error: `Has alcanzado el límite de ${maxBarberos} barberos activos permitidos en el Plan ${(tenant.plan || 'básico').toUpperCase()}. Mejora de plan para añadir más.`
+      });
+    }
+
     const nombreLimpio = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const emailFinal = email ? email.trim().toLowerCase() : `${nombreLimpio || 'barbero' + Date.now()}@barberia.com`;
     const passwordFinal = password ? password.trim() : '123456';
 
     const stmt = db.prepare(`
-      INSERT INTO barberos (nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO barberos (barberia_id, nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
     const result = stmt.run(
+      tenantId,
       nombre,
       telefono || '',
       emailFinal,
@@ -174,6 +624,7 @@ app.post('/api/barberos', (req, res) => {
 
 app.put('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
 
   try {
@@ -189,7 +640,7 @@ app.put('/api/barberos/:id', (req, res) => {
           horario_fin = COALESCE(?, horario_fin),
           dias_laborales = COALESCE(?, dias_laborales),
           activo = COALESCE(?, activo)
-      WHERE id = ?
+      WHERE id = ? AND barberia_id = ?
     `);
     stmt.run(
       nombre !== undefined ? nombre : null,
@@ -202,7 +653,8 @@ app.put('/api/barberos/:id', (req, res) => {
       horario_fin !== undefined ? horario_fin : null,
       dias_laborales !== undefined ? dias_laborales : null,
       activo !== undefined ? (activo ? 1 : 0) : null,
-      id
+      id,
+      tenantId
     );
     res.json({ success: true, message: 'Barbero actualizado con éxito' });
   } catch (error) {
@@ -212,198 +664,161 @@ app.put('/api/barberos/:id', (req, res) => {
 
 app.patch('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   const { porcentaje_comision, activo, pin, email, password } = req.body;
 
   try {
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
+    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
     if (porcentaje_comision !== undefined) {
-      db.prepare('UPDATE barberos SET porcentaje_comision = ? WHERE id = ?').run(Number(porcentaje_comision), id);
+      db.prepare('UPDATE barberos SET porcentaje_comision = ? WHERE id = ? AND barberia_id = ?').run(Number(porcentaje_comision), id, tenantId);
     }
     if (activo !== undefined) {
-      db.prepare('UPDATE barberos SET activo = ? WHERE id = ?').run(activo ? 1 : 0, id);
+      db.prepare('UPDATE barberos SET activo = ? WHERE id = ? AND barberia_id = ?').run(activo ? 1 : 0, id, tenantId);
     }
     if (pin !== undefined && pin !== '') {
-      db.prepare('UPDATE barberos SET pin = ? WHERE id = ?').run(String(pin).trim(), id);
+      db.prepare('UPDATE barberos SET pin = ? WHERE id = ? AND barberia_id = ?').run(String(pin).trim(), id, tenantId);
     }
     if (email !== undefined && email !== '') {
-      db.prepare('UPDATE barberos SET email = ? WHERE id = ?').run(String(email).trim().toLowerCase(), id);
+      db.prepare('UPDATE barberos SET email = ? WHERE id = ? AND barberia_id = ?').run(String(email).trim().toLowerCase(), id, tenantId);
     }
     if (password !== undefined && password !== '') {
-      db.prepare('UPDATE barberos SET password = ? WHERE id = ?').run(String(password).trim(), id);
+      db.prepare('UPDATE barberos SET password = ? WHERE id = ? AND barberia_id = ?').run(String(password).trim(), id, tenantId);
     }
 
-    const actualizado = db.prepare('SELECT * FROM barberos WHERE id = ?').get(id);
+    const actualizado = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     res.json({ success: true, message: 'Barbero actualizado', barbero: actualizado });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Autenticación de Barbero (Ingreso profesional con Correo y Contraseña)
+// Autenticación de Barbero
 app.post('/api/barberos/login', (req, res) => {
   const { email, password, barbero_id, pin } = req.body;
+  const tenantId = getTenantId(req);
 
   try {
     let barbero;
     if (email && password) {
-      barbero = db.prepare('SELECT * FROM barberos WHERE LOWER(email) = LOWER(?)').get(email.trim());
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPass = password.trim();
+      barbero = db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND LOWER(email) = ? AND password = ?').get(tenantId, cleanEmail, cleanPass);
       if (!barbero) {
-        return res.status(401).json({ error: 'No existe una cuenta registrada con este correo electrónico' });
+        const byId = db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND password = ?').get(tenantId, cleanPass);
+        if (byId && (byId.nombre.toLowerCase().includes(cleanEmail) || byId.email.toLowerCase() === cleanEmail)) {
+          barbero = byId;
+        }
       }
-      if (!barbero.activo) {
-        return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
+    } else if (barbero_id) {
+      barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+      if (barbero && barbero.pin && barbero.pin !== pin) {
+        return res.status(401).json({ error: 'PIN incorrecto' });
       }
-      const passGuardada = String(barbero.password || '123456').trim();
-      const pinGuardado = String(barbero.pin || '1234').trim();
-      const passEnviada = String(password).trim();
-
-      if (passGuardada !== passEnviada && pinGuardado !== passEnviada) {
-        return res.status(401).json({ error: 'Contraseña incorrecta' });
-      }
-    } else if (barbero_id && pin) {
-      // Compatibilidad hacia atrás
-      barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(barbero_id);
-      if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
-      if (!barbero.activo) return res.status(403).json({ error: 'Esta cuenta de barbero se encuentra inactiva' });
-      if (String(barbero.pin || '1234').trim() !== String(pin).trim() && String(barbero.password || '').trim() !== String(pin).trim()) {
-        return res.status(401).json({ error: 'Contraseña / PIN incorrecto' });
-      }
-    } else {
-      return res.status(400).json({ error: 'Por favor ingresa tu correo electrónico y contraseña' });
     }
 
-    // Retornar perfil seguro sin exponer la contraseña
-    const { password: _, pin: __, ...perfilSeguro } = barbero;
+    if (!barbero) {
+      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
+    }
+
+    if (barbero.activo === 0) {
+      return res.status(403).json({ error: 'Tu usuario se encuentra inactivo. Consulta con el dueño de la barbería.' });
+    }
+
+    const { password: _, pin: __, ...barberoSeguro } = barbero;
     res.json({
       success: true,
-      message: `Bienvenido ${barbero.nombre}`,
-      token: `barbero_session_${barbero.id}_${Date.now()}`,
-      barbero: perfilSeguro
+      message: `Bienvenido de vuelta, ${barbero.nombre}`,
+      barbero: barberoSeguro
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Expediente / Récord completo de un barbero (Usado por el Administrador y por el Barbero)
+// Ficha completa e historial de un barbero
 app.get('/api/barberos/:id/record', (req, res) => {
   const { id } = req.params;
-  const { desde, hasta, es_barbero } = req.query;
+  const tenantId = getTenantId(req);
 
   try {
-    const barbero = db.prepare('SELECT id, nombre, email, telefono, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo, creado_en FROM barberos WHERE id = ?').get(id);
+    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    // 1. Historial de Citas
-    let sqlCitas = `
-      SELECT 
-        c.id, c.fecha, c.hora_inicio, c.hora_fin, c.estado, c.precio_cobrado, c.notas, c.creado_en,
-        ${es_barbero === 'true' ? 'c.cliente_nombre' : 'c.cliente_nombre, c.cliente_telefono'},
-        s.nombre as servicio_nombre, s.duracion_minutos,
-        ROUND(c.precio_cobrado * (? / 100.0)) as comision_estimada
+    const totalCitas = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId).count;
+    const citasCompletadas = db.prepare("SELECT COUNT(*) as count, COALESCE(SUM(precio_cobrado), 0) as total FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'completada'").get(id, tenantId);
+    const citasCanceladas = db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'cancelada'").get(id, tenantId);
+    const noAsistio = db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'no_asistio'").get(id, tenantId);
+
+    const liquidaciones = db.prepare(`
+      SELECT * FROM liquidaciones 
+      WHERE barbero_id = ? AND barberia_id = ?
+      ORDER BY fecha_fin DESC LIMIT 15
+    `).all(id, tenantId);
+
+    const totalCobradoHistorico = citasCompletadas.total || 0;
+    const totalComisionesPagadas = liquidaciones.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
+    const utilidadGenerada = totalCobradoHistorico - totalComisionesPagadas;
+
+    const ultimasCitas = db.prepare(`
+      SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
-      WHERE c.barbero_id = ?
-    `;
-    const paramsCitas = [barbero.porcentaje_comision || 50, id];
-    if (desde && hasta) {
-      sqlCitas += ' AND c.fecha BETWEEN ? AND ?';
-      paramsCitas.push(desde, hasta);
-    }
-    sqlCitas += ' ORDER BY c.fecha DESC, c.hora_inicio DESC';
-    const citas = db.prepare(sqlCitas).all(...paramsCitas);
+      WHERE c.barbero_id = ? AND c.barberia_id = ?
+      ORDER BY c.fecha DESC, c.hora_inicio DESC
+      LIMIT 20
+    `).all(id, tenantId);
 
-    // 2. Liquidaciones / Pagos Recibidos
-    let sqlLiq = `SELECT * FROM liquidaciones WHERE barbero_id = ?`;
-    const paramsLiq = [id];
-    if (desde && hasta) {
-      sqlLiq += ' AND fecha_pago BETWEEN ? AND ?';
-      paramsLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-    }
-    sqlLiq += ' ORDER BY fecha_pago DESC';
-    const liquidaciones = db.prepare(sqlLiq).all(...paramsLiq);
-
-    // 3. Ventas de productos
-    const ventasProductos = db.prepare(`
-      SELECT vp.*, p.nombre as producto_nombre 
-      FROM ventas_productos vp 
-      JOIN productos p ON vp.producto_id = p.id 
-      WHERE vp.barbero_id = ? 
-      ORDER BY vp.fecha DESC
-    `).all(id);
-
-    // 4. Publicaciones multimedia en galería
-    const publicaciones = db.prepare(`
-      SELECT * FROM galeria_multimedia WHERE barbero_id = ? ORDER BY id DESC
-    `).all(id);
-
-    // 5. Auditoría del barbero
-    const auditoria = db.prepare(`
-      SELECT * FROM auditoria 
-      WHERE descripcion LIKE ? OR detalles_json LIKE ?
-      ORDER BY fecha_hora DESC LIMIT 50
-    `).all(`%${barbero.nombre}%`, `%"barbero_id":${id}%`);
-
-    // 6. Resumen Financiero Total
-    const totalCitasCompletadas = citas.filter(c => c.estado === 'completada').length;
-    const totalBrutoServicios = citas.filter(c => c.estado === 'completada').reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
-    const totalComisionServicios = Math.round(totalBrutoServicios * ((barbero.porcentaje_comision || 50) / 100));
-    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
-    const totalGanadoVitalicio = totalComisionServicios + totalComisionProductos;
-    const totalLiquidadoPagado = liquidaciones.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
-    const saldoPendientePorCobrar = Math.max(0, totalGanadoVitalicio - totalLiquidadoPagado);
+    const { password: _, pin: __, ...barberoLimpio } = barbero;
 
     res.json({
-      barbero,
-      resumen: {
-        total_citas_registradas: citas.length,
-        total_citas_completadas: totalCitasCompletadas,
-        total_bruto_servicios: totalBrutoServicios,
-        total_comision_servicios: totalComisionServicios,
-        total_comision_productos: totalComisionProductos,
-        total_ganado_vitalicio: totalGanadoVitalicio,
-        total_liquidado_pagado: totalLiquidadoPagado,
-        saldo_pendiente_por_cobrar: saldoPendientePorCobrar,
-        total_publicaciones: publicaciones.length
+      barbero: barberoLimpio,
+      metricas: {
+        total_citas: totalCitas,
+        completadas: citasCompletadas.count || 0,
+        canceladas: citasCanceladas.count || 0,
+        no_asistio: noAsistio.count || 0,
+        total_facturado: totalCobradoHistorico,
+        total_comisiones_pagadas: totalComisionesPagadas,
+        utilidad_neta_para_barberia: utilidadGenerada,
+        efectividad_pct: totalCitas > 0 ? Math.round(((citasCompletadas.count || 0) / totalCitas) * 100) : 0
       },
-      citas,
       liquidaciones,
-      ventas_productos: ventasProductos,
-      publicaciones,
-      auditoria
+      ultimas_citas: ultimasCitas
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Portal Barbero: Citas asignadas a este barbero (SIN teléfono ni datos sensibles)
+// Portal de Barbero: Citas asignadas
 app.get('/api/barbero-portal/citas', (req, res) => {
   const { barbero_id, fecha, desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   if (!barbero_id) {
-    return res.status(400).json({ error: 'barbero_id es requerido' });
+    return res.status(400).json({ error: 'barbero_id es obligatorio' });
   }
 
   try {
     let sql = `
       SELECT 
-        c.id,
-        c.fecha,
-        c.hora_inicio,
-        c.hora_fin,
-        c.estado,
+        c.id, 
+        c.fecha, 
+        c.hora_inicio, 
+        c.hora_fin, 
+        c.estado, 
+        c.notas, 
         c.precio_cobrado,
-        c.notas,
-        c.cliente_nombre, -- SOLO el nombre de pila
-        s.nombre as servicio_nombre,
+        c.cliente_nombre,
+        s.nombre as servicio_nombre, 
         s.duracion_minutos
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
-      WHERE c.barbero_id = ?
+      WHERE c.barbero_id = ? AND c.barberia_id = ?
     `;
-    const params = [barbero_id];
+    const params = [barbero_id, tenantId];
 
     if (fecha) {
       sql += ' AND c.fecha = ?';
@@ -416,85 +831,85 @@ app.get('/api/barbero-portal/citas', (req, res) => {
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
     const citas = db.prepare(sql).all(...params);
-
     res.json(citas);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Portal Barbero: Métricas personales de utilidad y rentabilidad propia (NO ve finanzas del local)
+// Portal de Barbero: Resumen financiero individual
 app.get('/api/barbero-portal/balance', (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   if (!barbero_id) {
-    return res.status(400).json({ error: 'barbero_id es requerido' });
+    return res.status(400).json({ error: 'barbero_id es obligatorio' });
   }
 
   try {
-    const barbero = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ?').get(barbero_id);
+    const barbero = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    // 1. Citas completadas de este barbero
-    let sqlCitas = `SELECT COUNT(*) as count, SUM(precio_cobrado) as total FROM citas WHERE barbero_id = ? AND estado = 'completada'`;
-    const paramsCitas = [barbero_id];
+    let sqlCitas = `
+      SELECT c.id, c.fecha, c.hora_inicio, c.precio_cobrado, s.nombre as servicio_nombre, c.liquidacion_id
+      FROM citas c
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barbero_id = ? AND c.barberia_id = ? AND c.estado = 'completada'
+    `;
+    const paramsCitas = [barbero_id, tenantId];
+
     if (desde && hasta) {
-      sqlCitas += ' AND fecha BETWEEN ? AND ?';
+      sqlCitas += ' AND c.fecha BETWEEN ? AND ?';
       paramsCitas.push(desde, hasta);
     }
-    const citasData = db.prepare(sqlCitas).get(...paramsCitas);
-    const totalServicios = citasData.count || 0;
-    const totalBrutoServicios = citasData.total || 0;
 
-    // 2. Ventas de productos realizadas por este barbero
-    let sqlProd = `SELECT COUNT(*) as count, SUM(total_venta) as total_venta, SUM(monto_comision) as total_comision FROM ventas_productos WHERE barbero_id = ?`;
-    const paramsProd = [barbero_id];
+    sqlCitas += ' ORDER BY c.fecha DESC';
+    const citasCompletadas = db.prepare(sqlCitas).all(...paramsCitas);
+
+    let sqlVentas = `
+      SELECT v.id, v.fecha, v.cantidad, v.total_venta, v.monto_comision, p.nombre as producto_nombre, v.liquidacion_id
+      FROM ventas_productos v
+      JOIN productos p ON v.producto_id = p.id
+      WHERE v.barbero_id = ? AND v.barberia_id = ?
+    `;
+    const paramsVentas = [barbero_id, tenantId];
     if (desde && hasta) {
-      sqlProd += ' AND fecha BETWEEN ? AND ?';
-      paramsProd.push(desde, hasta);
+      sqlVentas += ' AND v.fecha BETWEEN ? AND ?';
+      paramsVentas.push(desde, hasta);
     }
-    const prodData = db.prepare(sqlProd).get(...paramsProd);
-    const totalVentasProductos = prodData.total_venta || 0;
-    const comisionProductos = prodData.total_comision || 0;
+    const ventasProductos = db.prepare(sqlVentas).all(...paramsVentas);
 
-    // 3. Liquidaciones recibidas/pagadas
-    let sqlLiq = `SELECT SUM(total_pagado) as total_pagado, COUNT(*) as count FROM liquidaciones WHERE barbero_id = ?`;
-    const paramsLiq = [barbero_id];
-    if (desde && hasta) {
-      sqlLiq += ' AND fecha_pago BETWEEN ? AND ?';
-      paramsLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-    }
-    const liqData = db.prepare(sqlLiq).get(...paramsLiq);
-    const totalYaPagado = liqData.total_pagado || 0;
+    const liquidaciones = db.prepare(`
+      SELECT * FROM liquidaciones 
+      WHERE barbero_id = ? AND barberia_id = ?
+      ORDER BY fecha_pago DESC LIMIT 10
+    `).all(barbero_id, tenantId);
 
-    // 4. Citas pendientes por liquidar
-    let sqlPend = `SELECT COUNT(*) as count, SUM(precio_cobrado) as total FROM citas WHERE barbero_id = ? AND estado = 'completada' AND liquidacion_id IS NULL`;
-    const paramsPend = [barbero_id];
-    if (desde && hasta) {
-      sqlPend += ' AND fecha BETWEEN ? AND ?';
-      paramsPend.push(desde, hasta);
-    }
-    const pendData = db.prepare(sqlPend).get(...paramsPend);
-    const brutoPendiente = pendData.total || 0;
-    const comisionServiciosPendiente = Math.round(brutoPendiente * ((barbero.porcentaje_comision || 50) / 100));
+    const totalBrutoServicios = citasCompletadas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
+    const pct = barbero.porcentaje_comision || 50;
+    const comisionServiciosEstimada = Math.round(totalBrutoServicios * (pct / 100));
+    const comisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
 
-    const comisionServiciosTotal = Math.round(totalBrutoServicios * ((barbero.porcentaje_comision || 50) / 100));
-    const gananciaTotalBarbero = comisionServiciosTotal + comisionProductos;
+    const pendientesLiquidarCitas = citasCompletadas.filter(c => !c.liquidacion_id);
+    const pendientesLiquidarVentas = ventasProductos.filter(v => !v.liquidacion_id);
+    const saldoPendienteServicios = Math.round(pendientesLiquidarCitas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0) * (pct / 100));
+    const saldoPendienteProductos = pendientesLiquidarVentas.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
+    const saldoPendienteCobrar = saldoPendienteServicios + saldoPendienteProductos;
 
     res.json({
       barbero,
-      total_servicios: totalServicios,
-      total_bruto_generado: totalBrutoServicios + totalVentasProductos,
+      total_citas_completadas: citasCompletadas.length,
       total_bruto_servicios: totalBrutoServicios,
-      total_bruto_productos: totalVentasProductos,
-      porcentaje_comision: barbero.porcentaje_comision || 50,
-      ganancia_total_barbero: gananciaTotalBarbero,
-      comision_servicios: comisionServiciosTotal,
+      porcentaje_comision: pct,
+      comision_servicios_estimada: comisionServiciosEstimada,
+      total_ventas_productos: ventasProductos.length,
       comision_productos: comisionProductos,
-      total_ya_cobrado: totalYaPagado,
-      pendiente_por_cobrar: comisionServiciosPendiente,
-      servicios_pendientes_count: pendData.count || 0
+      ganancia_total_estimada: comisionServiciosEstimada + comisionProductos,
+      saldo_pendiente_cobrar: saldoPendienteCobrar,
+      citas_recientes: citasCompletadas.slice(0, 15),
+      ventas_recientes: ventasProductos.slice(0, 15),
+      ultimas_liquidaciones: liquidaciones
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -502,14 +917,14 @@ app.get('/api/barbero-portal/balance', (req, res) => {
 
 app.delete('/api/barberos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    // Si tiene citas registradas, desactivar para no perder historial
-    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ?').get(id).count;
+    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId).count;
     if (citasCount > 0) {
-      db.prepare('UPDATE barberos SET activo = 0 WHERE id = ?').run(id);
+      db.prepare('UPDATE barberos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Barbero desactivado (se conservó su historial de citas)' });
     } else {
-      db.prepare('DELETE FROM barberos WHERE id = ?').run(id);
+      db.prepare('DELETE FROM barberos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Barbero eliminado' });
     }
   } catch (error) {
@@ -518,15 +933,16 @@ app.delete('/api/barberos/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 3. SERVICIOS
+// 4. SERVICIOS
 // ----------------------------------------------------
 app.get('/api/servicios', (req, res) => {
   try {
+    const tenantId = getTenantId(req);
     const todos = req.query.todos === 'true';
     const query = todos 
-      ? 'SELECT * FROM servicios ORDER BY precio_cop ASC'
-      : 'SELECT * FROM servicios WHERE activo = 1 ORDER BY precio_cop ASC';
-    const servicios = db.prepare(query).all();
+      ? 'SELECT * FROM servicios WHERE barberia_id = ? ORDER BY precio_cop ASC'
+      : 'SELECT * FROM servicios WHERE barberia_id = ? AND activo = 1 ORDER BY precio_cop ASC';
+    const servicios = db.prepare(query).all(tenantId);
     res.json(servicios);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -538,11 +954,12 @@ app.post('/api/servicios', (req, res) => {
   if (!nombre || !precio_cop) return res.status(400).json({ error: 'Nombre y precio requeridos' });
 
   try {
+    const tenantId = getTenantId(req);
     const stmt = db.prepare(`
-      INSERT INTO servicios (nombre, precio_cop, duracion_minutos, descripcion, activo)
-      VALUES (?, ?, ?, ?, 1)
+      INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo)
+      VALUES (?, ?, ?, ?, ?, 1)
     `);
-    const result = stmt.run(nombre, Number(precio_cop), Number(duracion_minutos) || 45, descripcion || '');
+    const result = stmt.run(tenantId, nombre, Number(precio_cop), Number(duracion_minutos) || 45, descripcion || '');
     res.json({ id: result.lastInsertRowid, message: 'Servicio creado exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -551,6 +968,7 @@ app.post('/api/servicios', (req, res) => {
 
 app.put('/api/servicios/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   const { nombre, precio_cop, duracion_minutos, descripcion, activo } = req.body;
 
   try {
@@ -561,9 +979,9 @@ app.put('/api/servicios/:id', (req, res) => {
           duracion_minutos = COALESCE(?, duracion_minutos),
           descripcion = COALESCE(?, descripcion),
           activo = COALESCE(?, activo)
-      WHERE id = ?
+      WHERE id = ? AND barberia_id = ?
     `);
-    stmt.run(nombre, precio_cop, duracion_minutos, descripcion, activo, id);
+    stmt.run(nombre, precio_cop, duracion_minutos, descripcion, activo, id, tenantId);
     res.json({ success: true, message: 'Servicio actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -572,13 +990,14 @@ app.put('/api/servicios/:id', (req, res) => {
 
 app.delete('/api/servicios/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE servicio_id = ?').get(id).count;
+    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE servicio_id = ? AND barberia_id = ?').get(id, tenantId).count;
     if (citasCount > 0) {
-      db.prepare('UPDATE servicios SET activo = 0 WHERE id = ?').run(id);
+      db.prepare('UPDATE servicios SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Servicio desactivado para conservar historial' });
     } else {
-      db.prepare('DELETE FROM servicios WHERE id = ?').run(id);
+      db.prepare('DELETE FROM servicios WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Servicio eliminado' });
     }
   } catch (error) {
@@ -587,10 +1006,11 @@ app.delete('/api/servicios/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 4. MOTOR DE DISPONIBILIDAD (PREVENCIÓN DE SOLAPAMIENTOS)
+// 5. MOTOR DE DISPONIBILIDAD (PREVENCIÓN DE SOLAPAMIENTOS)
 // ----------------------------------------------------
 app.get('/api/disponibilidad', (req, res) => {
   const { barbero_id, fecha, duracion_minutos } = req.query;
+  const tenantId = getTenantId(req);
 
   if (!barbero_id || !fecha) {
     return res.status(400).json({ error: 'barbero_id y fecha son obligatorios' });
@@ -598,15 +1018,14 @@ app.get('/api/disponibilidad', (req, res) => {
 
   try {
     const duracion = Number(duracion_minutos) || 45;
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND activo = 1').get(barbero_id);
+    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(barbero_id, tenantId);
 
     if (!barbero) {
       return res.status(404).json({ error: 'Barbero no encontrado o inactivo' });
     }
 
-    // Verificar día laboral (1 = Lunes, 7 = Domingo)
     const fechaObj = new Date(`${fecha}T00:00:00`);
-    let diaSemana = fechaObj.getDay(); // 0 es Domingo
+    let diaSemana = fechaObj.getDay();
     if (diaSemana === 0) diaSemana = 7;
 
     const diasPermitidos = (barbero.dias_laborales || '1,2,3,4,5,6').split(',').map(Number);
@@ -618,33 +1037,28 @@ app.get('/api/disponibilidad', (req, res) => {
       });
     }
 
-    // Obtener citas activas del barbero en esa fecha
     const citas = db.prepare(`
       SELECT id, hora_inicio, hora_fin, cliente_nombre 
       FROM citas 
-      WHERE barbero_id = ? AND fecha = ? AND estado != 'cancelada'
-    `).all(barbero_id, fecha);
+      WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
+    `).all(barbero_id, tenantId, fecha);
 
-    // Obtener bloqueos de horario que apliquen (al barbero o globales)
     const bloqueos = db.prepare(`
       SELECT id, hora_inicio, hora_fin, motivo 
       FROM bloqueos 
-      WHERE (barbero_id = ? OR barbero_id IS NULL) AND fecha = ?
-    `).all(barbero_id, fecha);
+      WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
+    `).all(barbero_id, tenantId, fecha);
 
     const inicioMin = timeToMinutes(barbero.horario_inicio || '09:00');
     const finMin = timeToMinutes(barbero.horario_fin || '20:00');
-    const step = 30; // Granularidad de 30 minutos para opciones de inicio
+    const step = 30;
 
     const slots = [];
     for (let m = inicioMin; m + duracion <= finMin; m += step) {
       const slotInicio = minutesToTime(m);
       const slotFin = minutesToTime(m + duracion);
 
-      // Verificar si choca con cita
       const conflictoCita = citas.find(c => checkOverlap(slotInicio, slotFin, c.hora_inicio, c.hora_fin));
-
-      // Verificar si choca con bloqueo
       const conflictoBloqueo = bloqueos.find(b => checkOverlap(slotInicio, slotFin, b.hora_inicio, b.hora_fin));
 
       let disponible = true;
@@ -679,19 +1093,21 @@ app.get('/api/disponibilidad', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 5. CITAS / TURNOS
+// 6. CITAS / TURNOS MULTI-TENANT
 // ----------------------------------------------------
 app.get('/api/citas', (req, res) => {
   const { fecha, barbero_id, estado, desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
     let sql = `
       SELECT c.*, b.nombre as barbero_nombre, b.foto_url as barbero_foto, s.nombre as servicio_nombre, s.duracion_minutos
       FROM citas c
       JOIN barberos b ON c.barbero_id = b.id
       JOIN servicios s ON c.servicio_id = s.id
-      WHERE 1=1
+      WHERE c.barberia_id = ?
     `;
-    const params = [];
+    const params = [tenantId];
 
     if (fecha) {
       sql += ' AND c.fecha = ?';
@@ -720,13 +1136,14 @@ app.get('/api/citas', (req, res) => {
 
 app.post('/api/citas', (req, res) => {
   const { barbero_id, servicio_id, cliente_nombre, cliente_telefono, fecha, hora_inicio, notas } = req.body;
+  const tenantId = getTenantId(req);
 
   if (!barbero_id || !servicio_id || !cliente_nombre || !cliente_telefono || !fecha || !hora_inicio) {
     return res.status(400).json({ error: 'Todos los campos marcados son obligatorios' });
   }
 
   try {
-    const servicio = db.prepare('SELECT * FROM servicios WHERE id = ?').get(servicio_id);
+    const servicio = db.prepare('SELECT * FROM servicios WHERE id = ? AND barberia_id = ?').get(servicio_id, tenantId);
     if (!servicio) return res.status(404).json({ error: 'Servicio no encontrado' });
 
     const duracion = servicio.duracion_minutos || 45;
@@ -734,12 +1151,11 @@ app.post('/api/citas', (req, res) => {
     const endMin = startMin + duracion;
     const hora_fin = minutesToTime(endMin);
 
-    // 1. Validar colisión con citas existentes que no estén canceladas
     const citasExistentes = db.prepare(`
       SELECT id, hora_inicio, hora_fin 
       FROM citas 
-      WHERE barbero_id = ? AND fecha = ? AND estado != 'cancelada'
-    `).all(barbero_id, fecha);
+      WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
+    `).all(barbero_id, tenantId, fecha);
 
     const hayConflictoCita = citasExistentes.some(c => checkOverlap(hora_inicio, hora_fin, c.hora_inicio, c.hora_fin));
     if (hayConflictoCita) {
@@ -748,61 +1164,62 @@ app.post('/api/citas', (req, res) => {
       });
     }
 
-    // 2. Validar colisión con bloqueos
     const bloqueos = db.prepare(`
       SELECT id, hora_inicio, hora_fin, motivo 
       FROM bloqueos 
-      WHERE (barbero_id = ? OR barbero_id IS NULL) AND fecha = ?
-    `).all(barbero_id, fecha);
+      WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
+    `).all(barbero_id, tenantId, fecha);
 
     const hayConflictoBloqueo = bloqueos.some(b => checkOverlap(hora_inicio, hora_fin, b.hora_inicio, b.hora_fin));
     if (hayConflictoBloqueo) {
       return res.status(409).json({ 
-        error: 'El barbero o la barbería tiene este horario bloqueado para atención.' 
+        error: 'El barbero o la barbería tiene este horario bloqueado.' 
       });
     }
 
     const stmt = db.prepare(`
-      INSERT INTO citas (barbero_id, servicio_id, cliente_nombre, cliente_telefono, fecha, hora_inicio, hora_fin, estado, precio_cobrado, notas)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)
+      INSERT INTO citas (
+        barberia_id, barbero_id, servicio_id, cliente_nombre, cliente_telefono, 
+        fecha, hora_inicio, hora_fin, estado, notas, precio_cobrado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)
     `);
 
     const result = stmt.run(
-      barbero_id,
-      servicio_id,
+      tenantId,
+      Number(barbero_id),
+      Number(servicio_id),
       cliente_nombre.trim(),
       cliente_telefono.trim(),
       fecha,
       hora_inicio,
       hora_fin,
-      servicio.precio_cop,
-      notas || ''
+      notas || '',
+      servicio.precio_cop
     );
 
-    const barberoAsignado = db.prepare('SELECT nombre FROM barberos WHERE id = ?').get(barbero_id);
-    const nombreBarbero = barberoAsignado ? barberoAsignado.nombre : 'un barbero';
+    const nuevaCitaId = result.lastInsertRowid;
 
     // Registrar en auditoría
-    try {
-      db.prepare(`
-        INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json)
-        VALUES ('CITA_CREADA', ?, 'cliente', ?)
-      `).run(
-        `Nueva cita agendada para ${cliente_nombre.trim()} con ${nombreBarbero} (${fecha} a las ${hora_inicio})`,
-        JSON.stringify({ cita_id: result.lastInsertRowid, barbero_id, servicio_id, fecha, hora_inicio })
-      );
-    } catch (e) {}
+    registrarAuditoria(
+      tenantId,
+      'cita_creada',
+      `Nueva cita agendada para ${cliente_nombre.trim()} el ${fecha} a las ${hora_inicio}`,
+      'Cliente Web',
+      { cita_id: nuevaCitaId, servicio: servicio.nombre, barbero_id }
+    );
+
+    const citaCreada = db.prepare(`
+      SELECT c.*, b.nombre as barbero_nombre, s.nombre as servicio_nombre
+      FROM citas c
+      JOIN barberos b ON c.barbero_id = b.id
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.id = ? AND c.barberia_id = ?
+    `).get(nuevaCitaId, tenantId);
 
     res.status(201).json({
-      id: result.lastInsertRowid,
-      message: 'Turno agendado exitosamente',
-      cita: {
-        id: result.lastInsertRowid,
-        fecha,
-        hora_inicio,
-        hora_fin,
-        precio_cobrado: servicio.precio_cop
-      }
+      success: true,
+      message: '¡Tu cita ha sido confirmada con éxito!',
+      cita: citaCreada
     });
 
   } catch (error) {
@@ -810,76 +1227,98 @@ app.post('/api/citas', (req, res) => {
   }
 });
 
-// Reasignar cita a otro barbero (Permite al admin cambiar de barbero a su criterio)
+// Reasignación de cita a otro barbero
 app.patch('/api/citas/:id/reasignar', (req, res) => {
   const { id } = req.params;
-  const targetBarberoId = req.body.nuevo_barbero_id || req.body.barbero_id;
-  const { motivo, usuario } = req.body;
+  const { nuevo_barbero_id, motivo } = req.body;
+  const tenantId = getTenantId(req);
 
-  if (!targetBarberoId) {
-    return res.status(400).json({ error: 'barbero_id o nuevo_barbero_id es requerido' });
+  if (!nuevo_barbero_id) {
+    return res.status(400).json({ error: 'Debes seleccionar el barbero destino' });
   }
 
   try {
-    const cita = db.prepare('SELECT c.*, b.nombre as barbero_antiguo_nombre FROM citas c JOIN barberos b ON c.barbero_id = b.id WHERE c.id = ?').get(id);
+    const cita = db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!cita) return res.status(404).json({ error: 'Cita no encontrada' });
 
-    const nuevoBarbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(targetBarberoId);
-    if (!nuevoBarbero) return res.status(404).json({ error: 'Nuevo barbero no encontrado' });
+    const nuevoBarbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(nuevo_barbero_id, tenantId);
+    if (!nuevoBarbero) return res.status(404).json({ error: 'El barbero seleccionado no existe o está inactivo' });
 
-    // Actualizar barbero en la cita
-    db.prepare('UPDATE citas SET barbero_id = ? WHERE id = ?').run(targetBarberoId, id);
+    const citasExistentes = db.prepare(`
+      SELECT id, hora_inicio, hora_fin 
+      FROM citas 
+      WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND id != ? AND estado != 'cancelada'
+    `).all(nuevo_barbero_id, tenantId, cita.fecha, id);
 
-    // Registrar en auditoría
-    try {
-      db.prepare(`
-        INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json)
-        VALUES ('CITA_REASIGNADA', ?, ?, ?)
-      `).run(
-        `Cita de ${cita.cliente_nombre} reasignada de ${cita.barbero_antiguo_nombre} a ${nuevoBarbero.nombre}. Motivo: ${motivo || 'Decisión administrativa'}`,
-        usuario || 'Administrador',
-        JSON.stringify({ cita_id: id, barbero_anterior: cita.barbero_id, barbero_nuevo: targetBarberoId, motivo })
-      );
-    } catch (e) {}
+    const hayConflicto = citasExistentes.some(c => checkOverlap(cita.hora_inicio, cita.hora_fin, c.hora_inicio, c.hora_fin));
+    if (hayConflicto) {
+      return res.status(409).json({ 
+        error: `${nuevoBarbero.nombre} ya tiene una cita ocupada en ese mismo rango horario (${cita.hora_inicio} - ${cita.hora_fin})` 
+      });
+    }
+
+    db.prepare('UPDATE citas SET barbero_id = ? WHERE id = ? AND barberia_id = ?').run(nuevo_barbero_id, id, tenantId);
+
+    registrarAuditoria(
+      tenantId,
+      'cita_reasignada',
+      `Cita #${id} reasignada a ${nuevoBarbero.nombre}. Motivo: ${motivo || 'Reorganización de agenda'}`,
+      'Administración',
+      { cita_id: id, barbero_anterior: cita.barbero_id, barbero_nuevo: nuevo_barbero_id, motivo }
+    );
+
+    const citaActualizada = db.prepare(`
+      SELECT c.*, b.nombre as barbero_nombre, s.nombre as servicio_nombre
+      FROM citas c
+      JOIN barberos b ON c.barbero_id = b.id
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.id = ? AND c.barberia_id = ?
+    `).get(id, tenantId);
 
     res.json({
       success: true,
-      message: `Cita reasignada a ${nuevoBarbero.nombre} con éxito`,
-      nuevo_barbero: nuevoBarbero
+      message: `Cita reasignada con éxito a ${nuevoBarbero.nombre}`,
+      cita: citaActualizada
     });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Cambiar estado de cita
 app.patch('/api/citas/:id/estado', (req, res) => {
   const { id } = req.params;
   const { estado, precio_cobrado } = req.body;
+  const tenantId = getTenantId(req);
 
-  if (!['confirmada', 'completada', 'cancelada', 'no_asistio'].includes(estado)) {
+  const estadosValidos = ['confirmada', 'completada', 'cancelada', 'no_asistio'];
+  if (!estadosValidos.includes(estado)) {
     return res.status(400).json({ error: 'Estado no válido' });
   }
 
   try {
+    const citaActual = db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    if (!citaActual) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    let stmt;
     if (precio_cobrado !== undefined) {
-      db.prepare('UPDATE citas SET estado = ?, precio_cobrado = ? WHERE id = ?').run(estado, Number(precio_cobrado), id);
+      stmt = db.prepare('UPDATE citas SET estado = ?, precio_cobrado = ? WHERE id = ? AND barberia_id = ?');
+      stmt.run(estado, Number(precio_cobrado), id, tenantId);
     } else {
-      db.prepare('UPDATE citas SET estado = ? WHERE id = ?').run(estado, id);
+      stmt = db.prepare('UPDATE citas SET estado = ? WHERE id = ? AND barberia_id = ?');
+      stmt.run(estado, id, tenantId);
     }
 
-    try {
-      const c = db.prepare('SELECT c.cliente_nombre, b.nombre as barbero_nombre FROM citas c JOIN barberos b ON c.barbero_id = b.id WHERE c.id = ?').get(id);
-      if (c) {
-        db.prepare('INSERT INTO auditoria (tipo_evento, descripcion, usuario, detalles_json) VALUES (?, ?, ?, ?)').run(
-          'CITA_ESTADO',
-          `Cita de ${c.cliente_nombre} con ${c.barbero_nombre} cambiada a estado: ${estado.toUpperCase()}`,
-          'admin',
-          JSON.stringify({ cita_id: id, nuevo_estado: estado })
-        );
-      }
-    } catch (e) {}
+    registrarAuditoria(
+      tenantId,
+      'cita_estado_cambiado',
+      `Estado de cita #${id} cambiado a '${estado}'`,
+      'Administración',
+      { cita_id: id, estado_anterior: citaActual.estado, estado_nuevo: estado }
+    );
 
-    res.json({ success: true, message: `Estado actualizado a ${estado}` });
+    res.json({ success: true, message: 'Estado de la cita actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -887,8 +1326,9 @@ app.patch('/api/citas/:id/estado', (req, res) => {
 
 app.delete('/api/citas/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    db.prepare('DELETE FROM citas WHERE id = ?').run(id);
+    db.prepare('DELETE FROM citas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Cita eliminada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -896,18 +1336,20 @@ app.delete('/api/citas/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 6. BLOQUEO DE HORARIOS (DESCANSOS / ALMUERZOS / FERIADOS)
+// 7. BLOQUEOS DE HORARIO
 // ----------------------------------------------------
 app.get('/api/bloqueos', (req, res) => {
   const { fecha, barbero_id } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
     let sql = `
       SELECT b.*, bar.nombre as barbero_nombre 
       FROM bloqueos b
       LEFT JOIN barberos bar ON b.barbero_id = bar.id
-      WHERE 1=1
+      WHERE b.barberia_id = ?
     `;
-    const params = [];
+    const params = [tenantId];
     if (fecha) {
       sql += ' AND b.fecha = ?';
       params.push(fecha);
@@ -927,6 +1369,7 @@ app.get('/api/bloqueos', (req, res) => {
 
 app.post('/api/bloqueos', (req, res) => {
   const { barbero_id, fecha, hora_inicio, hora_fin, motivo } = req.body;
+  const tenantId = getTenantId(req);
 
   if (!fecha || !hora_inicio || !hora_fin || !motivo) {
     return res.status(400).json({ error: 'Fecha, hora de inicio, fin y motivo son requeridos' });
@@ -934,10 +1377,10 @@ app.post('/api/bloqueos', (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO bloqueos (barbero_id, fecha, hora_inicio, hora_fin, motivo)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO bloqueos (barberia_id, barbero_id, fecha, hora_inicio, hora_fin, motivo)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(barbero_id ? Number(barbero_id) : null, fecha, hora_inicio, hora_fin, motivo);
+    const result = stmt.run(tenantId, barbero_id ? Number(barbero_id) : null, fecha, hora_inicio, hora_fin, motivo);
     res.status(201).json({ id: result.lastInsertRowid, message: 'Horario bloqueado con éxito' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -946,8 +1389,9 @@ app.post('/api/bloqueos', (req, res) => {
 
 app.delete('/api/bloqueos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    db.prepare('DELETE FROM bloqueos WHERE id = ?').run(id);
+    db.prepare('DELETE FROM bloqueos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Bloqueo eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -955,18 +1399,20 @@ app.delete('/api/bloqueos/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 7. INGRESOS Y EGRESOS (MOVIMIENTOS DE CAJA & COSTOS)
+// 8. INGRESOS Y EGRESOS (MOVIMIENTOS DE CAJA & COSTOS)
 // ----------------------------------------------------
 app.get('/api/costos', (req, res) => {
   const { desde, hasta, categoria, tipo } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
     let sql = `
       SELECT c.*, b.nombre as barbero_nombre 
       FROM costos c 
       LEFT JOIN barberos b ON c.barbero_id = b.id 
-      WHERE 1=1
+      WHERE c.barberia_id = ?
     `;
-    const params = [];
+    const params = [tenantId];
 
     if (desde && hasta) {
       sql += ' AND c.fecha BETWEEN ? AND ?';
@@ -999,7 +1445,7 @@ app.get('/api/costos', (req, res) => {
       total_egresos: totalEgresos,
       total_ingresos: totalIngresos,
       balance_neto: balanceNeto,
-      total: totalEgresos // compatibilidad
+      total: totalEgresos
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1008,6 +1454,7 @@ app.get('/api/costos', (req, res) => {
 
 app.post('/api/costos', (req, res) => {
   const { tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas } = req.body;
+  const tenantId = getTenantId(req);
 
   if (!categoria || !descripcion || !monto_cop || !fecha) {
     return res.status(400).json({ error: 'Categoría, descripción, monto y fecha requeridos' });
@@ -1015,10 +1462,11 @@ app.post('/api/costos', (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO costos (tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
+      tenantId,
       tipo || 'egreso',
       categoria,
       descripcion,
@@ -1036,8 +1484,9 @@ app.post('/api/costos', (req, res) => {
 
 app.delete('/api/costos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    db.prepare('DELETE FROM costos WHERE id = ?').run(id);
+    db.prepare('DELETE FROM costos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Registro eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1045,15 +1494,16 @@ app.delete('/api/costos/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 8. PRODUCTOS, INVENTARIO Y VENTAS CON COMISIÓN
+// 9. PRODUCTOS, INVENTARIO Y VENTAS CON COMISIÓN
 // ----------------------------------------------------
 app.get('/api/productos', (req, res) => {
+  const tenantId = getTenantId(req);
   const todos = req.query.todos === 'true';
   try {
-    const query = todos
-      ? 'SELECT * FROM productos ORDER BY nombre ASC'
-      : 'SELECT * FROM productos WHERE activo = 1 ORDER BY nombre ASC';
-    const productos = db.prepare(query).all();
+    const sql = todos
+      ? 'SELECT * FROM productos WHERE barberia_id = ? ORDER BY nombre ASC'
+      : 'SELECT * FROM productos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
+    const productos = db.prepare(sql).all(tenantId);
     res.json(productos);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1061,28 +1511,30 @@ app.get('/api/productos', (req, res) => {
 });
 
 app.post('/api/productos', (req, res) => {
-  const { nombre, foto_url, stock, precio_venta, costo_compra, porcentaje_comision, categoria, descripcion } = req.body;
+  const { nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url } = req.body;
+  const tenantId = getTenantId(req);
 
-  if (!nombre || precio_venta === undefined) {
+  if (!nombre || !precio_venta_cop) {
     return res.status(400).json({ error: 'Nombre y precio de venta son requeridos' });
   }
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO productos (nombre, foto_url, stock, precio_venta, costo_compra, porcentaje_comision, categoria, descripcion, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO productos (barberia_id, nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
     const result = stmt.run(
+      tenantId,
       nombre.trim(),
-      foto_url || '',
-      Number(stock) || 0,
-      Number(precio_venta),
-      Number(costo_compra) || 0,
-      Number(porcentaje_comision) || 0,
-      categoria || 'General',
-      descripcion || ''
+      descripcion || '',
+      Number(precio_venta_cop),
+      Number(costo_compra_cop) || 0,
+      Number(stock_actual) || 0,
+      Number(stock_minimo) || 2,
+      Number(comision_barbero_fija) || 0,
+      foto_url || ''
     );
-    res.status(201).json({ id: result.lastInsertRowid, message: 'Producto agregado exitosamente' });
+    res.status(201).json({ id: result.lastInsertRowid, message: 'Producto registrado exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1090,23 +1542,24 @@ app.post('/api/productos', (req, res) => {
 
 app.put('/api/productos/:id', (req, res) => {
   const { id } = req.params;
-  const { nombre, foto_url, stock, precio_venta, costo_compra, porcentaje_comision, categoria, descripcion, activo } = req.body;
+  const tenantId = getTenantId(req);
+  const { nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo } = req.body;
 
   try {
     const stmt = db.prepare(`
       UPDATE productos
       SET nombre = COALESCE(?, nombre),
-          foto_url = COALESCE(?, foto_url),
-          stock = COALESCE(?, stock),
-          precio_venta = COALESCE(?, precio_venta),
-          costo_compra = COALESCE(?, costo_compra),
-          porcentaje_comision = COALESCE(?, porcentaje_comision),
-          categoria = COALESCE(?, categoria),
           descripcion = COALESCE(?, descripcion),
+          precio_venta_cop = COALESCE(?, precio_venta_cop),
+          costo_compra_cop = COALESCE(?, costo_compra_cop),
+          stock_actual = COALESCE(?, stock_actual),
+          stock_minimo = COALESCE(?, stock_minimo),
+          comision_barbero_fija = COALESCE(?, comision_barbero_fija),
+          foto_url = COALESCE(?, foto_url),
           activo = COALESCE(?, activo)
-      WHERE id = ?
+      WHERE id = ? AND barberia_id = ?
     `);
-    stmt.run(nombre, foto_url, stock, precio_venta, costo_compra, porcentaje_comision, categoria, descripcion, activo, id);
+    stmt.run(nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo, id, tenantId);
     res.json({ success: true, message: 'Producto actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1115,88 +1568,77 @@ app.put('/api/productos/:id', (req, res) => {
 
 app.delete('/api/productos/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    db.prepare('DELETE FROM productos WHERE id = ?').run(id);
-    res.json({ success: true, message: 'Producto eliminado' });
+    db.prepare('UPDATE productos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    res.json({ success: true, message: 'Producto desactivado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Registrar una Venta de Producto
+// Registrar venta de producto
 app.post('/api/ventas-productos', (req, res) => {
-  const { producto_id, cantidad, barbero_id, metodo_pago, fecha, notas } = req.body;
+  const { producto_id, barbero_id, cantidad, precio_unitario, metodo_pago, fecha } = req.body;
+  const tenantId = getTenantId(req);
 
   if (!producto_id || !cantidad || Number(cantidad) <= 0) {
-    return res.status(400).json({ error: 'Producto y cantidad válida requeridos' });
+    return res.status(400).json({ error: 'Producto y cantidad válida son requeridos' });
   }
 
-  const transaction = db.transaction(() => {
-    const producto = db.prepare('SELECT * FROM productos WHERE id = ?').get(producto_id);
-    if (!producto) throw new Error('Producto no encontrado');
-
-    const qty = Number(cantidad);
-    if (producto.stock < qty) {
-      throw new Error(`Inventario insuficiente. Stock disponible: ${producto.stock}`);
-    }
-
-    const precioUnit = producto.precio_venta;
-    const costoUnit = producto.costo_compra || 0;
-    const totalVenta = precioUnit * qty;
-    const costoTotal = costoUnit * qty;
-    const pctComision = barbero_id ? (producto.porcentaje_comision || 0) : 0;
-    const montoComision = Math.round(totalVenta * (pctComision / 100));
-    const gananciaNeta = totalVenta - costoTotal - montoComision;
-
-    // 1. Descontar inventario
-    db.prepare('UPDATE productos SET stock = stock - ? WHERE id = ?').run(qty, producto_id);
-
-    // 2. Registrar venta
-    const stmtVenta = db.prepare(`
-      INSERT INTO ventas_productos (
-        producto_id, cantidad, precio_unitario, costo_unitario, total_venta,
-        porcentaje_comision, monto_comision, ganancia_neta, barbero_id, metodo_pago, fecha, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const resultVenta = stmtVenta.run(
-      producto_id,
-      qty,
-      precioUnit,
-      costoUnit,
-      totalVenta,
-      pctComision,
-      montoComision,
-      gananciaNeta,
-      barbero_id ? Number(barbero_id) : null,
-      metodo_pago || 'Efectivo',
-      fecha || new Date().toISOString().split('T')[0],
-      notas || ''
-    );
-
-    // 3. Registrar automáticamente el ingreso en caja
-    db.prepare(`
-      INSERT INTO costos (tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
-      VALUES ('ingreso', 'Venta de Productos', ?, ?, ?, ?, ?, ?)
-    `).run(
-      `Venta: ${qty}x ${producto.nombre}`,
-      totalVenta,
-      fecha || new Date().toISOString().split('T')[0],
-      metodo_pago || 'Efectivo',
-      barbero_id ? Number(barbero_id) : null,
-      notas || 'Venta registrada en tienda'
-    );
-
-    return {
-      id: resultVenta.lastInsertRowid,
-      totalVenta,
-      montoComision,
-      gananciaNeta,
-      nuevoStock: producto.stock - qty
-    };
-  });
-
   try {
+    const transaction = db.transaction(() => {
+      const producto = db.prepare('SELECT * FROM productos WHERE id = ? AND barberia_id = ?').get(producto_id, tenantId);
+      if (!producto) throw new Error('Producto no encontrado');
+
+      const cant = Number(cantidad);
+      if (producto.stock_actual < cant) {
+        throw new Error(`Stock insuficiente. Solo quedan ${producto.stock_actual} unidades disponibles.`);
+      }
+
+      const pUnit = precio_unitario ? Number(precio_unitario) : producto.precio_venta_cop;
+      const totalVenta = pUnit * cant;
+      const comisionUnitaria = producto.comision_barbero_fija || 0;
+      const montoComision = barbero_id ? (comisionUnitaria * cant) : 0;
+      const fechaVenta = fecha || new Date().toISOString().split('T')[0];
+
+      const stmtVenta = db.prepare(`
+        INSERT INTO ventas_productos (barberia_id, producto_id, barbero_id, cantidad, precio_unitario, total_venta, comision_barbero, monto_comision, fecha, metodo_pago)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const resVenta = stmtVenta.run(
+        tenantId,
+        producto_id,
+        barbero_id ? Number(barbero_id) : null,
+        cant,
+        pUnit,
+        totalVenta,
+        comisionUnitaria,
+        montoComision,
+        fechaVenta,
+        metodo_pago || 'Efectivo'
+      );
+
+      // Descontar inventario
+      db.prepare('UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ? AND barberia_id = ?').run(cant, producto_id, tenantId);
+
+      // Registrar ingreso automático en caja
+      db.prepare(`
+        INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
+        VALUES (?, 'ingreso', 'Venta Producto', ?, ?, ?, ?, ?, ?)
+      `).run(
+        tenantId,
+        `Venta: ${cant}x ${producto.nombre}`,
+        totalVenta,
+        fechaVenta,
+        metodo_pago || 'Efectivo',
+        barbero_id ? Number(barbero_id) : null,
+        `Venta ID #${resVenta.lastInsertRowid}`
+      );
+
+      return { venta_id: resVenta.lastInsertRowid, total_venta: totalVenta, monto_comision: montoComision };
+    });
+
     const outcome = transaction();
     res.status(201).json({
       success: true,
@@ -1208,18 +1650,19 @@ app.post('/api/ventas-productos', (req, res) => {
   }
 });
 
-// Listar historial de ventas de productos
 app.get('/api/ventas-productos', (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
     let sql = `
       SELECT v.*, p.nombre as producto_nombre, p.foto_url as producto_foto, b.nombre as barbero_nombre
       FROM ventas_productos v
       JOIN productos p ON v.producto_id = p.id
       LEFT JOIN barberos b ON v.barbero_id = b.id
-      WHERE 1=1
+      WHERE v.barberia_id = ?
     `;
-    const params = [];
+    const params = [tenantId];
     if (barbero_id) {
       sql += ' AND v.barbero_id = ?';
       params.push(barbero_id);
@@ -1238,46 +1681,44 @@ app.get('/api/ventas-productos', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 9. PLANTILLA DE LIQUIDACIÓN Y PAGOS POR PORCENTAJE
+// 10. PLANTILLA DE LIQUIDACIÓN Y PAGOS POR PORCENTAJE
 // ----------------------------------------------------
-// Cálculo previo de comisiones antes de liquidar (acepta % personalizado del dueño)
 app.get('/api/liquidaciones/preview', (req, res) => {
   const { barbero_id, fecha_inicio, fecha_fin, porcentaje } = req.query;
+  const tenantId = getTenantId(req);
 
   if (!barbero_id || !fecha_inicio || !fecha_fin) {
     return res.status(400).json({ error: 'barbero_id, fecha_inicio y fecha_fin son requeridos' });
   }
 
   try {
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ?').get(barbero_id);
+    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    // Citas completadas en el rango que aún NO han sido liquidadas
     const citas = db.prepare(`
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
       WHERE c.barbero_id = ? 
+        AND c.barberia_id = ?
         AND c.fecha BETWEEN ? AND ? 
         AND c.estado = 'completada'
         AND c.liquidacion_id IS NULL
       ORDER BY c.fecha ASC, c.hora_inicio ASC
-    `).all(barbero_id, fecha_inicio, fecha_fin);
+    `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
 
-    // Ventas de productos realizadas por este barbero sin liquidar
     const ventasProductos = db.prepare(`
       SELECT v.*, p.nombre as producto_nombre
       FROM ventas_productos v
       JOIN productos p ON v.producto_id = p.id
       WHERE v.barbero_id = ? 
+        AND v.barberia_id = ?
         AND v.fecha BETWEEN ? AND ?
         AND v.liquidacion_id IS NULL
       ORDER BY v.fecha ASC
-    `).all(barbero_id, fecha_inicio, fecha_fin);
+    `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
 
     const totalBrutoServicios = citas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
-
-    // Porcentaje editable por el dueño (si lo escribió, se usa; si no, el del barbero)
     const porcentajeAplicado = (porcentaje !== undefined && porcentaje !== '' && !isNaN(porcentaje))
       ? Number(porcentaje)
       : (barbero.porcentaje_comision || 50.0);
@@ -1308,9 +1749,9 @@ app.get('/api/liquidaciones/preview', (req, res) => {
   }
 });
 
-// Guardar y cerrar la liquidación
 app.post('/api/liquidaciones', (req, res) => {
   const { barbero_id, fecha_inicio, fecha_fin, porcentaje_aplicado, deducciones, metodo_pago, notas, citas_ids, ventas_ids } = req.body;
+  const tenantId = getTenantId(req);
 
   const arrayCitas = Array.isArray(citas_ids) ? citas_ids : [];
   const arrayVentas = Array.isArray(ventas_ids) ? ventas_ids : [];
@@ -1324,19 +1765,17 @@ app.post('/api/liquidaciones', (req, res) => {
     let comisionServicios = 0;
     const pct = Number(porcentaje_aplicado);
 
-    // 1. Obtener y calcular citas si las hay
     if (arrayCitas.length > 0) {
       const placeholders = arrayCitas.map(() => '?').join(',');
-      const citas = db.prepare(`SELECT id, precio_cobrado FROM citas WHERE id IN (${placeholders})`).all(...arrayCitas);
+      const citas = db.prepare(`SELECT id, precio_cobrado FROM citas WHERE id IN (${placeholders}) AND barberia_id = ?`).all(...arrayCitas, tenantId);
       totalBruto = citas.reduce((sum, c) => sum + c.precio_cobrado, 0);
       comisionServicios = Math.round(totalBruto * (pct / 100));
     }
 
-    // 2. Obtener y calcular comisiones por productos
     let comisionProductos = 0;
     if (arrayVentas.length > 0) {
       const placeholdersVentas = arrayVentas.map(() => '?').join(',');
-      const ventas = db.prepare(`SELECT id, monto_comision FROM ventas_productos WHERE id IN (${placeholdersVentas})`).all(...arrayVentas);
+      const ventas = db.prepare(`SELECT id, monto_comision FROM ventas_productos WHERE id IN (${placeholdersVentas}) AND barberia_id = ?`).all(...arrayVentas, tenantId);
       comisionProductos = ventas.reduce((sum, v) => sum + v.monto_comision, 0);
     }
 
@@ -1344,16 +1783,15 @@ app.post('/api/liquidaciones', (req, res) => {
     const ded = Number(deducciones) || 0;
     const totalPagado = Math.max(0, comisionTotal - ded);
 
-    // 3. Insertar liquidación
     const stmt = db.prepare(`
       INSERT INTO liquidaciones (
-        barbero_id, fecha_inicio, fecha_fin, total_servicios, total_bruto,
-        porcentaje_aplicado, monto_comision, deducciones, total_pagado,
-        metodo_pago, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        barberia_id, barbero_id, fecha_inicio, fecha_fin, total_servicios, total_bruto,
+        porcentaje_aplicado, monto_comision, deducciones, total_pagado, metodo_pago, notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
+      tenantId,
       barbero_id,
       fecha_inicio,
       fecha_fin,
@@ -1369,49 +1807,74 @@ app.post('/api/liquidaciones', (req, res) => {
 
     const liquidacionId = result.lastInsertRowid;
 
-    // 4. Vincular citas
     if (arrayCitas.length > 0) {
       const placeholders = arrayCitas.map(() => '?').join(',');
-      db.prepare(`UPDATE citas SET liquidacion_id = ? WHERE id IN (${placeholders})`).run(liquidacionId, ...arrayCitas);
+      db.prepare(`UPDATE citas SET liquidacion_id = ? WHERE id IN (${placeholders}) AND barberia_id = ?`).run(liquidacionId, ...arrayCitas, tenantId);
     }
 
-    // 5. Vincular ventas de productos
     if (arrayVentas.length > 0) {
-      const placeholdersV = arrayVentas.map(() => '?').join(',');
-      db.prepare(`UPDATE ventas_productos SET liquidacion_id = ? WHERE id IN (${placeholdersV})`).run(liquidacionId, ...arrayVentas);
+      const placeholdersVentas = arrayVentas.map(() => '?').join(',');
+      db.prepare(`UPDATE ventas_productos SET liquidacion_id = ? WHERE id IN (${placeholdersVentas}) AND barberia_id = ?`).run(liquidacionId, ...arrayVentas, tenantId);
     }
 
-    return { liquidacionId, totalPagado };
+    const barbero = db.prepare('SELECT nombre FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+    const barberoNombre = barbero ? barbero.nombre : `Barbero #${barbero_id}`;
+
+    db.prepare(`
+      INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
+      VALUES (?, 'egreso', 'Comisión Barbero', ?, ?, ?, ?, ?, ?)
+    `).run(
+      tenantId,
+      `Liquidación comisiones (${fecha_inicio} a ${fecha_fin}): ${barberoNombre}`,
+      totalPagado,
+      new Date().toISOString().split('T')[0],
+      metodo_pago || 'Efectivo',
+      barbero_id,
+      `Liquidación ID #${liquidacionId}`
+    );
+
+    return {
+      liquidacion_id: liquidacionId,
+      barbero_nombre: barberoNombre,
+      total_pagado: totalPagado
+    };
   });
 
   try {
     const outcome = transaction();
     res.status(201).json({
       success: true,
-      id: outcome.liquidacionId,
-      message: 'Liquidación registrada y turnos/ventas marcados como pagados'
+      message: 'Liquidación generada con éxito y registrada en el Balance General',
+      ...outcome
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Listar historial de liquidaciones
 app.get('/api/liquidaciones', (req, res) => {
-  const { barbero_id } = req.query;
+  const { barbero_id, desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
     let sql = `
-      SELECT l.*, b.nombre as barbero_nombre, b.telefono as barbero_telefono
+      SELECT l.*, b.nombre as barbero_nombre, b.foto_url as barbero_foto
       FROM liquidaciones l
       JOIN barberos b ON l.barbero_id = b.id
-      WHERE 1=1
+      WHERE l.barberia_id = ?
     `;
-    const params = [];
+    const params = [tenantId];
+
     if (barbero_id) {
       sql += ' AND l.barbero_id = ?';
       params.push(barbero_id);
     }
-    sql += ' ORDER BY l.fecha_pago DESC';
+    if (desde && hasta) {
+      sql += ' AND l.fecha_pago BETWEEN ? AND ?';
+      params.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
+    }
+
+    sql += ' ORDER BY l.id DESC';
     const liquidaciones = db.prepare(sql).all(...params);
     res.json(liquidaciones);
   } catch (error) {
@@ -1419,16 +1882,17 @@ app.get('/api/liquidaciones', (req, res) => {
   }
 });
 
-// Detalle de liquidación con sus citas
 app.get('/api/liquidaciones/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
+
   try {
     const liquidacion = db.prepare(`
       SELECT l.*, b.nombre as barbero_nombre, b.telefono as barbero_telefono
       FROM liquidaciones l
       JOIN barberos b ON l.barbero_id = b.id
-      WHERE l.id = ?
-    `).get(id);
+      WHERE l.id = ? AND l.barberia_id = ?
+    `).get(id, tenantId);
 
     if (!liquidacion) return res.status(404).json({ error: 'Liquidación no encontrada' });
 
@@ -1436,167 +1900,141 @@ app.get('/api/liquidaciones/:id', (req, res) => {
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
-      WHERE c.liquidacion_id = ?
-      ORDER BY c.fecha ASC, c.hora_inicio ASC
-    `).all(id);
+      WHERE c.liquidacion_id = ? AND c.barberia_id = ?
+    `).all(id, tenantId);
 
-    res.json({ liquidacion, citas });
+    const ventas = db.prepare(`
+      SELECT v.*, p.nombre as producto_nombre
+      FROM ventas_productos v
+      JOIN productos p ON v.producto_id = p.id
+      WHERE v.liquidacion_id = ? AND v.barberia_id = ?
+    `).all(id, tenantId);
+
+    res.json({
+      ...liquidacion,
+      citas,
+      ventas
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // ----------------------------------------------------
-// 9. REPORTE FINANCIERO, BALANCE GENERAL Y DETALLE POR BARBERO
+// 11. REPORTES: BALANCE GENERAL Y ESTADÍSTICAS FINANCIERAS
 // ----------------------------------------------------
 app.get('/api/reportes/balance', (req, res) => {
   const { desde, hasta } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
-    // 1. Ingresos brutos por citas completadas
-    let sqlCitas = `SELECT SUM(precio_cobrado) as total_ingresos, COUNT(*) as cantidad_servicios FROM citas WHERE estado = 'completada'`;
-    const paramsCitas = [];
-    if (desde && hasta) {
-      sqlCitas += ' AND fecha BETWEEN ? AND ?';
-      paramsCitas.push(desde, hasta);
-    }
-    const citasData = db.prepare(sqlCitas).get(...paramsCitas);
-    const totalIngresosServicios = citasData.total_ingresos || 0;
-    const totalServicios = citasData.cantidad_servicios || 0;
+    const ahora = new Date();
+    const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().split('T')[0];
+    const hoyStr = ahora.toISOString().split('T')[0];
+
+    const fDesde = desde || primerDiaMes;
+    const fHasta = hasta || hoyStr;
+
+    // 1. Citas completadas en el periodo
+    const citasCompletadas = db.prepare(`
+      SELECT c.id, c.barbero_id, c.servicio_id, c.fecha, c.precio_cobrado,
+             b.nombre as barbero_nombre, b.porcentaje_comision,
+             s.nombre as servicio_nombre
+      FROM citas c
+      JOIN barberos b ON c.barbero_id = b.id
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barberia_id = ? AND c.estado = 'completada' AND c.fecha BETWEEN ? AND ?
+      ORDER BY c.fecha ASC
+    `).all(tenantId, fDesde, fHasta);
+
+    const totalIngresosCitas = citasCompletadas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
 
     // 2. Ventas de productos
-    let sqlProd = `SELECT SUM(total_venta) as total_ventas, SUM(monto_comision) as total_comisiones, COUNT(*) as count FROM ventas_productos WHERE 1=1`;
-    const paramsProd = [];
-    if (desde && hasta) {
-      sqlProd += ' AND fecha BETWEEN ? AND ?';
-      paramsProd.push(desde, hasta);
-    }
-    const prodData = db.prepare(sqlProd).get(...paramsProd);
-    const totalVentasProductos = prodData.total_ventas || 0;
+    const ventasProductos = db.prepare(`
+      SELECT v.*, p.nombre as producto_nombre, b.nombre as barbero_nombre
+      FROM ventas_productos v
+      JOIN productos p ON v.producto_id = p.id
+      LEFT JOIN barberos b ON v.barbero_id = b.id
+      WHERE v.barberia_id = ? AND v.fecha BETWEEN ? AND ?
+    `).all(tenantId, fDesde, fHasta);
 
-    // 3. Ingresos extras de caja (no provenientes de productos)
-    let sqlIngresosExtras = `SELECT SUM(monto_cop) as total FROM costos WHERE tipo = 'ingreso' AND categoria != 'Venta de Productos'`;
-    const paramsIngresosExtras = [];
-    if (desde && hasta) {
-      sqlIngresosExtras += ' AND fecha BETWEEN ? AND ?';
-      paramsIngresosExtras.push(desde, hasta);
-    }
-    const ingresosExtrasData = db.prepare(sqlIngresosExtras).get(...paramsIngresosExtras);
-    const totalIngresosExtras = ingresosExtrasData.total || 0;
+    const totalIngresosProductos = ventasProductos.reduce((sum, v) => sum + (v.total_venta || 0), 0);
+    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
 
-    // 4. Liquidaciones pagadas a barberos
-    let sqlLiq = `SELECT SUM(total_pagado) as total_pagado, SUM(monto_comision) as total_comisiones FROM liquidaciones WHERE 1=1`;
-    const paramsLiq = [];
-    if (desde && hasta) {
-      sqlLiq += ' AND fecha_pago BETWEEN ? AND ?';
-      paramsLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-    }
-    const liqData = db.prepare(sqlLiq).get(...paramsLiq);
-    const totalComisionesPagadas = liqData.total_pagado || liqData.total_comisiones || 0;
+    // 3. Movimientos de costos (egresos e ingresos manuales)
+    const movimientosCostos = db.prepare(`
+      SELECT c.*, b.nombre as barbero_nombre
+      FROM costos c
+      LEFT JOIN barberos b ON c.barbero_id = b.id
+      WHERE c.barberia_id = ? AND c.fecha BETWEEN ? AND ?
+    `).all(tenantId, fDesde, fHasta);
 
-    // 5. Gastos y costos operativos (tipo = 'egreso')
-    let sqlCostos = `SELECT SUM(monto_cop) as total_gastos FROM costos WHERE tipo = 'egreso'`;
-    const paramsCostos = [];
-    if (desde && hasta) {
-      sqlCostos += ' AND fecha BETWEEN ? AND ?';
-      paramsCostos.push(desde, hasta);
-    }
-    const costosData = db.prepare(sqlCostos).get(...paramsCostos);
-    const totalCostosOperativos = costosData.total_gastos || 0;
+    const egresosCostos = movimientosCostos.filter(m => !m.tipo || m.tipo === 'egreso');
+    const totalEgresos = egresosCostos.reduce((sum, e) => sum + e.monto_cop, 0);
 
-    // Totales consolidados
-    const totalIngresos = totalIngresosServicios + totalVentasProductos + totalIngresosExtras;
-    const margenBruto = totalIngresos - totalComisionesPagadas;
-    const gananciaNeta = margenBruto - totalCostosOperativos;
+    // Egresos desglosados por categoría
+    const egresosPorCategoria = {};
+    egresosCostos.forEach(e => {
+      const cat = e.categoria || 'Varios';
+      egresosPorCategoria[cat] = (egresosPorCategoria[cat] || 0) + e.monto_cop;
+    });
 
-    // 6. DESGLOSE INDEPENDIENTE POR CADA BARBERO
-    const todosBarberos = db.prepare('SELECT id, nombre, telefono, foto_url, porcentaje_comision, activo FROM barberos ORDER BY id ASC').all();
+    // 4. Liquidaciones pagadas
+    const liquidacionesPagadas = db.prepare(`
+      SELECT l.*, b.nombre as barbero_nombre
+      FROM liquidaciones l
+      JOIN barberos b ON l.barbero_id = b.id
+      WHERE l.barberia_id = ? AND substr(l.fecha_pago, 1, 10) BETWEEN ? AND ?
+    `).all(tenantId, fDesde, fHasta);
 
-    const barberosDetalle = todosBarberos.map(b => {
-      // Citas completadas de este barbero
-      let sqlBCitas = `SELECT COUNT(*) as count, SUM(precio_cobrado) as total FROM citas WHERE barbero_id = ? AND estado = 'completada'`;
-      const paramsBCitas = [b.id];
-      if (desde && hasta) {
-        sqlBCitas += ' AND fecha BETWEEN ? AND ?';
-        paramsBCitas.push(desde, hasta);
-      }
-      const bCitas = db.prepare(sqlBCitas).get(...paramsBCitas);
-      const serviciosCount = bCitas.count || 0;
-      const totalBrutoServicios = bCitas.total || 0;
+    const totalComisionesPagadas = liquidacionesPagadas.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
 
-      // Ventas de productos por este barbero
-      let sqlBProd = `SELECT COUNT(*) as count, SUM(total_venta) as total_venta, SUM(monto_comision) as total_comision FROM ventas_productos WHERE barbero_id = ?`;
-      const paramsBProd = [b.id];
-      if (desde && hasta) {
-        sqlBProd += ' AND fecha BETWEEN ? AND ?';
-        paramsBProd.push(desde, hasta);
-      }
-      const bProd = db.prepare(sqlBProd).get(...paramsBProd);
-      const ventasProdCount = bProd.count || 0;
-      const totalBrutoProd = bProd.total_venta || 0;
-      const comisionProd = bProd.total_comision || 0;
-
-      // Liquidaciones pagadas a este barbero
-      let sqlBLiq = `SELECT SUM(total_pagado) as total_pagado, SUM(monto_comision) as total_comision FROM liquidaciones WHERE barbero_id = ?`;
-      const paramsBLiq = [b.id];
-      if (desde && hasta) {
-        sqlBLiq += ' AND fecha_pago BETWEEN ? AND ?';
-        paramsBLiq.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-      }
-      const bLiq = db.prepare(sqlBLiq).get(...paramsBLiq);
-      const totalLiquidado = bLiq.total_pagado || 0;
-
-      // Citas completadas pendientes por liquidar
-      let sqlBPend = `SELECT SUM(precio_cobrado) as total_pendiente, COUNT(*) as count_pendiente FROM citas WHERE barbero_id = ? AND estado = 'completada' AND liquidacion_id IS NULL`;
-      const paramsBPend = [b.id];
-      if (desde && hasta) {
-        sqlBPend += ' AND fecha BETWEEN ? AND ?';
-        paramsBPend.push(desde, hasta);
-      }
-      const bPend = db.prepare(sqlBPend).get(...paramsBPend);
-      const brutoServiciosPendiente = bPend.total_pendiente || 0;
-      const comisionServiciosPendiente = Math.round(brutoServiciosPendiente * ((b.porcentaje_comision || 50) / 100));
-
-      const totalBrutoGenerado = totalBrutoServicios + totalBrutoProd;
-      
-      // Total asignado al barbero (lo pagado + lo pendiente por pagar)
-      const totalGanadoBarbero = totalLiquidado > 0 ? (totalLiquidado + comisionServiciosPendiente) : (comisionServiciosPendiente + comisionProd);
-      // Lo que le queda a la barbería generado por este barbero
-      const retenidoBarberia = totalBrutoGenerado - totalGanadoBarbero;
-      const margenRetenidoPct = totalBrutoGenerado > 0 
-        ? Math.round((retenidoBarberia / totalBrutoGenerado) * 100) 
-        : Math.round(100 - (b.porcentaje_comision || 50));
+    // 5. Rentabilidad desglosada por barbero
+    const barberos = db.prepare('SELECT id, nombre, porcentaje_comision, foto_url FROM barberos WHERE barberia_id = ?').all(tenantId);
+    const balanceBarberos = barberos.map(b => {
+      const citasDelBarbero = citasCompletadas.filter(c => c.barbero_id === b.id);
+      const facturadoServicios = citasDelBarbero.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
+      const ventasDelBarbero = ventasProductos.filter(v => v.barbero_id === b.id);
+      const facturadoProductos = ventasDelBarbero.reduce((sum, v) => sum + (v.total_venta || 0), 0);
+      const comisionProd = ventasDelBarbero.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
+      const pct = b.porcentaje_comision || 50;
+      const comisionServicios = Math.round(facturadoServicios * (pct / 100));
+      const comisionTotalGenerada = comisionServicios + comisionProd;
+      const utilidadParaNegocio = (facturadoServicios + facturadoProductos) - comisionTotalGenerada;
 
       return {
-        id: b.id,
+        barbero_id: b.id,
         nombre: b.nombre,
         foto_url: b.foto_url,
-        telefono: b.telefono,
-        porcentaje_comision: b.porcentaje_comision || 50,
-        activo: b.activo,
-        servicios_realizados: serviciosCount,
-        total_bruto_servicios: totalBrutoServicios,
-        ventas_productos_count: ventasProdCount,
-        total_bruto_productos: totalBrutoProd,
-        total_bruto_generado: totalBrutoGenerado,
-        total_pagado_liquidaciones: totalLiquidado,
-        comisiones_pendientes: comisionServiciosPendiente,
-        total_ganado_barbero: totalGanadoBarbero,
-        retenido_barberia: retenidoBarberia,
-        porcentaje_retenido_barberia: margenRetenidoPct
+        porcentaje: pct,
+        total_citas: citasDelBarbero.length,
+        total_servicios_cop: facturadoServicios,
+        total_productos_cop: facturadoProductos,
+        total_facturado_cop: facturadoServicios + facturadoProductos,
+        comision_estimada_cop: comisionTotalGenerada,
+        utilidad_neta_negocio_cop: utilidadParaNegocio
       };
     });
 
+    const totalIngresosBrutos = totalIngresosCitas + totalIngresosProductos;
+    const utilidadNetaOperativa = totalIngresosBrutos - totalEgresos;
+
     res.json({
-      total_ingresos: totalIngresos,
-      total_ingresos_servicios: totalIngresosServicios,
-      total_ventas_productos: totalVentasProductos,
-      total_ingresos_extras: totalIngresosExtras,
-      total_servicios: totalServicios,
-      total_comisiones_pagadas: totalComisionesPagadas,
-      total_costos_operativos: totalCostosOperativos,
-      margen_barberia: margenBruto,
-      ganancia_neta: gananciaNeta,
-      barberos_detalle: barberosDetalle
+      periodo: { desde: fDesde, hasta: fHasta },
+      metricas_globales: {
+        total_ingresos_brutos: totalIngresosBrutos,
+        total_ingresos_servicios: totalIngresosCitas,
+        total_ingresos_productos: totalIngresosProductos,
+        total_egresos: totalEgresos,
+        utilidad_neta: utilidadNetaOperativa,
+        total_citas_completadas: citasCompletadas.length,
+        total_liquidaciones_pagadas: totalComisionesPagadas,
+        margen_rentabilidad_pct: totalIngresosBrutos > 0 ? Math.round((utilidadNetaOperativa / totalIngresosBrutos) * 100) : 0
+      },
+      egresos_por_categoria: egresosPorCategoria,
+      balance_barberos: balanceBarberos,
+      citas_recientes: citasCompletadas.slice(0, 30),
+      ultimas_liquidaciones: liquidacionesPagadas
     });
 
   } catch (error) {
@@ -1606,56 +2044,52 @@ app.get('/api/reportes/balance', (req, res) => {
 
 // Endpoint para estadísticas del simulador de rentabilidad & punto de equilibrio
 app.get('/api/reportes/rentabilidad-stats', (req, res) => {
+  const tenantId = getTenantId(req);
   try {
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    // Citas del mes actual
     const citasMes = db.prepare(`
       SELECT COUNT(*) as count, SUM(precio_cobrado) as total 
       FROM citas 
-      WHERE estado = 'completada' AND fecha BETWEEN ? AND ?
-    `).get(primerDiaMes, ultimoDiaMes);
+      WHERE barberia_id = ? AND estado = 'completada' AND fecha BETWEEN ? AND ?
+    `).get(tenantId, primerDiaMes, ultimoDiaMes);
 
-    // Egresos del mes actual (Costos fijos reales registrados)
     const egresosMes = db.prepare(`
       SELECT SUM(monto_cop) as total 
       FROM costos 
-      WHERE tipo = 'egreso' AND fecha BETWEEN ? AND ?
-    `).get(primerDiaMes, ultimoDiaMes);
+      WHERE barberia_id = ? AND tipo = 'egreso' AND fecha BETWEEN ? AND ?
+    `).get(tenantId, primerDiaMes, ultimoDiaMes);
 
-    // Todos los egresos registrados (para promedio mensual en caso de no tener egresos en este mes aún)
     const egresosTotales = db.prepare(`
       SELECT SUM(monto_cop) as total, COUNT(DISTINCT substr(fecha, 1, 7)) as meses_count 
       FROM costos 
-      WHERE tipo = 'egreso'
-    `).get();
+      WHERE barberia_id = ? AND tipo = 'egreso'
+    `).get(tenantId);
 
     let costosFijosEstimados = egresosMes.total || 0;
-    if (costosFijosEstimados === 0 && egresosTotales.total > 0) {
+    if (costosFijosEstimados === 0 && egresosTotales && egresosTotales.total > 0) {
       const meses = Math.max(1, egresosTotales.meses_count || 1);
       costosFijosEstimados = Math.round(egresosTotales.total / meses);
     }
     if (costosFijosEstimados === 0) {
-      costosFijosEstimados = 1200000; // Valor de referencia estándar (arriendo + servicios)
+      costosFijosEstimados = 1200000;
     }
 
-    // Barberos activos y comisiones
-    const barberos = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE activo = 1').all();
+    const barberos = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE barberia_id = ? AND activo = 1').all(tenantId);
     const totalComision = barberos.reduce((acc, b) => acc + (b.porcentaje_comision || 50), 0);
     const comisionPromedio = barberos.length > 0 ? Math.round(totalComision / barberos.length) : 50;
 
-    // Servicios activos y precio promedio
-    const servicios = db.prepare('SELECT precio_cop FROM servicios WHERE activo = 1').all();
+    const servicios = db.prepare('SELECT precio_cop FROM servicios WHERE barberia_id = ? AND activo = 1').all(tenantId);
     const totalPrecios = servicios.reduce((acc, s) => acc + (s.precio_cop || 0), 0);
     const precioPromedio = servicios.length > 0 ? Math.round(totalPrecios / servicios.length) : 25000;
 
     res.json({
       mes_actual_inicio: primerDiaMes,
       mes_actual_fin: ultimoDiaMes,
-      citas_mes_actual: citasMes.count || 0,
-      ingresos_mes_actual: citasMes.total || 0,
+      citas_mes_actual: citasMes ? (citasMes.count || 0) : 0,
+      ingresos_mes_actual: citasMes ? (citasMes.total || 0) : 0,
       costos_fijos_mensuales: costosFijosEstimados,
       barberos_activos_count: barberos.length || 1,
       comision_promedio: comisionPromedio,
@@ -1668,22 +2102,24 @@ app.get('/api/reportes/rentabilidad-stats', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 10. GALERÍA MULTIMEDIA & REDES SOCIALES
+// 12. GALERÍA MULTIMEDIA & REDES SOCIALES
 // ----------------------------------------------------
 app.get('/api/multimedia', (req, res) => {
+  const tenantId = getTenantId(req);
   const todos = req.query.todos === 'true';
   try {
     let sql = `
       SELECT m.*, b.nombre as barbero_nombre 
       FROM galeria_multimedia m
       LEFT JOIN barberos b ON m.barbero_id = b.id
+      WHERE m.barberia_id = ?
     `;
     if (!todos) {
-      sql += ' WHERE m.activo = 1';
+      sql += ' AND m.activo = 1';
     }
     sql += ' ORDER BY m.orden ASC, m.creado_en DESC';
 
-    const items = db.prepare(sql).all();
+    const items = db.prepare(sql).all(tenantId);
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1692,6 +2128,7 @@ app.get('/api/multimedia', (req, res) => {
 
 app.post('/api/multimedia', (req, res) => {
   const { titulo, tipo, url_media, url_red_social, descripcion, barbero_id } = req.body;
+  const tenantId = getTenantId(req);
 
   if (!titulo || !url_media) {
     return res.status(400).json({ error: 'Título y URL de multimedia o red social son obligatorios' });
@@ -1699,10 +2136,11 @@ app.post('/api/multimedia', (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO galeria_multimedia (titulo, tipo, url_media, url_red_social, descripcion, barbero_id, orden, activo)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 1)
+      INSERT INTO galeria_multimedia (barberia_id, titulo, tipo, url_media, url_red_social, descripcion, barbero_id, orden, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)
     `);
     const result = stmt.run(
+      tenantId,
       titulo.trim(),
       tipo || 'imagen',
       url_media.trim(),
@@ -1718,6 +2156,7 @@ app.post('/api/multimedia', (req, res) => {
 
 app.put('/api/multimedia/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   const { titulo, tipo, url_media, url_red_social, descripcion, barbero_id, activo } = req.body;
 
   try {
@@ -1730,7 +2169,7 @@ app.put('/api/multimedia/:id', (req, res) => {
           descripcion = COALESCE(?, descripcion),
           barbero_id = ?,
           activo = COALESCE(?, activo)
-      WHERE id = ?
+      WHERE id = ? AND barberia_id = ?
     `);
     stmt.run(
       titulo,
@@ -1740,7 +2179,8 @@ app.put('/api/multimedia/:id', (req, res) => {
       descripcion,
       barbero_id !== undefined ? (barbero_id ? Number(barbero_id) : null) : null,
       activo,
-      id
+      id,
+      tenantId
     );
     res.json({ success: true, message: 'Publicación actualizada' });
   } catch (error) {
@@ -1750,8 +2190,9 @@ app.put('/api/multimedia/:id', (req, res) => {
 
 app.delete('/api/multimedia/:id', (req, res) => {
   const { id } = req.params;
+  const tenantId = getTenantId(req);
   try {
-    db.prepare('DELETE FROM galeria_multimedia WHERE id = ?').run(id);
+    db.prepare('DELETE FROM galeria_multimedia WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Publicación eliminada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1759,13 +2200,15 @@ app.delete('/api/multimedia/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 11. AUDITORÍA E HISTORIAL TOTAL DE MOVIMIENTOS
+// 13. AUDITORÍA E HISTORIAL TOTAL DE MOVIMIENTOS
 // ----------------------------------------------------
 app.get('/api/auditoria', (req, res) => {
   const { tipo, desde, hasta, limite } = req.query;
+  const tenantId = getTenantId(req);
+
   try {
-    let sql = 'SELECT * FROM auditoria WHERE 1=1';
-    const params = [];
+    let sql = 'SELECT * FROM auditoria WHERE barberia_id = ?';
+    const params = [tenantId];
 
     if (tipo) {
       sql += ' AND tipo_evento = ?';
@@ -1786,25 +2229,26 @@ app.get('/api/auditoria', (req, res) => {
   }
 });
 
-// Endpoint SSE / Long-Polling para Notificaciones en Vivo de Nuevas Citas
+// Notificaciones en vivo de citas para la campana de alertas
 app.get('/api/notificaciones/recientes', (req, res) => {
+  const tenantId = getTenantId(req);
   try {
-    // Últimas citas creadas en las últimas 24 horas
     const recientes = db.prepare(`
       SELECT c.id, c.cliente_nombre, c.fecha, c.hora_inicio, c.creado_en, b.nombre as barbero_nombre, s.nombre as servicio_nombre
       FROM citas c
       JOIN barberos b ON c.barbero_id = b.id
       JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barberia_id = ?
       ORDER BY c.id DESC
       LIMIT 10
-    `).all();
+    `).all(tenantId);
     res.json(recientes);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Soporte para rutas en SPA frontend
+// Soporte para rutas SPA frontend
 if (fs.existsSync(clientDistPath)) {
   app.use((req, res) => {
     res.sendFile(path.join(clientDistPath, 'index.html'));
@@ -1812,5 +2256,5 @@ if (fs.existsSync(clientDistPath)) {
 }
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor de Barbería corriendo en http://localhost:${PORT}`);
+  console.log(`Servidor Multi-Tenant de Barbería corriendo en http://localhost:${PORT}`);
 });
