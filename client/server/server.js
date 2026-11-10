@@ -708,23 +708,6 @@ app.delete('/api/superadmin/barberias/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-    await db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM liquidaciones WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM barberos WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM servicios WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM costos WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM ventas_productos WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM productos WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM galeria_multimedia WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM auditoria WHERE barberia_id = ?').run(id);
-    await db.prepare('DELETE FROM barberias WHERE id = ?').run(id);
-
-    res.json({ success: true, message: 'Barbería eliminada correctamente' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // ----------------------------------------------------
 // 3. BARBEROS (EQUIPO)
