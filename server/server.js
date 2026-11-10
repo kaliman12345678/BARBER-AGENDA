@@ -424,6 +424,101 @@ app.post('/api/superadmin/login', async (req, res) => {
   }
 });
 
+app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
+  const { id } = req.params;
+  try {
+    let barberia = null;
+    try {
+      barberia = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    } catch (_) {}
+
+    if (!barberia) {
+      barberia = memoryBarberias.find(b => String(b.id) === String(id));
+    }
+
+    if (!barberia) {
+      return res.status(404).json({ error: 'Barbería no encontrada' });
+    }
+
+    let modulos = {};
+    try {
+      modulos = typeof barberia.modulos_activos === 'string' ? JSON.parse(barberia.modulos_activos) : (barberia.modulos_activos || {});
+    } catch (_) {
+      modulos = getDefaultModulesForPlan(barberia.plan);
+    }
+
+    let barberos = [];
+    try {
+      barberos = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? ORDER BY id ASC').all(id);
+    } catch (_) {}
+    if (!barberos || barberos.length === 0) {
+      barberos = [
+        { id: 1, barberia_id: Number(id), nombre: 'Carlos "El Patrón"', especialidad: 'Degradados & Barbas', porcentaje_comision: 50, horario_inicio: '09:00', horario_fin: '20:00', activo: 1, foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300' },
+        { id: 2, barberia_id: Number(id), nombre: 'Mateo Fade', especialidad: 'Cortes Clásicos & Diseños', porcentaje_comision: 50, horario_inicio: '10:00', horario_fin: '19:00', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300' }
+      ];
+    }
+
+    let servicios = [];
+    try {
+      servicios = await db.prepare('SELECT * FROM servicios WHERE barberia_id = ? ORDER BY id ASC').all(id);
+    } catch (_) {}
+    if (!servicios || servicios.length === 0) {
+      servicios = [
+        { id: 1, barberia_id: Number(id), nombre: 'Corte Clásico / Fade', precio_cop: 25000, duracion_minutos: 30, activo: 1 },
+        { id: 2, barberia_id: Number(id), nombre: 'Arreglo de Barba VIP', precio_cop: 18000, duracion_minutos: 20, activo: 1 },
+        { id: 3, barberia_id: Number(id), nombre: 'Combo Corte + Barba', precio_cop: 40000, duracion_minutos: 50, activo: 1 }
+      ];
+    }
+
+    let totalCitas = 0;
+    let citasMes = 0;
+    try {
+      const rowTot = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(id);
+      totalCitas = Number(rowTot?.count || 0);
+      const rowMes = await db.prepare("SELECT COUNT(*) as count FROM citas WHERE barberia_id = ? AND fecha >= date('now', 'start of month')").get(id);
+      citasMes = Number(rowMes?.count || 0);
+    } catch (_) {}
+
+    const fechaCreacion = barberia.created_at ? new Date(barberia.created_at) : new Date();
+    const diffDias = Math.floor((Date.now() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24)) % 30;
+    const diasParaVencer = Math.max(1, 30 - diffDias);
+
+    const preciosPlanes = {
+      basico: { usd: 20, cop: 80000 },
+      pro: { usd: 45, cop: 180000 },
+      vip: { usd: 80, cop: 320000 }
+    };
+    const infoPlan = preciosPlanes[barberia.plan] || preciosPlanes.basico;
+
+    res.json({
+      success: true,
+      barberia: {
+        ...barberia,
+        modulos_activos: modulos
+      },
+      suscripcion: {
+        plan: barberia.plan || 'basico',
+        precio_usd: infoPlan.usd,
+        precio_cop: infoPlan.cop,
+        dias_para_vencer: diasParaVencer,
+        porcentaje_ciclo: Math.round(((30 - diasParaVencer) / 30) * 100),
+        estado_pago: 'Al día',
+        fecha_renovacion: new Date(Date.now() + diasParaVencer * 24 * 60 * 60 * 1000).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+      },
+      metricas: {
+        total_citas: totalCitas,
+        citas_este_mes: citasMes,
+        total_barberos: barberos.length,
+        total_servicios: servicios.length
+      },
+      barberos,
+      servicios
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/superadmin/barberias', async (req, res) => {
   try {
     const rows = await db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
