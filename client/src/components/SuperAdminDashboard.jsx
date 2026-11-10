@@ -35,11 +35,12 @@ import {
   Eye,
   EyeOff,
   BarChart3,
-  CreditCard
+  CreditCard,
+  Menu
 } from 'lucide-react';
 
 const COLOR_PRESETS = [
-  { name: 'Azul Konnexa', hex: '#2563eb' },
+  { name: 'Azul EXAKTA', hex: '#2563eb' },
   { name: 'Esmeralda', hex: '#059669' },
   { name: 'Púrpura Imperial', hex: '#7c3aed' },
   { name: 'Rubí Clásico', hex: '#dc2626' },
@@ -56,6 +57,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   // Navegación en el menú lateral
   const [seccionActiva, setSeccionActiva] = useState('inicio');
   const [filtroTiempo, setFiltroTiempo] = useState('hoy');
+  const [sidebarMovilAbierto, setSidebarMovilAbierto] = useState(false);
 
   // Datos
   const [barberias, setBarberias] = useState([]);
@@ -67,7 +69,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   // Modales
   const [modalCrearOpen, setModalCrearOpen] = useState(false);
   const [slugCopiado, setSlugCopiado] = useState(null);
-  const [mostrarPinLocal, setMostrarPinLocal] = useState({});
 
   // Formulario Crear Barbería
   const [nuevaBarberia, setNuevaBarberia] = useState({
@@ -150,7 +151,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         const data = await res.json();
         setBarberiaDetalle(data);
       } else {
-        // Fallback local si el endpoint tarda
         const dias = calcularDiasVencer(barberia);
         setBarberiaDetalle({
           success: true,
@@ -275,7 +275,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           eslogan: 'Tu estilo en las mejores manos'
         });
         await cargarBarberias();
-        // Abrir de inmediato el detalle de la recién creada
         if (data.barberia) {
           handleAbrirDetalle(data.barberia);
         }
@@ -297,7 +296,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     setTimeout(() => setSlugCopiado(null), 2000);
   }
 
-  // Acceder directamente a una barbería en modo dueño
   function handleEntrarComoDueno(barberia, e) {
     if (e) e.stopPropagation();
     sessionStorage.setItem('barberia_admin_token', 'auth-admin-session-token');
@@ -309,7 +307,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     }
   }
 
-  // Cálculo de días para vencer (ciclo de 30 días)
   function calcularDiasVencer(barberia) {
     if (!barberia) return 30;
     const base = barberia.created_at ? new Date(barberia.created_at).getTime() : (barberia.id && barberia.id > 1000000000 ? barberia.id : Date.now());
@@ -317,13 +314,11 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     return Math.max(1, 30 - diasTranscurridos);
   }
 
-  // Estadísticas globales para las tarjetas pastel (Konnexa)
   const totalBarberias = barberias.length;
   const barberiasActivas = barberias.filter(b => b.activo !== 0).length;
   const totalBarberosRed = barberias.reduce((acc, b) => acc + (b.total_barberos || 1), 0);
   const totalCitasRed = barberias.reduce((acc, b) => acc + (b.total_citas || 0), 0);
   
-  // MRR Estimado (Facturación recurrente mensual)
   const mrrTotalUSD = barberias.reduce((acc, b) => {
     const val = b.plan === 'vip' ? 80 : (b.plan === 'pro' ? 45 : 20);
     return acc + val;
@@ -331,12 +326,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   const cuentasPorVencer = barberias.filter(b => calcularDiasVencer(b) <= 5 || b.activo === 0).length;
 
-  // Fecha actual formateada estilo Konnexa
   const fechaHoyStr = new Date().toLocaleDateString('es-CO', {
-    weekday: 'long',
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
-    year: 'numeric'
+    month: 'short'
   });
   const horaHoyStr = new Date().toLocaleTimeString('es-CO', {
     hour: '2-digit',
@@ -348,14 +341,14 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   if (!isSuperLoggedIn) {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-4">
-        <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full shadow-xl">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-xl">
           <div className="flex items-center justify-center gap-2.5 mb-6">
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-md">
-              K
+              E
             </div>
             <div>
-              <span className="text-xl font-black text-slate-900 tracking-tight">Konnexa</span>
-              <span className="block text-[10px] text-blue-600 font-bold uppercase tracking-wider">SuperAdmin Master</span>
+              <span className="text-xl font-black text-slate-900 tracking-tight">EXAKTA</span>
+              <span className="block text-[10px] text-blue-600 font-bold uppercase tracking-wider">SuperAdmin Suite</span>
             </div>
           </div>
 
@@ -370,7 +363,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
           {pinError && (
             <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{pinError}</span>
             </div>
           )}
@@ -409,25 +402,20 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-600 selection:text-white">
-
-      {/* ======================================================== */}
-      {/* 1. BARRA LATERAL IZQUIERDA (ESTÉTICA KONNEXA COMPLETA)     */}
-      {/* ======================================================== */}
-      <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 sticky top-0 h-screen z-30">
+  // Componente Sidebar contenido (reutilizable en escritorio y móvil)
+  const SidebarContent = () => (
+    <div className="flex flex-col justify-between h-full">
+      <div className="p-4 space-y-4 overflow-y-auto">
         
-        {/* PARTE SUPERIOR DEL SIDEBAR */}
-        <div className="p-4 space-y-4 overflow-y-auto">
-          
-          {/* LOGO DE KONNEXA */}
-          <div className="flex items-center gap-2.5 px-2 pt-1 pb-2">
+        {/* LOGO DE EXAKTA */}
+        <div className="flex items-center justify-between px-2 pt-1 pb-2">
+          <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-400 flex items-center justify-center text-white font-black text-lg shadow-sm">
-              K
+              E
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-base text-slate-900 tracking-tight leading-none">Konnexa</span>
+                <span className="font-black text-base text-slate-900 tracking-tight leading-none">EXAKTA</span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-extrabold border border-blue-200 uppercase">
                   SaaS
                 </span>
@@ -436,212 +424,251 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             </div>
           </div>
 
-          {/* BOTÓN PRINCIPAL ACCIÓN: + CREAR LANDING / BARBERÍA CON IA */}
+          {/* Botón cerrar en móvil */}
           <button
-            onClick={() => setModalCrearOpen(true)}
-            className="w-full py-2.5 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-blue-500/25 transition-all group"
+            onClick={() => setSidebarMovilAbierto(false)}
+            className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-200 group-hover:rotate-12 transition-transform" />
-            <span>Crear Barbería</span>
+            <X className="w-5 h-5" />
           </button>
-
-          {/* ÍTEM DIRECTO: MIS TIENDAS CON CONTADOR */}
-          <div className="pt-1">
-            <button
-              onClick={() => setSeccionActiva('barberias')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'barberias'
-                  ? 'bg-blue-50/70 text-blue-700 font-bold'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Store className="w-4 h-4 text-slate-500" />
-                <span>Mis Barberías</span>
-              </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-600">
-                {totalBarberias}
-              </span>
-            </button>
-          </div>
-
-          {/* GRUPO: VENDER / GESTIÓN */}
-          <div className="space-y-0.5">
-            <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-              Gestión SaaS
-            </span>
-
-            <button
-              onClick={() => setSeccionActiva('inicio')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'inicio'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Activity className="w-4 h-4 text-blue-600" />
-              <span>Inicio</span>
-            </button>
-
-            <button
-              onClick={() => setSeccionActiva('barberias')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'barberias'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Building2 className="w-4 h-4 text-slate-500" />
-              <span>Barberías Clientes</span>
-            </button>
-
-            <button
-              onClick={() => setSeccionActiva('planes')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'planes'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Crown className="w-4 h-4 text-amber-500" />
-              <span>Planes & Suscripciones</span>
-            </button>
-
-            <button
-              onClick={() => setSeccionActiva('citas')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'citas'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Calendar className="w-4 h-4 text-slate-500" />
-              <span>Citas Procesadas</span>
-            </button>
-          </div>
-
-          {/* GRUPO: ATENDER & CRECER */}
-          <div className="space-y-0.5">
-            <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-              Red & Equipo
-            </span>
-
-            <button
-              onClick={() => setSeccionActiva('barberos')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'barberos'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Scissors className="w-4 h-4 text-slate-500" />
-              <span>Barberos en Red ({totalBarberosRed})</span>
-            </button>
-
-            <button
-              onClick={() => setSeccionActiva('metricas')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'metricas'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 text-slate-500" />
-              <span>Facturación MRR</span>
-            </button>
-          </div>
-
-          {/* GRUPO: CUENTA */}
-          <div className="space-y-0.5">
-            <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-              Cuenta
-            </span>
-
-            <button
-              onClick={() => setSeccionActiva('auditoria')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                seccionActiva === 'auditoria'
-                  ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-slate-500" />
-              <span>Auditoría & Logs</span>
-            </button>
-          </div>
-
         </div>
 
-        {/* PARTE INFERIOR DEL SIDEBAR (PERFIL WILLINGTON / SUPERADMIN) */}
-        <div className="p-3 border-t border-slate-100 space-y-2 bg-slate-50/50">
-          
-          {/* Botón para volver al cliente */}
-          <button
-            onClick={onVolverAApp}
-            className="w-full py-2 px-3 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-between transition-colors shadow-xs"
-          >
-            <div className="flex items-center gap-2">
-              <Store className="w-3.5 h-3.5 text-blue-600" />
-              <span>Volver a la App</span>
-            </div>
-            <ExternalLink className="w-3 h-3 text-slate-400" />
-          </button>
+        {/* BOTÓN PRINCIPAL ACCIÓN: + CREAR BARBERÍA */}
+        <button
+          onClick={() => {
+            setModalCrearOpen(true);
+            setSidebarMovilAbierto(false);
+          }}
+          className="w-full py-2.5 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-blue-500/25 transition-all group"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-blue-200 group-hover:rotate-12 transition-transform" />
+          <span>Crear Barbería</span>
+        </button>
 
-          {/* Card de Usuario Estilo Konnexa */}
-          <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between shadow-xs">
+        {/* ÍTEM DIRECTO: MIS BARBERÍAS CON CONTADOR */}
+        <div className="pt-1">
+          <button
+            onClick={() => {
+              setSeccionActiva('barberias');
+              setSidebarMovilAbierto(false);
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'barberias'
+                ? 'bg-blue-50/70 text-blue-700 font-bold'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
-                W
-              </div>
-              <div className="leading-tight">
-                <span className="block text-xs font-bold text-slate-900">Willington</span>
-                <span className="text-[10px] text-slate-400 font-medium">Master Root</span>
-              </div>
+              <Store className="w-4 h-4 text-slate-500" />
+              <span>Mis Barberías</span>
             </div>
-
-            <button
-              onClick={handleLogoutSuper}
-              title="Cerrar sesión SuperAdmin"
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+              {totalBarberias}
+            </span>
+          </button>
         </div>
 
+        {/* GRUPO: GESTIÓN */}
+        <div className="space-y-0.5">
+          <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+            Gestión
+          </span>
+
+          <button
+            onClick={() => { setSeccionActiva('inicio'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'inicio'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-blue-600" />
+            <span>Inicio</span>
+          </button>
+
+          <button
+            onClick={() => { setSeccionActiva('barberias'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'barberias'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-slate-500" />
+            <span>Barberías Clientes</span>
+          </button>
+
+          <button
+            onClick={() => { setSeccionActiva('planes'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'planes'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Crown className="w-4 h-4 text-amber-500" />
+            <span>Planes & Suscripciones</span>
+          </button>
+
+          <button
+            onClick={() => { setSeccionActiva('citas'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'citas'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-slate-500" />
+            <span>Citas Procesadas ({totalCitasRed})</span>
+          </button>
+        </div>
+
+        {/* GRUPO: RED & EQUIPO */}
+        <div className="space-y-0.5">
+          <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+            Red & Equipo
+          </span>
+
+          <button
+            onClick={() => { setSeccionActiva('barberos'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'barberos'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Scissors className="w-4 h-4 text-slate-500" />
+            <span>Barberos en Red ({totalBarberosRed})</span>
+          </button>
+
+          <button
+            onClick={() => { setSeccionActiva('metricas'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'metricas'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 text-slate-500" />
+            <span>Facturación MRR (${mrrTotalUSD})</span>
+          </button>
+        </div>
+
+        {/* GRUPO: CUENTA */}
+        <div className="space-y-0.5">
+          <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
+            Sistema
+          </span>
+
+          <button
+            onClick={() => { setSeccionActiva('auditoria'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'auditoria'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-slate-500" />
+            <span>Auditoría & Logs</span>
+          </button>
+        </div>
+
+      </div>
+
+      {/* PARTE INFERIOR DEL SIDEBAR */}
+      <div className="p-3 border-t border-slate-100 space-y-2 bg-slate-50/50">
+        
+        <button
+          onClick={onVolverAApp}
+          className="w-full py-2 px-3 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-between transition-colors shadow-xs"
+        >
+          <div className="flex items-center gap-2">
+            <Store className="w-3.5 h-3.5 text-blue-600" />
+            <span>Volver a la App</span>
+          </div>
+          <ExternalLink className="w-3 h-3 text-slate-400" />
+        </button>
+
+        <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-xs flex items-center justify-center">
+              E
+            </div>
+            <div className="leading-tight">
+              <span className="block text-xs font-bold text-slate-900">EXAKTA Root</span>
+              <span className="text-[10px] text-slate-400 font-medium">Master Admin</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleLogoutSuper}
+            title="Cerrar sesión SuperAdmin"
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+      {/* SIDEBAR ESCRITORIO (FIJO A LA IZQUIERDA) */}
+      <aside className="hidden md:flex w-64 bg-white border-r border-slate-200/90 flex-col justify-between shrink-0 sticky top-0 h-screen z-30">
+        <SidebarContent />
       </aside>
 
-      {/* ======================================================== */}
-      {/* 2. ÁREA PRINCIPAL DE CONTENIDO                            */}
-      {/* ======================================================== */}
+      {/* SIDEBAR MÓVIL DESLIZANTE (OFF-CANVAS DRAWER) */}
+      {sidebarMovilAbierto && (
+        <div className="fixed inset-0 z-50 md:hidden animate-fadeIn">
+          <div 
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setSidebarMovilAbierto(false)}
+          />
+          <div className="fixed inset-y-0 left-0 max-w-xs w-full bg-white shadow-2xl z-10 animate-slideInRight">
+            <SidebarContent />
+          </div>
+        </div>
+      )}
+
+      {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
 
-        {/* BARRA SUPERIOR DE ENCABEZADO */}
-        <header className="h-16 bg-white border-b border-slate-200/90 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20">
+        {/* HEADER SUPERIOR RESPONSIVO */}
+        <header className="h-16 bg-white border-b border-slate-200/90 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-20">
           
-          {/* TÍTULO / VISTA */}
           <div className="flex items-center gap-3">
-            <span className="font-extrabold text-sm text-slate-900">Inicio</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-xs text-slate-500 font-medium">SuperAdmin Konnexa</span>
+            {/* Botón menú móvil */}
+            <button
+              onClick={() => setSidebarMovilAbierto(true)}
+              className="md:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-sm text-slate-900">EXAKTA</span>
+              <span className="text-slate-300">/</span>
+              <span className="text-xs text-slate-500 font-medium capitalize">{seccionActiva}</span>
+            </div>
           </div>
 
-          {/* DERECHA: FILTROS DE TIEMPO (Hoy, Ayer, 7 días...) Y FECHA */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             
-            <div className="hidden sm:flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold">
+            {/* Filtros de tiempo scrollables en móvil */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold overflow-x-auto">
               {[
                 { id: 'hoy', label: 'Hoy' },
-                { id: 'ayer', label: 'Ayer' },
-                { id: '7d', label: '7 días' },
-                { id: '30d', label: '30 días' },
-                { id: 'fechas', label: 'Fechas' }
+                { id: '7d', label: '7d' },
+                { id: '30d', label: '30d' }
               ].map(f => (
                 <button
                   key={f.id}
                   onClick={() => setFiltroTiempo(f.id)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
                     filtroTiempo === f.id
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -652,7 +679,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               ))}
             </div>
 
-            <div className="text-right hidden md:block">
+            <div className="text-right hidden sm:block">
               <span className="text-[11px] text-slate-500 font-medium capitalize block leading-tight">
                 {fechaHoyStr}
               </span>
@@ -666,23 +693,33 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         </header>
 
         {/* CONTENIDO SCROLLEABLE */}
-        <main className="p-6 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="p-4 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
 
-          {/* SALUDO KONNEXA */}
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight font-sans">
-              Buenas tardes, Willington
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Aquí tienes lo que necesita tu atención hoy en tu red de barberías.
-            </p>
+          {/* SALUDO EXAKTA */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-sans">
+                Panel Maestro EXAKTA
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Control central de barberías clientes, planes, módulos independientes y métricas.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setModalCrearOpen(true)}
+              className="sm:hidden py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nueva Barbería</span>
+            </button>
           </div>
 
-          {/* 4 TARJETAS PASTEL KONNEXA (KPIs) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 4 TARJETAS PASTEL (KPIs) RESPONSIVAS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
-            {/* TARJETA 1: AMBER (Necesitan tu atención / Suscripción) */}
-            <div className="bg-[#fefce8] border border-amber-200/80 rounded-2xl p-5 space-y-3 shadow-xs">
+            {/* TARJETA 1: AMBER */}
+            <div className="bg-[#fefce8] border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4" />
@@ -692,27 +729,27 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </span>
               </div>
               <div>
-                <span className="text-3xl font-black text-amber-950 block leading-tight">
+                <span className="text-2xl sm:text-3xl font-black text-amber-950 block leading-tight">
                   {cuentasPorVencer}
                 </span>
                 <span className="text-xs font-bold text-amber-900 block mt-1">
-                  Necesitan tu ayuda
+                  Por vencer / Inactivas
                 </span>
                 <p className="text-[11px] text-amber-700/90 leading-tight mt-1">
-                  Cuentas por vencer en &lt; 5 días o suspendidas.
+                  Cuentas con suscripción por vencer en &lt; 5 días.
                 </p>
               </div>
               <button
                 onClick={() => setSeccionActiva('barberias')}
                 className="text-[11px] font-extrabold text-amber-800 hover:text-amber-950 flex items-center gap-1 pt-1"
               >
-                <span>Atender ahora</span>
+                <span>Revisar cuentas</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* TARJETA 2: PURPLE (Barberos en servicio) */}
-            <div className="bg-[#faf5ff] border border-purple-200/80 rounded-2xl p-5 space-y-3 shadow-xs">
+            {/* TARJETA 2: PURPLE */}
+            <div className="bg-[#faf5ff] border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
                   <Scissors className="w-4 h-4" />
@@ -722,14 +759,14 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </span>
               </div>
               <div>
-                <span className="text-3xl font-black text-purple-950 block leading-tight">
+                <span className="text-2xl sm:text-3xl font-black text-purple-950 block leading-tight">
                   {totalBarberosRed}
                 </span>
                 <span className="text-xs font-bold text-purple-900 block mt-1">
-                  Barberos en servicio
+                  Barberos en la red
                 </span>
                 <p className="text-[11px] text-purple-700/90 leading-tight mt-1">
-                  Personal activo atendiendo turnos en los locales.
+                  Personal profesional atendiendo turnos en los locales.
                 </p>
               </div>
               <button
@@ -741,8 +778,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </button>
             </div>
 
-            {/* TARJETA 3: BLUE (Facturación SaaS / MRR) */}
-            <div className="bg-[#f0f9ff] border border-sky-200/80 rounded-2xl p-5 space-y-3 shadow-xs">
+            {/* TARJETA 3: BLUE */}
+            <div className="bg-[#f0f9ff] border border-sky-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
                   <DollarSign className="w-4 h-4" />
@@ -752,27 +789,27 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </span>
               </div>
               <div>
-                <span className="text-3xl font-black text-sky-950 block leading-tight">
-                  ${mrrTotalUSD}
+                <span className="text-2xl sm:text-3xl font-black text-sky-950 block leading-tight">
+                  ${mrrTotalUSD} USD
                 </span>
                 <span className="text-xs font-bold text-sky-900 block mt-1">
-                  Ingresos mensuales SaaS
+                  Facturación mensual
                 </span>
                 <p className="text-[11px] text-sky-700/90 leading-tight mt-1">
-                  Facturación recurrente generada por suscripciones.
+                  Ingresos recurrentes generados por las suscripciones.
                 </p>
               </div>
               <button
                 onClick={() => setSeccionActiva('planes')}
                 className="text-[11px] font-extrabold text-sky-800 hover:text-sky-950 flex items-center gap-1 pt-1"
               >
-                <span>Ver mis suscripciones</span>
+                <span>Ver planes activos</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* TARJETA 4: GREEN (Barberías Activas) */}
-            <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-2xl p-5 space-y-3 shadow-xs">
+            {/* TARJETA 4: GREEN */}
+            <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
                   <Store className="w-4 h-4" />
@@ -782,50 +819,48 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </span>
               </div>
               <div>
-                <span className="text-3xl font-black text-emerald-950 block leading-tight">
+                <span className="text-2xl sm:text-3xl font-black text-emerald-950 block leading-tight">
                   {barberiasActivas} / {totalBarberias}
                 </span>
                 <span className="text-xs font-bold text-emerald-900 block mt-1">
-                  Barberías operando
+                  Barberías activas
                 </span>
                 <p className="text-[11px] text-emerald-700/90 leading-tight mt-1">
-                  Locales con agenda abierta en línea a clientes.
+                  Clientes operando con agendamiento público en vivo.
                 </p>
               </div>
               <button
                 onClick={() => setSeccionActiva('barberias')}
                 className="text-[11px] font-extrabold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 pt-1"
               >
-                <span>Ver mis locales</span>
+                <span>Ver lista completa</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
           </div>
 
-          {/* BANNER VERDE INFORMATIVO (KONNEXA STATUS) */}
-          <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl px-4 py-3 flex items-center justify-between shadow-xs">
+          {/* BANNER STATUS */}
+          <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
             <div className="flex items-center gap-2.5 text-xs text-emerald-800">
               <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-3.5 h-3.5" />
               </div>
               <span>
-                El sistema multi-inquilino de Konnexa se encuentra 100% operativo en Vercel & Supabase.
+                Plataforma <strong>EXAKTA Multi-Tenant</strong> operando con normalidad.
               </span>
             </div>
             <button
               onClick={cargarBarberias}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 self-end sm:self-auto"
             >
               <RefreshCw className="w-3 h-3" />
-              <span>Actualizar datos</span>
+              <span>Sincronizar</span>
             </button>
           </div>
 
-          {/* ======================================================== */}
-          {/* SECCIÓN PRINCIPAL: LISTA DE BARBERÍAS CON CLIC A DETALLE  */}
-          {/* ======================================================== */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+          {/* LISTA DE BARBERÍAS CON CLIC A DETALLE COMPLETO */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4">
             
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -833,21 +868,21 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   Barberías Registradas ({totalBarberias})
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Haz clic en cualquier barbería para abrir su <strong>detalle completo</strong>, barberos, plan y días para vencer.
+                  Toca cualquier barbería para inspeccionar su <strong>detalle completo</strong>, equipo de barberos, plan y días para vencer.
                 </p>
               </div>
 
               <button
                 onClick={() => setModalCrearOpen(true)}
-                className="py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                className="hidden sm:flex py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold items-center gap-1.5 transition-colors shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Nueva Barbería</span>
               </button>
             </div>
 
-            {/* LISTADO DE TARJETAS / FILAS DE BARBERÍA */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* GRILLA DE TARJETAS DE BARBERÍA */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {barberias.map((barberia) => {
                 const diasRestantes = calcularDiasVencer(barberia);
                 const planName = (barberia.plan || 'basico').toUpperCase();
@@ -857,29 +892,28 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <div
                     key={barberia.id}
                     onClick={() => handleAbrirDetalle(barberia)}
-                    className="p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative flex flex-col justify-between space-y-4"
+                    className="p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative flex flex-col justify-between space-y-3 sm:space-y-4"
                   >
-                    {/* CABECERA DE LA TARJETA */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    {/* CABECERA */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0"
+                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0"
                           style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
                         >
                           {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
                         </div>
-                        <div>
-                          <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
                             {barberia.nombre}
                           </h4>
-                          <span className="text-[11px] text-slate-400 font-mono block">
+                          <span className="text-[11px] text-slate-400 font-mono block truncate">
                             /?b={barberia.slug}
                           </span>
                         </div>
                       </div>
 
-                      {/* BADGE DE PLAN */}
-                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
                         barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
                         barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                         'bg-slate-100 text-slate-700 border border-slate-200'
@@ -888,10 +922,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       </span>
                     </div>
 
-                    {/* MÉTRICAS CLAVE EN LA TARJETA */}
+                    {/* MÉTRICAS */}
                     <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-xl bg-slate-50 text-center border border-slate-100">
                       <div>
-                        <span className="text-[10px] text-slate-400 font-medium block">Días restantes</span>
+                        <span className="text-[10px] text-slate-400 font-medium block">Días vencimiento</span>
                         <span className={`text-xs font-black ${
                           diasRestantes <= 5 ? 'text-rose-600 animate-pulse' : 'text-slate-800'
                         }`}>
@@ -912,10 +946,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       </div>
                     </div>
 
-                    {/* PIE DE LA TARJETA CON ACCIONES */}
+                    {/* PIE */}
                     <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                      
-                      {/* Estado Activo / Pausado */}
                       <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full ${estaActiva ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
                         <span className="text-[11px] font-bold text-slate-600">
@@ -923,7 +955,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                         </span>
                       </div>
 
-                      {/* Botón Ver Detalle */}
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => handleEntrarComoDueno(barberia, e)}
@@ -935,11 +966,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                         </button>
 
                         <span className="text-blue-600 font-bold text-[11px] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                          <span>Ver detalle</span>
+                          <span>Detalle</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </span>
                       </div>
-
                     </div>
                   </div>
                 );
@@ -952,73 +982,68 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
       </div>
 
-      {/* ======================================================== */}
-      {/* 3. MODAL COMPLETO DE DETALLE DE LA BARBERÍA               */}
-      {/* ======================================================== */}
+      {/* MODAL DETALLE COMPLETO DE BARBERÍA (RESPONSIVO MÓVIL) */}
       {modalDetalleOpen && barberiaDetalle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-slideUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-slideUp">
             
-            {/* CABECERA DEL DETALLE */}
-            <div className="p-6 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
+            {/* CABECERA */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-md shrink-0"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-md shrink-0"
                   style={{ backgroundColor: barberiaDetalle.barberia.color_primario || '#2563eb' }}
                 >
                   {barberiaDetalle.barberia.nombre?.slice(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-black text-slate-900 leading-tight">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">
                       {barberiaDetalle.barberia.nombre}
                     </h3>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      barberiaDetalle.barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800' :
-                      barberiaDetalle.barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800' :
-                      'bg-slate-200 text-slate-700'
-                    }`}>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 uppercase tracking-wider">
                       Plan {barberiaDetalle.barberia.plan?.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                  <p className="text-xs text-slate-500 font-mono mt-0.5 truncate">
                     ID: {barberiaDetalle.barberia.id} • Slug: /{barberiaDetalle.barberia.slug}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => handleEntrarComoDueno(barberiaDetalle.barberia)}
-                  className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                  className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-colors"
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Entrar como Dueño</span>
+                  <span className="hidden sm:inline">Entrar como Dueño</span>
+                  <span className="sm:hidden">Dueño</span>
                 </button>
                 <button
                   onClick={() => setModalDetalleOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* PESTAÑAS DENTRO DEL DETALLE */}
-            <div className="px-6 border-b border-slate-100 flex items-center gap-6 text-xs font-bold bg-white">
+            {/* PESTAÑAS DETALLE SCROLLEABLES EN MÓVIL */}
+            <div className="px-4 sm:px-6 border-b border-slate-100 flex items-center gap-4 sm:gap-6 text-xs font-bold bg-white overflow-x-auto">
               <button
                 onClick={() => setTabDetalle('resumen')}
-                className={`py-3 border-b-2 transition-all ${
+                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
                   tabDetalle === 'resumen'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
-                Resumen & Suscripción
+                Resumen & Días para Vencer
               </button>
               <button
                 onClick={() => setTabDetalle('barberos')}
-                className={`py-3 border-b-2 transition-all ${
+                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
                   tabDetalle === 'barberos'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1028,7 +1053,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </button>
               <button
                 onClick={() => setTabDetalle('modulos')}
-                className={`py-3 border-b-2 transition-all ${
+                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
                   tabDetalle === 'modulos'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1038,7 +1063,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </button>
               <button
                 onClick={() => setTabDetalle('ajustes')}
-                className={`py-3 border-b-2 transition-all ${
+                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
                   tabDetalle === 'ajustes'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1048,30 +1073,30 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </button>
             </div>
 
-            {/* CONTENIDO DE LA PESTAÑA SELECCIONADA */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+            {/* CONTENIDO SCROLLEABLE */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
 
-              {/* PESTAÑA 1: RESUMEN Y SUSCRIPCIÓN */}
+              {/* PESTAÑA 1: RESUMEN */}
               {tabDetalle === 'resumen' && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   
-                  {/* TARJETA DE DÍAS PARA VENCER Y SUSCRIPCIÓN */}
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg space-y-4">
+                  {/* CARD DE DÍAS PARA VENCER */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-amber-400" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                        <CreditCard className="w-4 h-4 text-amber-400" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
                           Suscripción SaaS Activa
                         </span>
                       </div>
-                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                         {barberiaDetalle.suscripcion?.estado_pago || 'Al día'}
                       </span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                       <div>
-                        <span className="text-4xl font-black tracking-tight text-white font-mono">
+                        <span className="text-3xl sm:text-4xl font-black tracking-tight text-white font-mono">
                           {barberiaDetalle.suscripcion?.dias_para_vencer}
                         </span>
                         <span className="text-xs text-slate-300 font-bold ml-2">
@@ -1084,7 +1109,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
                       <div className="text-left sm:text-right">
                         <span className="text-xs text-slate-400 block font-medium">Cuota mensual:</span>
-                        <span className="text-xl font-black text-amber-400 font-mono">
+                        <span className="text-lg sm:text-xl font-black text-amber-400 font-mono">
                           ${barberiaDetalle.suscripcion?.precio_usd} USD
                         </span>
                         <span className="text-[10px] text-slate-400 block">
@@ -1093,8 +1118,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       </div>
                     </div>
 
-                    {/* BARRA DE PROGRESO DEL CICLO MENSUAL */}
-                    <div className="space-y-1.5 pt-1">
+                    {/* BARRA DE PROGRESO */}
+                    <div className="space-y-1 pt-1">
                       <div className="flex justify-between text-[10px] font-bold text-slate-400">
                         <span>Progreso del ciclo mensual</span>
                         <span>{barberiaDetalle.suscripcion?.porcentaje_ciclo}% transcurrido</span>
@@ -1108,48 +1133,48 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     </div>
                   </div>
 
-                  {/* MÉTRICAS DE CITAS Y ACTIVIDAD */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                  {/* 4 MÉTRICAS */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Citas Totales</span>
-                      <span className="text-xl font-black text-slate-900 mt-1 block">
+                      <span className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 block">
                         {barberiaDetalle.metricas?.total_citas || 0}
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Citas Este Mes</span>
-                      <span className="text-xl font-black text-blue-600 mt-1 block">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Citas Mes</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-600 mt-0.5 block">
                         {barberiaDetalle.metricas?.citas_este_mes || 0}
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Barberos</span>
-                      <span className="text-xl font-black text-purple-600 mt-1 block">
+                      <span className="text-lg sm:text-xl font-black text-purple-600 mt-0.5 block">
                         {barberiaDetalle.barberos?.length || 1}
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Servicios</span>
-                      <span className="text-xl font-black text-emerald-600 mt-1 block">
+                      <span className="text-lg sm:text-xl font-black text-emerald-600 mt-0.5 block">
                         {barberiaDetalle.servicios?.length || 2}
                       </span>
                     </div>
                   </div>
 
-                  {/* ENLACE PÚBLICO Y ACCESO */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
-                    <div className="leading-tight">
+                  {/* LINK PÚBLICO */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="min-w-0">
                       <span className="text-xs font-bold text-slate-800 block">Enlace Público de Agendamiento</span>
-                      <span className="text-[11px] text-blue-600 font-mono">
+                      <span className="text-[11px] text-blue-600 font-mono truncate block">
                         {window.location.origin}/?b={barberiaDetalle.barberia.slug}
                       </span>
                     </div>
                     <button
                       onClick={(e) => handleCopiarEnlace(barberiaDetalle.barberia.slug, e)}
-                      className="py-1.5 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      className="py-1.5 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors self-start sm:self-auto shrink-0"
                     >
                       {slugCopiado === barberiaDetalle.barberia.slug ? (
                         <>
@@ -1168,7 +1193,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
               )}
 
-              {/* PESTAÑA 2: EQUIPO DE BARBEROS */}
+              {/* PESTAÑA 2: BARBEROS */}
               {tabDetalle === 'barberos' && (
                 <div className="space-y-3">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
@@ -1178,23 +1203,23 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <div className="space-y-2">
                     {barberiaDetalle.barberos?.map((b) => (
                       <div key={b.id} className="p-3.5 rounded-2xl border border-slate-200/80 bg-white flex items-center justify-between gap-3 shadow-xs">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <img
                             src={b.foto_url || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150'}
                             alt={b.nombre}
-                            className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
                           />
-                          <div>
-                            <span className="text-xs font-extrabold text-slate-900 block leading-tight">
+                          <div className="min-w-0">
+                            <span className="text-xs font-extrabold text-slate-900 block leading-tight truncate">
                               {b.nombre}
                             </span>
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-slate-500 truncate block">
                               {b.especialidad || 'Cortes & Barba'} • Comisión: {b.porcentaje_comision || 50}%
                             </span>
                           </div>
                         </div>
 
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
                             {b.activo ? 'En Turno' : 'Inactivo'}
                           </span>
@@ -1208,7 +1233,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
               )}
 
-              {/* PESTAÑA 3: MÓDULOS ACTIVOS & PLAN */}
+              {/* PESTAÑA 3: MÓDULOS */}
               {tabDetalle === 'modulos' && (
                 <div className="space-y-4">
                   <div>
@@ -1283,25 +1308,21 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               {/* PESTAÑA 4: DATOS DEL LOCAL & PIN */}
               {tabDetalle === 'ajustes' && (
                 <div className="space-y-4">
-                  
-                  {/* PIN DE ACCESO DUEÑO */}
-                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-between">
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <span className="text-xs font-bold text-amber-900 block">PIN de Administrador Dueño</span>
                       <span className="text-xs text-amber-700/80">
-                        Con este PIN el dueño ingresa a administrar este local específico.
+                        Clave exclusiva para que el dueño ingrese a este local.
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-black font-mono tracking-widest text-amber-950 px-3 py-1 bg-white border border-amber-300 rounded-xl">
-                        {barberiaDetalle.barberia.pin_admin || '1234'}
-                      </span>
-                    </div>
+                    <span className="text-lg font-black font-mono tracking-widest text-amber-950 px-3 py-1 bg-white border border-amber-300 rounded-xl self-start sm:self-auto">
+                      {barberiaDetalle.barberia.pin_admin || '1234'}
+                    </span>
                   </div>
 
                   <div className="space-y-3 text-xs">
                     <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-400 font-semibold">Teléfono de Contacto</span>
+                      <span className="text-slate-400 font-semibold">Teléfono</span>
                       <span className="font-bold text-slate-800">{barberiaDetalle.barberia.telefono || 'Sin registrar'}</span>
                     </div>
 
@@ -1328,11 +1349,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                             : 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800'
                         }`}
                       >
-                        {barberiaDetalle.barberia.activo !== 0 ? 'Cuenta Activa (Clic para Pausar)' : 'Pausada (Clic para Reactivar)'}
+                        {barberiaDetalle.barberia.activo !== 0 ? 'Cuenta Activa (Pausar)' : 'Pausada (Reactivar)'}
                       </button>
                     </div>
 
-                    {/* ZONA DE PELIGRO: ELIMINAR */}
                     {barberiaDetalle.barberia.id !== 1 && (
                       <div className="pt-4">
                         <button
@@ -1352,15 +1372,15 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             </div>
 
             {/* PIE DEL MODAL */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
               <span className="text-[11px] text-slate-400">
-                Konnexa Multi-Tenant Platform • ID: {barberiaDetalle.barberia.id}
+                EXAKTA Multi-Tenant • ID: {barberiaDetalle.barberia.id}
               </span>
               <button
                 onClick={() => setModalDetalleOpen(false)}
-                className="py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+                className="py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
               >
-                Cerrar Detalle
+                Cerrar
               </button>
             </div>
 
@@ -1368,30 +1388,28 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* 4. MODAL ALTA DE NUEVA BARBERÍA                           */}
-      {/* ======================================================== */}
+      {/* MODAL ALTA DE NUEVA BARBERÍA */}
       {modalCrearOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative animate-slideUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-2xl relative animate-slideUp max-h-[92vh] overflow-y-auto">
             
             <button
               onClick={() => setModalCrearOpen(false)}
-              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center">
-                <Store className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900 leading-tight">
-                  Alta de Nueva Barbería (Cliente)
+                  Alta de Nueva Barbería
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Crea una cuenta independiente con su propia base de datos y agenda.
+                  Crea una cuenta en EXAKTA con base de datos y agenda propia.
                 </p>
               </div>
             </div>
@@ -1399,7 +1417,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             <form onSubmit={handleCrearBarberia} className="space-y-4">
               
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Nombre de la Barbería *
                 </label>
                 <input
@@ -1412,12 +1430,12 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     const autoSlug = nom.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
                     setNuevaBarberia({ ...nuevaBarberia, nombre: nom, slug: autoSlug });
                   }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Identificador URL (Slug) *
                 </label>
                 <div className="flex items-center">
@@ -1430,13 +1448,13 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     placeholder="fade-master"
                     value={nuevaBarberia.slug}
                     onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, slug: e.target.value })}
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-r-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-r-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Plan de Suscripción *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -1449,7 +1467,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       key={p.id}
                       type="button"
                       onClick={() => setNuevaBarberia({ ...nuevaBarberia, plan: p.id })}
-                      className={`p-3 rounded-2xl border text-left transition-all ${
+                      className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
                         nuevaBarberia.plan === p.id
                           ? 'border-blue-600 bg-blue-50/70 shadow-xs ring-1 ring-blue-600'
                           : 'border-slate-200 hover:border-slate-300'
@@ -1464,8 +1482,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Color Primario de Marca
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Color de Marca
                 </label>
                 <div className="flex items-center gap-2">
                   {COLOR_PRESETS.map((c) => (
@@ -1490,7 +1508,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Teléfono
                   </label>
                   <input
@@ -1503,7 +1521,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     PIN Admin Inicial
                   </label>
                   <input
@@ -1516,7 +1534,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
               </div>
 
-              <div className="flex gap-2.5 pt-4">
+              <div className="flex gap-2.5 pt-3">
                 <button
                   type="button"
                   onClick={() => setModalCrearOpen(false)}

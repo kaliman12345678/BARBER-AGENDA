@@ -224,26 +224,26 @@ export default function ClientBooking({ shopConfig }) {
     <div className="max-w-4xl mx-auto px-4 py-8">
       
       {/* Encabezado Principal */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold tracking-wider uppercase mb-3">
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold tracking-wider uppercase mb-2 sm:mb-3">
           <Sparkles className="w-3.5 h-3.5" />
           Agenda tu Cita en Línea
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-serif">
+        <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight font-sans">
           {shopConfig.nombre_barberia || 'The Barber Club'}
         </h1>
-        <p className="text-slate-400 text-sm sm:text-base mt-2 max-w-lg mx-auto">
+        <p className="text-slate-500 text-xs sm:text-sm mt-1 sm:mt-2 max-w-lg mx-auto">
           Selecciona a tu barbero de confianza, el servicio deseado y elige tu horario disponible al instante.
         </p>
       </div>
 
-      {/* Barra de Progreso de Pasos */}
+      {/* Barra de Progreso de Pasos (Optimizada para Móvil) */}
       {paso < 5 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between max-w-2xl mx-auto relative">
-            <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-800 -translate-y-1/2 z-0"></div>
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center justify-between max-w-2xl mx-auto relative px-2">
+            <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-200 -translate-y-1/2 z-0 rounded-full"></div>
             <div 
-              className="absolute top-1/2 left-0 h-0.5 bg-amber-500 -translate-y-1/2 z-0 transition-all duration-300"
+              className="absolute top-1/2 left-0 h-1 bg-blue-600 -translate-y-1/2 z-0 transition-all duration-300 rounded-full"
               style={{ width: `${((paso - 1) / 3) * 100}%` }}
             ></div>
 
@@ -259,18 +259,18 @@ export default function ClientBooking({ shopConfig }) {
               return (
                 <div key={step.num} className="relative z-10 flex flex-col items-center">
                   <div 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all ${
                       isDone 
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
                         : isCurrent
-                        ? 'bg-slate-900 border-2 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/20 scale-110'
-                        : 'bg-slate-800 text-slate-500 border border-slate-700'
+                        ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md shadow-blue-500/20 scale-105 sm:scale-110'
+                        : 'bg-white text-slate-400 border border-slate-300'
                     }`}
                   >
-                    {isDone ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
+                    {isDone ? <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <Icon className="w-4 h-4" />}
                   </div>
-                  <span className={`text-xs mt-1.5 font-medium hidden sm:block ${
-                    isCurrent ? 'text-amber-400 font-bold' : isDone ? 'text-slate-300' : 'text-slate-500'
+                  <span className={`text-[10px] sm:text-xs mt-1.5 font-bold ${
+                    isCurrent ? 'text-blue-600 font-extrabold' : isDone ? 'text-slate-700' : 'text-slate-400'
                   }`}>
                     {step.label}
                   </span>
@@ -290,11 +290,11 @@ export default function ClientBooking({ shopConfig }) {
           <ClientMediaFeed onSeleccionarBarbero={handleSelectBarberoFromMedia} />
 
           <div className="text-center sm:text-left">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
-              <User className="w-5 h-5 text-amber-400" />
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2 justify-center sm:justify-start">
+              <User className="w-5 h-5 text-blue-600" />
               1. Selecciona a tu Barbero
             </h2>
-            <p className="text-slate-400 text-sm">Elige el profesional que cuidará de tu estilo</p>
+            <p className="text-slate-500 text-xs sm:text-sm">Elige el profesional que cuidará de tu estilo</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -354,17 +354,17 @@ export default function ClientBooking({ shopConfig }) {
         <div className="space-y-6 animate-fadeIn">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-amber-400" />
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-blue-600" />
                 2. Selecciona el Servicio
               </h2>
-              <p className="text-slate-400 text-sm">
-                Barbero elegido: <span className="text-amber-400 font-semibold">{barberoSeleccionado?.nombre}</span>
+              <p className="text-slate-500 text-xs sm:text-sm">
+                Barbero elegido: <span className="text-blue-600 font-bold">{barberoSeleccionado?.nombre}</span>
               </p>
             </div>
             <button
               onClick={() => setPaso(1)}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors font-bold"
             >
               <ChevronLeft className="w-4 h-4" />
               Cambiar Barbero
@@ -426,17 +426,17 @@ export default function ClientBooking({ shopConfig }) {
         <div className="space-y-6 animate-fadeIn">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-amber-400" />
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-blue-600" />
                 3. Elige Fecha y Hora
               </h2>
-              <p className="text-slate-400 text-sm">
-                Con <span className="text-amber-400 font-semibold">{barberoSeleccionado?.nombre}</span> para <span className="text-white font-medium">{servicioSeleccionado?.nombre}</span> ({servicioSeleccionado?.duracion_minutos} min)
+              <p className="text-slate-500 text-xs sm:text-sm">
+                Con <span className="text-blue-600 font-bold">{barberoSeleccionado?.nombre}</span> para <span className="text-slate-800 font-bold">{servicioSeleccionado?.nombre}</span> ({servicioSeleccionado?.duracion_minutos} min)
               </p>
             </div>
             <button
               onClick={() => setPaso(2)}
-              className="self-start sm:self-center flex items-center gap-1 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
+              className="self-start sm:self-center flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors font-bold"
             >
               <ChevronLeft className="w-4 h-4" />
               Cambiar Servicio
@@ -579,15 +579,15 @@ export default function ClientBooking({ shopConfig }) {
         <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <User className="w-5 h-5 text-amber-400" />
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
                 4. Confirma tus Datos
               </h2>
-              <p className="text-slate-400 text-sm">Necesitamos tu nombre y WhatsApp para guardar tu cita</p>
+              <p className="text-slate-500 text-xs sm:text-sm">Necesitamos tu nombre y WhatsApp para guardar tu cita</p>
             </div>
             <button
               onClick={() => setPaso(3)}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors font-bold"
             >
               <ChevronLeft className="w-4 h-4" />
               Cambiar Hora
