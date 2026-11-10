@@ -1,3 +1,4 @@
+require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -56,7 +57,7 @@ if (fs.existsSync(clientDistPath)) {
 }
 
 // ----------------------------------------------------
-// HELPERS GENERALES Y MULTI-TENANT
+// HELPERS GENERALES Y MULTI-TENANT ASÍNCRONOS
 // ----------------------------------------------------
 
 function timeToMinutes(timeStr) {
@@ -107,7 +108,6 @@ function getDefaultModulesForPlan(plan) {
       auditoria: false
     };
   } else {
-    // vip
     return {
       agenda: true,
       max_barberos: 999,
@@ -123,21 +123,19 @@ function getDefaultModulesForPlan(plan) {
   }
 }
 
-// Helper para extraer la barbería (tenant) a partir del request
-function getTenant(req) {
+async function getTenant(req) {
   const slug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug;
   const id = req.headers['x-barberia-id'] || req.query.barberia_id;
 
   if (id) {
-    const b = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    const b = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
     if (b) return b;
   }
   if (slug) {
-    const b = db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
+    const b = await db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
     if (b) return b;
   }
-  // Fallback a barberia id = 1 o primera existente
-  const def = db.prepare('SELECT * FROM barberias WHERE id = 1').get() || db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get();
+  const def = (await db.prepare('SELECT * FROM barberias WHERE id = 1').get()) || (await db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get());
   return def || {
     id: 1,
     slug: 'the-barber-club',
@@ -149,15 +147,14 @@ function getTenant(req) {
   };
 }
 
-function getTenantId(req) {
-  const tenant = getTenant(req);
+async function getTenantId(req) {
+  const tenant = await getTenant(req);
   return tenant ? tenant.id : 1;
 }
 
-// Helper para registrar eventos de auditoría por barbería
-function registrarAuditoria(tenantId, tipo_evento, descripcion, usuario, detalles_json) {
+async function registrarAuditoria(tenantId, tipo_evento, descripcion, usuario, detalles_json) {
   try {
-    db.prepare('INSERT INTO auditoria (barberia_id, tipo_evento, descripcion, usuario, detalles_json) VALUES (?, ?, ?, ?, ?)').run(
+    await db.prepare('INSERT INTO auditoria (barberia_id, tipo_evento, descripcion, usuario, detalles_json) VALUES (?, ?, ?, ?, ?)').run(
       tenantId || 1,
       tipo_evento,
       descripcion,
@@ -173,10 +170,9 @@ function registrarAuditoria(tenantId, tipo_evento, descripcion, usuario, detalle
 // 1. CONFIGURACIÓN Y AUTENTICACIÓN MULTI-TENANT
 // ----------------------------------------------------
 
-// Información pública y configuración de la barbería actual
-app.get('/api/barberias/info', (req, res) => {
+app.get('/api/barberias/info', async (req, res) => {
   try {
-    const tenant = getTenant(req);
+    const tenant = await getTenant(req);
     let modulos = {};
     try {
       modulos = typeof tenant.modulos_activos === 'string' ? JSON.parse(tenant.modulos_activos) : (tenant.modulos_activos || {});
@@ -203,11 +199,10 @@ app.get('/api/barberias/info', (req, res) => {
   }
 });
 
-// Configuración general combinada con la barbería activa
-app.get('/api/configuracion', (req, res) => {
+app.get('/api/configuracion', async (req, res) => {
   try {
-    const tenant = getTenant(req);
-    const rows = db.prepare('SELECT clave, valor FROM configuracion').all();
+    const tenant = await getTenant(req);
+    const rows = await db.prepare('SELECT clave, valor FROM configuracion').all();
     const config = {};
     rows.forEach(r => {
       if (r.clave !== 'pin_admin' && r.clave !== 'pin_superadmin') {
@@ -240,15 +235,13 @@ app.get('/api/configuracion', (req, res) => {
   }
 });
 
-// Verificar PIN del Administrador (dueño de la barbería)
-app.post('/api/auth/verify-pin', (req, res) => {
+app.post('/api/auth/verify-pin', async (req, res) => {
   const { pin } = req.body;
   try {
-    const tenant = getTenant(req);
+    const tenant = await getTenant(req);
     const tenantPin = tenant && tenant.pin_admin ? tenant.pin_admin : '1234';
 
-    // PIN Maestro SuperAdmin
-    const superRow = db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
+    const superRow = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
     const superPin = superRow ? superRow.valor : '9999';
 
     if (String(pin).trim() === String(tenantPin).trim() || String(pin).trim() === String(superPin).trim()) {
@@ -267,13 +260,11 @@ app.post('/api/auth/verify-pin', (req, res) => {
   }
 });
 
-// Actualizar configuración por parte del Administrador de la barbería
-app.put('/api/configuracion', (req, res) => {
+app.put('/api/configuracion', async (req, res) => {
   const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan } = req.body;
   try {
-    const tenantId = getTenantId(req);
+    const tenantId = await getTenantId(req);
 
-    // Guardar en tabla barberias
     const stmt = db.prepare(`
       UPDATE barberias
       SET nombre = COALESCE(?, nombre),
@@ -284,7 +275,7 @@ app.put('/api/configuracion', (req, res) => {
           eslogan = COALESCE(?, eslogan)
       WHERE id = ?
     `);
-    stmt.run(
+    await stmt.run(
       nombre_barberia || null,
       telefono_barberia || null,
       direccion_barberia || null,
@@ -294,11 +285,10 @@ app.put('/api/configuracion', (req, res) => {
       tenantId
     );
 
-    // Actualizar también tabla configuracion para compatibilidad
-    const update = db.prepare('INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)');
-    if (nombre_barberia) update.run('nombre_barberia', nombre_barberia);
-    if (telefono_barberia) update.run('telefono_barberia', telefono_barberia);
-    if (direccion_barberia) update.run('direccion_barberia', direccion_barberia);
+    const update = db.prepare('INSERT INTO configuracion (clave, valor) VALUES (?, ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor');
+    if (nombre_barberia) await update.run('nombre_barberia', nombre_barberia);
+    if (telefono_barberia) await update.run('telefono_barberia', telefono_barberia);
+    if (direccion_barberia) await update.run('direccion_barberia', direccion_barberia);
 
     res.json({ success: true, message: 'Configuración actualizada' });
   } catch (error) {
@@ -306,10 +296,9 @@ app.put('/api/configuracion', (req, res) => {
   }
 });
 
-// Actualizar branding/personalización de la barbería
-app.patch('/api/barberias/config', (req, res) => {
+app.patch('/api/barberias/config', async (req, res) => {
   try {
-    const tenantId = getTenantId(req);
+    const tenantId = await getTenantId(req);
     const { nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, pin_admin } = req.body;
 
     const stmt = db.prepare(`
@@ -324,7 +313,7 @@ app.patch('/api/barberias/config', (req, res) => {
           pin_admin = COALESCE(?, pin_admin)
       WHERE id = ?
     `);
-    stmt.run(
+    await stmt.run(
       nombre || null,
       eslogan !== undefined ? eslogan : null,
       logo_url !== undefined ? logo_url : null,
@@ -336,7 +325,7 @@ app.patch('/api/barberias/config', (req, res) => {
       tenantId
     );
 
-    const updated = db.prepare('SELECT * FROM barberias WHERE id = ?').get(tenantId);
+    const updated = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(tenantId);
     res.json({ success: true, message: 'Barbería actualizada', barberia: updated });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -347,11 +336,10 @@ app.patch('/api/barberias/config', (req, res) => {
 // 2. SUPERADMIN: GESTIÓN DE CLIENTES & PLANES (SAAS)
 // ----------------------------------------------------
 
-// Login SuperAdmin con PIN Maestro
-app.post('/api/superadmin/login', (req, res) => {
+app.post('/api/superadmin/login', async (req, res) => {
   const { pin } = req.body;
   try {
-    const row = db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
+    const row = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
     const masterPin = row ? row.valor : '9999';
 
     if (String(pin).trim() === String(masterPin).trim()) {
@@ -364,34 +352,32 @@ app.post('/api/superadmin/login', (req, res) => {
   }
 });
 
-// Listar todas las barberías registradas con métricas rápidas
-app.get('/api/superadmin/barberias', (req, res) => {
+app.get('/api/superadmin/barberias', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
-    const result = rows.map(b => {
+    const rows = await db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
+    const result = await Promise.all(rows.map(async b => {
       let modulos = {};
       try {
         modulos = typeof b.modulos_activos === 'string' ? JSON.parse(b.modulos_activos) : (b.modulos_activos || {});
       } catch (e) {
         modulos = getDefaultModulesForPlan(b.plan);
       }
-      const barberosCount = db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ?').get(b.id).count;
-      const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(b.id).count;
+      const barberosRow = await db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ?').get(b.id);
+      const citasRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(b.id);
       return {
         ...b,
         modulos_activos: modulos,
-        total_barberos: barberosCount,
-        total_citas: citasCount
+        total_barberos: Number(barberosRow?.count || 0),
+        total_citas: Number(citasRow?.count || 0)
       };
-    });
+    }));
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Crear una nueva barbería (Alta de cliente en el SaaS)
-app.post('/api/superadmin/barberias', (req, res) => {
+app.post('/api/superadmin/barberias', async (req, res) => {
   const {
     nombre,
     slug,
@@ -414,8 +400,7 @@ app.post('/api/superadmin/barberias', (req, res) => {
       finalSlug = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     }
 
-    // Verificar unicidad de slug
-    const existe = db.prepare('SELECT id FROM barberias WHERE slug = ?').get(finalSlug);
+    const existe = await db.prepare('SELECT id FROM barberias WHERE slug = ?').get(finalSlug);
     if (existe) {
       finalSlug = `${finalSlug}-${Date.now().toString().slice(-4)}`;
     }
@@ -430,7 +415,7 @@ app.post('/api/superadmin/barberias', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
 
-    const result = stmt.run(
+    const result = await stmt.run(
       finalSlug,
       nombre.trim(),
       eslogan || 'Tu estilo en las mejores manos',
@@ -446,22 +431,20 @@ app.post('/api/superadmin/barberias', (req, res) => {
 
     const nuevaId = result.lastInsertRowid;
 
-    // Crear 2 servicios iniciales predeterminados
     const stmtServ = db.prepare('INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo) VALUES (?, ?, ?, ?, ?, 1)');
-    stmtServ.run(nuevaId, 'Corte Clásico', 25000, 45, 'Corte tradicional de cabello con tijera y máquina.');
-    stmtServ.run(nuevaId, 'Corte y Barba Completa', 35000, 60, 'Perfilado de barba con toalla caliente y corte.');
+    await stmtServ.run(nuevaId, 'Corte Clásico', 25000, 45, 'Corte tradicional de cabello con tijera y máquina.');
+    await stmtServ.run(nuevaId, 'Corte y Barba Completa', 35000, 60, 'Perfilado de barba con toalla caliente y corte.');
 
-    // Crear 1 barbero principal inicial
     const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-    stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+    await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
 
-    const nuevaBarberia = db.prepare('SELECT * FROM barberias WHERE id = ?').get(nuevaId);
+    const nuevaBarberia = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(nuevaId);
     res.json({
       success: true,
       message: 'Barbería creada exitosamente con servicios y barbero inicial',
       barberia: {
         ...nuevaBarberia,
-        modulos_activos: JSON.parse(nuevaBarberia.modulos_activos)
+        modulos_activos: typeof nuevaBarberia.modulos_activos === 'string' ? JSON.parse(nuevaBarberia.modulos_activos) : nuevaBarberia.modulos_activos
       }
     });
   } catch (error) {
@@ -469,13 +452,12 @@ app.post('/api/superadmin/barberias', (req, res) => {
   }
 });
 
-// Editar barbería (activar/suspender, cambiar plan o módulos individuales)
-app.patch('/api/superadmin/barberias/:id', (req, res) => {
+app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   const { id } = req.params;
   const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo } = req.body;
 
   try {
-    const actual = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    const actual = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
     if (!actual) return res.status(404).json({ error: 'Barbería no encontrada' });
 
     let modulosStr = null;
@@ -502,7 +484,7 @@ app.patch('/api/superadmin/barberias/:id', (req, res) => {
       WHERE id = ?
     `);
 
-    stmt.run(
+    await stmt.run(
       nombre !== undefined ? nombre : null,
       slug !== undefined ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') : null,
       eslogan !== undefined ? eslogan : null,
@@ -518,13 +500,13 @@ app.patch('/api/superadmin/barberias/:id', (req, res) => {
       id
     );
 
-    const updated = db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
     res.json({
       success: true,
       message: 'Barbería actualizada correctamente',
       barberia: {
         ...updated,
-        modulos_activos: JSON.parse(updated.modulos_activos || '{}')
+        modulos_activos: typeof updated.modulos_activos === 'string' ? JSON.parse(updated.modulos_activos || '{}') : updated.modulos_activos
       }
     });
   } catch (error) {
@@ -532,24 +514,23 @@ app.patch('/api/superadmin/barberias/:id', (req, res) => {
   }
 });
 
-// Eliminar barbería
-app.delete('/api/superadmin/barberias/:id', (req, res) => {
+app.delete('/api/superadmin/barberias/:id', async (req, res) => {
   const { id } = req.params;
   if (Number(id) === 1) {
     return res.status(400).json({ error: 'No se puede eliminar la barbería principal del sistema (ID 1).' });
   }
   try {
-    db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM liquidaciones WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM barberos WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM servicios WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM costos WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM ventas_productos WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM productos WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM galeria_multimedia WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM auditoria WHERE barberia_id = ?').run(id);
-    db.prepare('DELETE FROM barberias WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM liquidaciones WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM barberos WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM servicios WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM costos WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM ventas_productos WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM productos WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM galeria_multimedia WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM auditoria WHERE barberia_id = ?').run(id);
+    await db.prepare('DELETE FROM barberias WHERE id = ?').run(id);
 
     res.json({ success: true, message: 'Barbería eliminada correctamente' });
   } catch (error) {
@@ -560,35 +541,35 @@ app.delete('/api/superadmin/barberias/:id', (req, res) => {
 // ----------------------------------------------------
 // 3. BARBEROS (EQUIPO)
 // ----------------------------------------------------
-app.get('/api/barberos', (req, res) => {
+app.get('/api/barberos', async (req, res) => {
   try {
-    const tenantId = getTenantId(req);
+    const tenantId = await getTenantId(req);
     const todos = req.query.todos === 'true';
     const query = todos 
       ? 'SELECT * FROM barberos WHERE barberia_id = ? ORDER BY nombre ASC'
       : 'SELECT * FROM barberos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
-    const barberos = db.prepare(query).all(tenantId);
+    const barberos = await db.prepare(query).all(tenantId);
     res.json(barberos);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/barberos', (req, res) => {
+app.post('/api/barberos', async (req, res) => {
   const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
   try {
-    const tenantId = getTenantId(req);
-    const tenant = getTenant(req);
+    const tenantId = await getTenantId(req);
+    const tenant = await getTenant(req);
 
-    // Validación de cupos según el plan
     let modulos = {};
     try {
       modulos = typeof tenant.modulos_activos === 'string' ? JSON.parse(tenant.modulos_activos) : (tenant.modulos_activos || {});
     } catch (e) {}
     const maxBarberos = modulos.max_barberos || (tenant.plan === 'basico' ? 2 : tenant.plan === 'pro' ? 5 : 999);
-    const currentCount = db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ? AND activo = 1').get(tenantId).count;
+    const countRow = await db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ? AND activo = 1').get(tenantId);
+    const currentCount = Number(countRow?.count || 0);
 
     if (currentCount >= maxBarberos) {
       return res.status(400).json({
@@ -604,7 +585,7 @@ app.post('/api/barberos', (req, res) => {
       INSERT INTO barberos (barberia_id, nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `);
-    const result = stmt.run(
+    const result = await stmt.run(
       tenantId,
       nombre,
       telefono || '',
@@ -622,9 +603,9 @@ app.post('/api/barberos', (req, res) => {
   }
 });
 
-app.put('/api/barberos/:id', (req, res) => {
+app.put('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
 
   try {
@@ -642,7 +623,7 @@ app.put('/api/barberos/:id', (req, res) => {
           activo = COALESCE(?, activo)
       WHERE id = ? AND barberia_id = ?
     `);
-    stmt.run(
+    await stmt.run(
       nombre !== undefined ? nombre : null,
       telefono !== undefined ? telefono : null,
       email !== undefined && email !== '' ? email.trim().toLowerCase() : null,
@@ -662,57 +643,56 @@ app.put('/api/barberos/:id', (req, res) => {
   }
 });
 
-app.patch('/api/barberos/:id', (req, res) => {
+app.patch('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   const { porcentaje_comision, activo, pin, email, password } = req.body;
 
   try {
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
     if (porcentaje_comision !== undefined) {
-      db.prepare('UPDATE barberos SET porcentaje_comision = ? WHERE id = ? AND barberia_id = ?').run(Number(porcentaje_comision), id, tenantId);
+      await db.prepare('UPDATE barberos SET porcentaje_comision = ? WHERE id = ? AND barberia_id = ?').run(Number(porcentaje_comision), id, tenantId);
     }
     if (activo !== undefined) {
-      db.prepare('UPDATE barberos SET activo = ? WHERE id = ? AND barberia_id = ?').run(activo ? 1 : 0, id, tenantId);
+      await db.prepare('UPDATE barberos SET activo = ? WHERE id = ? AND barberia_id = ?').run(activo ? 1 : 0, id, tenantId);
     }
     if (pin !== undefined && pin !== '') {
-      db.prepare('UPDATE barberos SET pin = ? WHERE id = ? AND barberia_id = ?').run(String(pin).trim(), id, tenantId);
+      await db.prepare('UPDATE barberos SET pin = ? WHERE id = ? AND barberia_id = ?').run(String(pin).trim(), id, tenantId);
     }
     if (email !== undefined && email !== '') {
-      db.prepare('UPDATE barberos SET email = ? WHERE id = ? AND barberia_id = ?').run(String(email).trim().toLowerCase(), id, tenantId);
+      await db.prepare('UPDATE barberos SET email = ? WHERE id = ? AND barberia_id = ?').run(String(email).trim().toLowerCase(), id, tenantId);
     }
     if (password !== undefined && password !== '') {
-      db.prepare('UPDATE barberos SET password = ? WHERE id = ? AND barberia_id = ?').run(String(password).trim(), id, tenantId);
+      await db.prepare('UPDATE barberos SET password = ? WHERE id = ? AND barberia_id = ?').run(String(password).trim(), id, tenantId);
     }
 
-    const actualizado = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    const actualizado = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     res.json({ success: true, message: 'Barbero actualizado', barbero: actualizado });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Autenticación de Barbero
-app.post('/api/barberos/login', (req, res) => {
+app.post('/api/barberos/login', async (req, res) => {
   const { email, password, barbero_id, pin } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let barbero;
     if (email && password) {
       const cleanEmail = email.trim().toLowerCase();
       const cleanPass = password.trim();
-      barbero = db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND LOWER(email) = ? AND password = ?').get(tenantId, cleanEmail, cleanPass);
+      barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND LOWER(email) = ? AND password = ?').get(tenantId, cleanEmail, cleanPass);
       if (!barbero) {
-        const byId = db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND password = ?').get(tenantId, cleanPass);
+        const byId = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND password = ?').get(tenantId, cleanPass);
         if (byId && (byId.nombre.toLowerCase().includes(cleanEmail) || byId.email.toLowerCase() === cleanEmail)) {
           barbero = byId;
         }
       }
     } else if (barbero_id) {
-      barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+      barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
       if (barbero && barbero.pin && barbero.pin !== pin) {
         return res.status(401).json({ error: 'PIN incorrecto' });
       }
@@ -737,31 +717,31 @@ app.post('/api/barberos/login', (req, res) => {
   }
 });
 
-// Ficha completa e historial de un barbero
-app.get('/api/barberos/:id/record', (req, res) => {
+app.get('/api/barberos/:id/record', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    const totalCitas = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId).count;
-    const citasCompletadas = db.prepare("SELECT COUNT(*) as count, COALESCE(SUM(precio_cobrado), 0) as total FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'completada'").get(id, tenantId);
-    const citasCanceladas = db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'cancelada'").get(id, tenantId);
-    const noAsistio = db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'no_asistio'").get(id, tenantId);
+    const totalCitasRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId);
+    const citasCompletadas = await db.prepare("SELECT COUNT(*) as count, COALESCE(SUM(precio_cobrado), 0) as total FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'completada'").get(id, tenantId);
+    const citasCanceladas = await db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'cancelada'").get(id, tenantId);
+    const noAsistio = await db.prepare("SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ? AND estado = 'no_asistio'").get(id, tenantId);
 
-    const liquidaciones = db.prepare(`
+    const liquidaciones = await db.prepare(`
       SELECT * FROM liquidaciones 
       WHERE barbero_id = ? AND barberia_id = ?
       ORDER BY fecha_fin DESC LIMIT 15
     `).all(id, tenantId);
 
-    const totalCobradoHistorico = citasCompletadas.total || 0;
-    const totalComisionesPagadas = liquidaciones.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
+    const totalCobradoHistorico = Number(citasCompletadas?.total || 0);
+    const totalComisionesPagadas = liquidaciones.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
     const utilidadGenerada = totalCobradoHistorico - totalComisionesPagadas;
+    const totalCitas = Number(totalCitasRow?.count || 0);
 
-    const ultimasCitas = db.prepare(`
+    const ultimasCitas = await db.prepare(`
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
@@ -776,13 +756,13 @@ app.get('/api/barberos/:id/record', (req, res) => {
       barbero: barberoLimpio,
       metricas: {
         total_citas: totalCitas,
-        completadas: citasCompletadas.count || 0,
-        canceladas: citasCanceladas.count || 0,
-        no_asistio: noAsistio.count || 0,
+        completadas: Number(citasCompletadas?.count || 0),
+        canceladas: Number(citasCanceladas?.count || 0),
+        no_asistio: Number(noAsistio?.count || 0),
         total_facturado: totalCobradoHistorico,
         total_comisiones_pagadas: totalComisionesPagadas,
         utilidad_neta_para_barberia: utilidadGenerada,
-        efectividad_pct: totalCitas > 0 ? Math.round(((citasCompletadas.count || 0) / totalCitas) * 100) : 0
+        efectividad_pct: totalCitas > 0 ? Math.round((Number(citasCompletadas?.count || 0) / totalCitas) * 100) : 0
       },
       liquidaciones,
       ultimas_citas: ultimasCitas
@@ -792,10 +772,9 @@ app.get('/api/barberos/:id/record', (req, res) => {
   }
 });
 
-// Portal de Barbero: Citas asignadas
-app.get('/api/barbero-portal/citas', (req, res) => {
+app.get('/api/barbero-portal/citas', async (req, res) => {
   const { barbero_id, fecha, desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!barbero_id) {
     return res.status(400).json({ error: 'barbero_id es obligatorio' });
@@ -830,24 +809,23 @@ app.get('/api/barbero-portal/citas', (req, res) => {
     }
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
-    const citas = db.prepare(sql).all(...params);
+    const citas = await db.prepare(sql).all(...params);
     res.json(citas);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Portal de Barbero: Resumen financiero individual
-app.get('/api/barbero-portal/balance', (req, res) => {
+app.get('/api/barbero-portal/balance', async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!barbero_id) {
     return res.status(400).json({ error: 'barbero_id es obligatorio' });
   }
 
   try {
-    const barbero = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+    const barbero = await db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
     let sqlCitas = `
@@ -864,7 +842,7 @@ app.get('/api/barbero-portal/balance', (req, res) => {
     }
 
     sqlCitas += ' ORDER BY c.fecha DESC';
-    const citasCompletadas = db.prepare(sqlCitas).all(...paramsCitas);
+    const citasCompletadas = await db.prepare(sqlCitas).all(...paramsCitas);
 
     let sqlVentas = `
       SELECT v.id, v.fecha, v.cantidad, v.total_venta, v.monto_comision, p.nombre as producto_nombre, v.liquidacion_id
@@ -877,23 +855,23 @@ app.get('/api/barbero-portal/balance', (req, res) => {
       sqlVentas += ' AND v.fecha BETWEEN ? AND ?';
       paramsVentas.push(desde, hasta);
     }
-    const ventasProductos = db.prepare(sqlVentas).all(...paramsVentas);
+    const ventasProductos = await db.prepare(sqlVentas).all(...paramsVentas);
 
-    const liquidaciones = db.prepare(`
+    const liquidaciones = await db.prepare(`
       SELECT * FROM liquidaciones 
       WHERE barbero_id = ? AND barberia_id = ?
       ORDER BY fecha_pago DESC LIMIT 10
     `).all(barbero_id, tenantId);
 
-    const totalBrutoServicios = citasCompletadas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
-    const pct = barbero.porcentaje_comision || 50;
+    const totalBrutoServicios = citasCompletadas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+    const pct = Number(barbero.porcentaje_comision || 50);
     const comisionServiciosEstimada = Math.round(totalBrutoServicios * (pct / 100));
-    const comisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
+    const comisionProductos = ventasProductos.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
 
     const pendientesLiquidarCitas = citasCompletadas.filter(c => !c.liquidacion_id);
     const pendientesLiquidarVentas = ventasProductos.filter(v => !v.liquidacion_id);
-    const saldoPendienteServicios = Math.round(pendientesLiquidarCitas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0) * (pct / 100));
-    const saldoPendienteProductos = pendientesLiquidarVentas.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
+    const saldoPendienteServicios = Math.round(pendientesLiquidarCitas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0) * (pct / 100));
+    const saldoPendienteProductos = pendientesLiquidarVentas.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
     const saldoPendienteCobrar = saldoPendienteServicios + saldoPendienteProductos;
 
     res.json({
@@ -915,16 +893,18 @@ app.get('/api/barbero-portal/balance', (req, res) => {
   }
 });
 
-app.delete('/api/barberos/:id', (req, res) => {
+app.delete('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   try {
-    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId).count;
+    const citasCountRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barbero_id = ? AND barberia_id = ?').get(id, tenantId);
+    const citasCount = Number(citasCountRow?.count || 0);
+
     if (citasCount > 0) {
-      db.prepare('UPDATE barberos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+      await db.prepare('UPDATE barberos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Barbero desactivado (se conservó su historial de citas)' });
     } else {
-      db.prepare('DELETE FROM barberos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+      await db.prepare('DELETE FROM barberos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Barbero eliminado' });
     }
   } catch (error) {
@@ -935,40 +915,40 @@ app.delete('/api/barberos/:id', (req, res) => {
 // ----------------------------------------------------
 // 4. SERVICIOS
 // ----------------------------------------------------
-app.get('/api/servicios', (req, res) => {
+app.get('/api/servicios', async (req, res) => {
   try {
-    const tenantId = getTenantId(req);
+    const tenantId = await getTenantId(req);
     const todos = req.query.todos === 'true';
     const query = todos 
       ? 'SELECT * FROM servicios WHERE barberia_id = ? ORDER BY precio_cop ASC'
       : 'SELECT * FROM servicios WHERE barberia_id = ? AND activo = 1 ORDER BY precio_cop ASC';
-    const servicios = db.prepare(query).all(tenantId);
+    const servicios = await db.prepare(query).all(tenantId);
     res.json(servicios);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/servicios', (req, res) => {
+app.post('/api/servicios', async (req, res) => {
   const { nombre, precio_cop, duracion_minutos, descripcion } = req.body;
   if (!nombre || !precio_cop) return res.status(400).json({ error: 'Nombre y precio requeridos' });
 
   try {
-    const tenantId = getTenantId(req);
+    const tenantId = await getTenantId(req);
     const stmt = db.prepare(`
       INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo)
       VALUES (?, ?, ?, ?, ?, 1)
     `);
-    const result = stmt.run(tenantId, nombre, Number(precio_cop), Number(duracion_minutos) || 45, descripcion || '');
+    const result = await stmt.run(tenantId, nombre, Number(precio_cop), Number(duracion_minutos) || 45, descripcion || '');
     res.json({ id: result.lastInsertRowid, message: 'Servicio creado exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/servicios/:id', (req, res) => {
+app.put('/api/servicios/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   const { nombre, precio_cop, duracion_minutos, descripcion, activo } = req.body;
 
   try {
@@ -981,23 +961,25 @@ app.put('/api/servicios/:id', (req, res) => {
           activo = COALESCE(?, activo)
       WHERE id = ? AND barberia_id = ?
     `);
-    stmt.run(nombre, precio_cop, duracion_minutos, descripcion, activo, id, tenantId);
+    await stmt.run(nombre, precio_cop, duracion_minutos, descripcion, activo, id, tenantId);
     res.json({ success: true, message: 'Servicio actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/servicios/:id', (req, res) => {
+app.delete('/api/servicios/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   try {
-    const citasCount = db.prepare('SELECT COUNT(*) as count FROM citas WHERE servicio_id = ? AND barberia_id = ?').get(id, tenantId).count;
+    const citasCountRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE servicio_id = ? AND barberia_id = ?').get(id, tenantId);
+    const citasCount = Number(citasCountRow?.count || 0);
+
     if (citasCount > 0) {
-      db.prepare('UPDATE servicios SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+      await db.prepare('UPDATE servicios SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Servicio desactivado para conservar historial' });
     } else {
-      db.prepare('DELETE FROM servicios WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+      await db.prepare('DELETE FROM servicios WHERE id = ? AND barberia_id = ?').run(id, tenantId);
       res.json({ success: true, message: 'Servicio eliminado' });
     }
   } catch (error) {
@@ -1006,11 +988,11 @@ app.delete('/api/servicios/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 5. MOTOR DE DISPONIBILIDAD (PREVENCIÓN DE SOLAPAMIENTOS)
+// 5. MOTOR DE DISPONIBILIDAD
 // ----------------------------------------------------
-app.get('/api/disponibilidad', (req, res) => {
+app.get('/api/disponibilidad', async (req, res) => {
   const { barbero_id, fecha, duracion_minutos } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!barbero_id || !fecha) {
     return res.status(400).json({ error: 'barbero_id y fecha son obligatorios' });
@@ -1018,7 +1000,7 @@ app.get('/api/disponibilidad', (req, res) => {
 
   try {
     const duracion = Number(duracion_minutos) || 45;
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(barbero_id, tenantId);
+    const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(barbero_id, tenantId);
 
     if (!barbero) {
       return res.status(404).json({ error: 'Barbero no encontrado o inactivo' });
@@ -1037,13 +1019,13 @@ app.get('/api/disponibilidad', (req, res) => {
       });
     }
 
-    const citas = db.prepare(`
+    const citas = await db.prepare(`
       SELECT id, hora_inicio, hora_fin, cliente_nombre 
       FROM citas 
       WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
     `).all(barbero_id, tenantId, fecha);
 
-    const bloqueos = db.prepare(`
+    const bloqueos = await db.prepare(`
       SELECT id, hora_inicio, hora_fin, motivo 
       FROM bloqueos 
       WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
@@ -1095,9 +1077,9 @@ app.get('/api/disponibilidad', (req, res) => {
 // ----------------------------------------------------
 // 6. CITAS / TURNOS MULTI-TENANT
 // ----------------------------------------------------
-app.get('/api/citas', (req, res) => {
+app.get('/api/citas', async (req, res) => {
   const { fecha, barbero_id, estado, desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = `
@@ -1127,31 +1109,31 @@ app.get('/api/citas', (req, res) => {
     }
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
-    const citas = db.prepare(sql).all(...params);
+    const citas = await db.prepare(sql).all(...params);
     res.json(citas);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/citas', (req, res) => {
+app.post('/api/citas', async (req, res) => {
   const { barbero_id, servicio_id, cliente_nombre, cliente_telefono, fecha, hora_inicio, notas } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!barbero_id || !servicio_id || !cliente_nombre || !cliente_telefono || !fecha || !hora_inicio) {
     return res.status(400).json({ error: 'Todos los campos marcados son obligatorios' });
   }
 
   try {
-    const servicio = db.prepare('SELECT * FROM servicios WHERE id = ? AND barberia_id = ?').get(servicio_id, tenantId);
+    const servicio = await db.prepare('SELECT * FROM servicios WHERE id = ? AND barberia_id = ?').get(servicio_id, tenantId);
     if (!servicio) return res.status(404).json({ error: 'Servicio no encontrado' });
 
-    const duracion = servicio.duracion_minutos || 45;
+    const duracion = Number(servicio.duracion_minutos) || 45;
     const startMin = timeToMinutes(hora_inicio);
     const endMin = startMin + duracion;
     const hora_fin = minutesToTime(endMin);
 
-    const citasExistentes = db.prepare(`
+    const citasExistentes = await db.prepare(`
       SELECT id, hora_inicio, hora_fin 
       FROM citas 
       WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
@@ -1164,7 +1146,7 @@ app.post('/api/citas', (req, res) => {
       });
     }
 
-    const bloqueos = db.prepare(`
+    const bloqueos = await db.prepare(`
       SELECT id, hora_inicio, hora_fin, motivo 
       FROM bloqueos 
       WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
@@ -1184,7 +1166,7 @@ app.post('/api/citas', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)
     `);
 
-    const result = stmt.run(
+    const result = await stmt.run(
       tenantId,
       Number(barbero_id),
       Number(servicio_id),
@@ -1199,8 +1181,7 @@ app.post('/api/citas', (req, res) => {
 
     const nuevaCitaId = result.lastInsertRowid;
 
-    // Registrar en auditoría
-    registrarAuditoria(
+    await registrarAuditoria(
       tenantId,
       'cita_creada',
       `Nueva cita agendada para ${cliente_nombre.trim()} el ${fecha} a las ${hora_inicio}`,
@@ -1208,7 +1189,7 @@ app.post('/api/citas', (req, res) => {
       { cita_id: nuevaCitaId, servicio: servicio.nombre, barbero_id }
     );
 
-    const citaCreada = db.prepare(`
+    const citaCreada = await db.prepare(`
       SELECT c.*, b.nombre as barbero_nombre, s.nombre as servicio_nombre
       FROM citas c
       JOIN barberos b ON c.barbero_id = b.id
@@ -1227,24 +1208,23 @@ app.post('/api/citas', (req, res) => {
   }
 });
 
-// Reasignación de cita a otro barbero
-app.patch('/api/citas/:id/reasignar', (req, res) => {
+app.patch('/api/citas/:id/reasignar', async (req, res) => {
   const { id } = req.params;
   const { nuevo_barbero_id, motivo } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!nuevo_barbero_id) {
     return res.status(400).json({ error: 'Debes seleccionar el barbero destino' });
   }
 
   try {
-    const cita = db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    const cita = await db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!cita) return res.status(404).json({ error: 'Cita no encontrada' });
 
-    const nuevoBarbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(nuevo_barbero_id, tenantId);
+    const nuevoBarbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(nuevo_barbero_id, tenantId);
     if (!nuevoBarbero) return res.status(404).json({ error: 'El barbero seleccionado no existe o está inactivo' });
 
-    const citasExistentes = db.prepare(`
+    const citasExistentes = await db.prepare(`
       SELECT id, hora_inicio, hora_fin 
       FROM citas 
       WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND id != ? AND estado != 'cancelada'
@@ -1257,9 +1237,9 @@ app.patch('/api/citas/:id/reasignar', (req, res) => {
       });
     }
 
-    db.prepare('UPDATE citas SET barbero_id = ? WHERE id = ? AND barberia_id = ?').run(nuevo_barbero_id, id, tenantId);
+    await db.prepare('UPDATE citas SET barbero_id = ? WHERE id = ? AND barberia_id = ?').run(nuevo_barbero_id, id, tenantId);
 
-    registrarAuditoria(
+    await registrarAuditoria(
       tenantId,
       'cita_reasignada',
       `Cita #${id} reasignada a ${nuevoBarbero.nombre}. Motivo: ${motivo || 'Reorganización de agenda'}`,
@@ -1267,7 +1247,7 @@ app.patch('/api/citas/:id/reasignar', (req, res) => {
       { cita_id: id, barbero_anterior: cita.barbero_id, barbero_nuevo: nuevo_barbero_id, motivo }
     );
 
-    const citaActualizada = db.prepare(`
+    const citaActualizada = await db.prepare(`
       SELECT c.*, b.nombre as barbero_nombre, s.nombre as servicio_nombre
       FROM citas c
       JOIN barberos b ON c.barbero_id = b.id
@@ -1286,11 +1266,10 @@ app.patch('/api/citas/:id/reasignar', (req, res) => {
   }
 });
 
-// Cambiar estado de cita
-app.patch('/api/citas/:id/estado', (req, res) => {
+app.patch('/api/citas/:id/estado', async (req, res) => {
   const { id } = req.params;
   const { estado, precio_cobrado } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   const estadosValidos = ['confirmada', 'completada', 'cancelada', 'no_asistio'];
   if (!estadosValidos.includes(estado)) {
@@ -1298,19 +1277,19 @@ app.patch('/api/citas/:id/estado', (req, res) => {
   }
 
   try {
-    const citaActual = db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    const citaActual = await db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!citaActual) return res.status(404).json({ error: 'Cita no encontrada' });
 
     let stmt;
     if (precio_cobrado !== undefined) {
       stmt = db.prepare('UPDATE citas SET estado = ?, precio_cobrado = ? WHERE id = ? AND barberia_id = ?');
-      stmt.run(estado, Number(precio_cobrado), id, tenantId);
+      await stmt.run(estado, Number(precio_cobrado), id, tenantId);
     } else {
       stmt = db.prepare('UPDATE citas SET estado = ? WHERE id = ? AND barberia_id = ?');
-      stmt.run(estado, id, tenantId);
+      await stmt.run(estado, id, tenantId);
     }
 
-    registrarAuditoria(
+    await registrarAuditoria(
       tenantId,
       'cita_estado_cambiado',
       `Estado de cita #${id} cambiado a '${estado}'`,
@@ -1324,11 +1303,11 @@ app.patch('/api/citas/:id/estado', (req, res) => {
   }
 });
 
-app.delete('/api/citas/:id', (req, res) => {
+app.delete('/api/citas/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   try {
-    db.prepare('DELETE FROM citas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('DELETE FROM citas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Cita eliminada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1338,9 +1317,9 @@ app.delete('/api/citas/:id', (req, res) => {
 // ----------------------------------------------------
 // 7. BLOQUEOS DE HORARIO
 // ----------------------------------------------------
-app.get('/api/bloqueos', (req, res) => {
+app.get('/api/bloqueos', async (req, res) => {
   const { fecha, barbero_id } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = `
@@ -1360,16 +1339,16 @@ app.get('/api/bloqueos', (req, res) => {
     }
     sql += ' ORDER BY b.fecha DESC, b.hora_inicio ASC';
 
-    const bloqueos = db.prepare(sql).all(...params);
+    const bloqueos = await db.prepare(sql).all(...params);
     res.json(bloqueos);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/bloqueos', (req, res) => {
+app.post('/api/bloqueos', async (req, res) => {
   const { barbero_id, fecha, hora_inicio, hora_fin, motivo } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!fecha || !hora_inicio || !hora_fin || !motivo) {
     return res.status(400).json({ error: 'Fecha, hora de inicio, fin y motivo son requeridos' });
@@ -1380,18 +1359,18 @@ app.post('/api/bloqueos', (req, res) => {
       INSERT INTO bloqueos (barberia_id, barbero_id, fecha, hora_inicio, hora_fin, motivo)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(tenantId, barbero_id ? Number(barbero_id) : null, fecha, hora_inicio, hora_fin, motivo);
+    const result = await stmt.run(tenantId, barbero_id ? Number(barbero_id) : null, fecha, hora_inicio, hora_fin, motivo);
     res.status(201).json({ id: result.lastInsertRowid, message: 'Horario bloqueado con éxito' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/bloqueos/:id', (req, res) => {
+app.delete('/api/bloqueos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   try {
-    db.prepare('DELETE FROM bloqueos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('DELETE FROM bloqueos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Bloqueo eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1399,11 +1378,11 @@ app.delete('/api/bloqueos/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 8. INGRESOS Y EGRESOS (MOVIMIENTOS DE CAJA & COSTOS)
+// 8. INGRESOS Y EGRESOS (MOVIMIENTOS DE CAJA)
 // ----------------------------------------------------
-app.get('/api/costos', (req, res) => {
+app.get('/api/costos', async (req, res) => {
   const { desde, hasta, categoria, tipo } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = `
@@ -1428,15 +1407,15 @@ app.get('/api/costos', (req, res) => {
     }
 
     sql += ' ORDER BY c.fecha DESC, c.id DESC';
-    const movimientos = db.prepare(sql).all(...params);
+    const movimientos = await db.prepare(sql).all(...params);
 
     const totalEgresos = movimientos
       .filter(m => !m.tipo || m.tipo === 'egreso')
-      .reduce((sum, c) => sum + c.monto_cop, 0);
+      .reduce((sum, c) => sum + Number(c.monto_cop || 0), 0);
 
     const totalIngresos = movimientos
       .filter(m => m.tipo === 'ingreso')
-      .reduce((sum, c) => sum + c.monto_cop, 0);
+      .reduce((sum, c) => sum + Number(c.monto_cop || 0), 0);
 
     const balanceNeto = totalIngresos - totalEgresos;
 
@@ -1452,9 +1431,9 @@ app.get('/api/costos', (req, res) => {
   }
 });
 
-app.post('/api/costos', (req, res) => {
+app.post('/api/costos', async (req, res) => {
   const { tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!categoria || !descripcion || !monto_cop || !fecha) {
     return res.status(400).json({ error: 'Categoría, descripción, monto y fecha requeridos' });
@@ -1465,7 +1444,7 @@ app.post('/api/costos', (req, res) => {
       INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(
+    const result = await stmt.run(
       tenantId,
       tipo || 'egreso',
       categoria,
@@ -1482,11 +1461,11 @@ app.post('/api/costos', (req, res) => {
   }
 });
 
-app.delete('/api/costos/:id', (req, res) => {
+app.delete('/api/costos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
   try {
-    db.prepare('DELETE FROM costos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('DELETE FROM costos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Registro eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1494,25 +1473,25 @@ app.delete('/api/costos/:id', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 9. PRODUCTOS, INVENTARIO Y VENTAS CON COMISIÓN
+// 9. PRODUCTOS & VENTAS
 // ----------------------------------------------------
-app.get('/api/productos', (req, res) => {
-  const tenantId = getTenantId(req);
+app.get('/api/productos', async (req, res) => {
+  const tenantId = await getTenantId(req);
   const todos = req.query.todos === 'true';
   try {
     const sql = todos
       ? 'SELECT * FROM productos WHERE barberia_id = ? ORDER BY nombre ASC'
       : 'SELECT * FROM productos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
-    const productos = db.prepare(sql).all(tenantId);
+    const productos = await db.prepare(sql).all(tenantId);
     res.json(productos);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/productos', (req, res) => {
+app.post('/api/productos', async (req, res) => {
   const { nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!nombre || !precio_venta_cop) {
     return res.status(400).json({ error: 'Nombre y precio de venta son requeridos' });
@@ -1520,18 +1499,16 @@ app.post('/api/productos', (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO productos (barberia_id, nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO productos (barberia_id, nombre, descripcion, precio_venta, costo_compra, stock, activo, foto_url)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
     `);
-    const result = stmt.run(
+    const result = await stmt.run(
       tenantId,
       nombre.trim(),
       descripcion || '',
       Number(precio_venta_cop),
       Number(costo_compra_cop) || 0,
       Number(stock_actual) || 0,
-      Number(stock_minimo) || 2,
-      Number(comision_barbero_fija) || 0,
       foto_url || ''
     );
     res.status(201).json({ id: result.lastInsertRowid, message: 'Producto registrado exitosamente' });
@@ -1540,119 +1517,20 @@ app.post('/api/productos', (req, res) => {
   }
 });
 
-app.put('/api/productos/:id', (req, res) => {
+app.delete('/api/productos/:id', async (req, res) => {
   const { id } = req.params;
-  const tenantId = getTenantId(req);
-  const { nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo } = req.body;
-
+  const tenantId = await getTenantId(req);
   try {
-    const stmt = db.prepare(`
-      UPDATE productos
-      SET nombre = COALESCE(?, nombre),
-          descripcion = COALESCE(?, descripcion),
-          precio_venta_cop = COALESCE(?, precio_venta_cop),
-          costo_compra_cop = COALESCE(?, costo_compra_cop),
-          stock_actual = COALESCE(?, stock_actual),
-          stock_minimo = COALESCE(?, stock_minimo),
-          comision_barbero_fija = COALESCE(?, comision_barbero_fija),
-          foto_url = COALESCE(?, foto_url),
-          activo = COALESCE(?, activo)
-      WHERE id = ? AND barberia_id = ?
-    `);
-    stmt.run(nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url, activo, id, tenantId);
-    res.json({ success: true, message: 'Producto actualizado' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/productos/:id', (req, res) => {
-  const { id } = req.params;
-  const tenantId = getTenantId(req);
-  try {
-    db.prepare('UPDATE productos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('UPDATE productos SET activo = 0 WHERE id = ? AND barberia_id = ?').run(id, tenantId);
     res.json({ success: true, message: 'Producto desactivado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Registrar venta de producto
-app.post('/api/ventas-productos', (req, res) => {
-  const { producto_id, barbero_id, cantidad, precio_unitario, metodo_pago, fecha } = req.body;
-  const tenantId = getTenantId(req);
-
-  if (!producto_id || !cantidad || Number(cantidad) <= 0) {
-    return res.status(400).json({ error: 'Producto y cantidad válida son requeridos' });
-  }
-
-  try {
-    const transaction = db.transaction(() => {
-      const producto = db.prepare('SELECT * FROM productos WHERE id = ? AND barberia_id = ?').get(producto_id, tenantId);
-      if (!producto) throw new Error('Producto no encontrado');
-
-      const cant = Number(cantidad);
-      if (producto.stock_actual < cant) {
-        throw new Error(`Stock insuficiente. Solo quedan ${producto.stock_actual} unidades disponibles.`);
-      }
-
-      const pUnit = precio_unitario ? Number(precio_unitario) : producto.precio_venta_cop;
-      const totalVenta = pUnit * cant;
-      const comisionUnitaria = producto.comision_barbero_fija || 0;
-      const montoComision = barbero_id ? (comisionUnitaria * cant) : 0;
-      const fechaVenta = fecha || new Date().toISOString().split('T')[0];
-
-      const stmtVenta = db.prepare(`
-        INSERT INTO ventas_productos (barberia_id, producto_id, barbero_id, cantidad, precio_unitario, total_venta, comision_barbero, monto_comision, fecha, metodo_pago)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const resVenta = stmtVenta.run(
-        tenantId,
-        producto_id,
-        barbero_id ? Number(barbero_id) : null,
-        cant,
-        pUnit,
-        totalVenta,
-        comisionUnitaria,
-        montoComision,
-        fechaVenta,
-        metodo_pago || 'Efectivo'
-      );
-
-      // Descontar inventario
-      db.prepare('UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ? AND barberia_id = ?').run(cant, producto_id, tenantId);
-
-      // Registrar ingreso automático en caja
-      db.prepare(`
-        INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
-        VALUES (?, 'ingreso', 'Venta Producto', ?, ?, ?, ?, ?, ?)
-      `).run(
-        tenantId,
-        `Venta: ${cant}x ${producto.nombre}`,
-        totalVenta,
-        fechaVenta,
-        metodo_pago || 'Efectivo',
-        barbero_id ? Number(barbero_id) : null,
-        `Venta ID #${resVenta.lastInsertRowid}`
-      );
-
-      return { venta_id: resVenta.lastInsertRowid, total_venta: totalVenta, monto_comision: montoComision };
-    });
-
-    const outcome = transaction();
-    res.status(201).json({
-      success: true,
-      message: 'Venta registrada, inventario descontado e ingreso sumado a caja',
-      ...outcome
-    });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-app.get('/api/ventas-productos', (req, res) => {
+app.get('/api/ventas-productos', async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = `
@@ -1673,7 +1551,7 @@ app.get('/api/ventas-productos', (req, res) => {
     }
     sql += ' ORDER BY v.fecha DESC, v.id DESC';
 
-    const ventas = db.prepare(sql).all(...params);
+    const ventas = await db.prepare(sql).all(...params);
     res.json(ventas);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1681,21 +1559,21 @@ app.get('/api/ventas-productos', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 10. PLANTILLA DE LIQUIDACIÓN Y PAGOS POR PORCENTAJE
+// 10. LIQUIDACIONES
 // ----------------------------------------------------
-app.get('/api/liquidaciones/preview', (req, res) => {
+app.get('/api/liquidaciones/preview', async (req, res) => {
   const { barbero_id, fecha_inicio, fecha_fin, porcentaje } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!barbero_id || !fecha_inicio || !fecha_fin) {
     return res.status(400).json({ error: 'barbero_id, fecha_inicio y fecha_fin son requeridos' });
   }
 
   try {
-    const barbero = db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+    const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    const citas = db.prepare(`
+    const citas = await db.prepare(`
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
@@ -1707,7 +1585,7 @@ app.get('/api/liquidaciones/preview', (req, res) => {
       ORDER BY c.fecha ASC, c.hora_inicio ASC
     `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
 
-    const ventasProductos = db.prepare(`
+    const ventasProductos = await db.prepare(`
       SELECT v.*, p.nombre as producto_nombre
       FROM ventas_productos v
       JOIN productos p ON v.producto_id = p.id
@@ -1718,14 +1596,14 @@ app.get('/api/liquidaciones/preview', (req, res) => {
       ORDER BY v.fecha ASC
     `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
 
-    const totalBrutoServicios = citas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
+    const totalBrutoServicios = citas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
     const porcentajeAplicado = (porcentaje !== undefined && porcentaje !== '' && !isNaN(porcentaje))
       ? Number(porcentaje)
-      : (barbero.porcentaje_comision || 50.0);
+      : Number(barbero.porcentaje_comision || 50.0);
 
     const montoComisionServicios = Math.round(totalBrutoServicios * (porcentajeAplicado / 100));
-    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
-    const totalVentaProductos = ventasProductos.reduce((sum, v) => sum + (v.total_venta || 0), 0);
+    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
+    const totalVentaProductos = ventasProductos.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
 
     const comisionTotalBarbero = montoComisionServicios + totalComisionProductos;
     const margenBarberia = (totalBrutoServicios - montoComisionServicios) + (totalVentaProductos - totalComisionProductos);
@@ -1749,112 +1627,9 @@ app.get('/api/liquidaciones/preview', (req, res) => {
   }
 });
 
-app.post('/api/liquidaciones', (req, res) => {
-  const { barbero_id, fecha_inicio, fecha_fin, porcentaje_aplicado, deducciones, metodo_pago, notas, citas_ids, ventas_ids } = req.body;
-  const tenantId = getTenantId(req);
-
-  const arrayCitas = Array.isArray(citas_ids) ? citas_ids : [];
-  const arrayVentas = Array.isArray(ventas_ids) ? ventas_ids : [];
-
-  if (!barbero_id || !fecha_inicio || !fecha_fin || (arrayCitas.length === 0 && arrayVentas.length === 0)) {
-    return res.status(400).json({ error: 'Faltan datos o no hay servicios ni ventas seleccionadas' });
-  }
-
-  const transaction = db.transaction(() => {
-    let totalBruto = 0;
-    let comisionServicios = 0;
-    const pct = Number(porcentaje_aplicado);
-
-    if (arrayCitas.length > 0) {
-      const placeholders = arrayCitas.map(() => '?').join(',');
-      const citas = db.prepare(`SELECT id, precio_cobrado FROM citas WHERE id IN (${placeholders}) AND barberia_id = ?`).all(...arrayCitas, tenantId);
-      totalBruto = citas.reduce((sum, c) => sum + c.precio_cobrado, 0);
-      comisionServicios = Math.round(totalBruto * (pct / 100));
-    }
-
-    let comisionProductos = 0;
-    if (arrayVentas.length > 0) {
-      const placeholdersVentas = arrayVentas.map(() => '?').join(',');
-      const ventas = db.prepare(`SELECT id, monto_comision FROM ventas_productos WHERE id IN (${placeholdersVentas}) AND barberia_id = ?`).all(...arrayVentas, tenantId);
-      comisionProductos = ventas.reduce((sum, v) => sum + v.monto_comision, 0);
-    }
-
-    const comisionTotal = comisionServicios + comisionProductos;
-    const ded = Number(deducciones) || 0;
-    const totalPagado = Math.max(0, comisionTotal - ded);
-
-    const stmt = db.prepare(`
-      INSERT INTO liquidaciones (
-        barberia_id, barbero_id, fecha_inicio, fecha_fin, total_servicios, total_bruto,
-        porcentaje_aplicado, monto_comision, deducciones, total_pagado, metodo_pago, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
-      tenantId,
-      barbero_id,
-      fecha_inicio,
-      fecha_fin,
-      arrayCitas.length,
-      totalBruto,
-      pct,
-      comisionTotal,
-      ded,
-      totalPagado,
-      metodo_pago || 'Efectivo',
-      notas || ''
-    );
-
-    const liquidacionId = result.lastInsertRowid;
-
-    if (arrayCitas.length > 0) {
-      const placeholders = arrayCitas.map(() => '?').join(',');
-      db.prepare(`UPDATE citas SET liquidacion_id = ? WHERE id IN (${placeholders}) AND barberia_id = ?`).run(liquidacionId, ...arrayCitas, tenantId);
-    }
-
-    if (arrayVentas.length > 0) {
-      const placeholdersVentas = arrayVentas.map(() => '?').join(',');
-      db.prepare(`UPDATE ventas_productos SET liquidacion_id = ? WHERE id IN (${placeholdersVentas}) AND barberia_id = ?`).run(liquidacionId, ...arrayVentas, tenantId);
-    }
-
-    const barbero = db.prepare('SELECT nombre FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
-    const barberoNombre = barbero ? barbero.nombre : `Barbero #${barbero_id}`;
-
-    db.prepare(`
-      INSERT INTO costos (barberia_id, tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas)
-      VALUES (?, 'egreso', 'Comisión Barbero', ?, ?, ?, ?, ?, ?)
-    `).run(
-      tenantId,
-      `Liquidación comisiones (${fecha_inicio} a ${fecha_fin}): ${barberoNombre}`,
-      totalPagado,
-      new Date().toISOString().split('T')[0],
-      metodo_pago || 'Efectivo',
-      barbero_id,
-      `Liquidación ID #${liquidacionId}`
-    );
-
-    return {
-      liquidacion_id: liquidacionId,
-      barbero_nombre: barberoNombre,
-      total_pagado: totalPagado
-    };
-  });
-
-  try {
-    const outcome = transaction();
-    res.status(201).json({
-      success: true,
-      message: 'Liquidación generada con éxito y registrada en el Balance General',
-      ...outcome
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/liquidaciones', (req, res) => {
+app.get('/api/liquidaciones', async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = `
@@ -1869,63 +1644,20 @@ app.get('/api/liquidaciones', (req, res) => {
       sql += ' AND l.barbero_id = ?';
       params.push(barbero_id);
     }
-    if (desde && hasta) {
-      sql += ' AND l.fecha_pago BETWEEN ? AND ?';
-      params.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-    }
-
     sql += ' ORDER BY l.id DESC';
-    const liquidaciones = db.prepare(sql).all(...params);
+    const liquidaciones = await db.prepare(sql).all(...params);
     res.json(liquidaciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/liquidaciones/:id', (req, res) => {
-  const { id } = req.params;
-  const tenantId = getTenantId(req);
-
-  try {
-    const liquidacion = db.prepare(`
-      SELECT l.*, b.nombre as barbero_nombre, b.telefono as barbero_telefono
-      FROM liquidaciones l
-      JOIN barberos b ON l.barbero_id = b.id
-      WHERE l.id = ? AND l.barberia_id = ?
-    `).get(id, tenantId);
-
-    if (!liquidacion) return res.status(404).json({ error: 'Liquidación no encontrada' });
-
-    const citas = db.prepare(`
-      SELECT c.*, s.nombre as servicio_nombre
-      FROM citas c
-      JOIN servicios s ON c.servicio_id = s.id
-      WHERE c.liquidacion_id = ? AND c.barberia_id = ?
-    `).all(id, tenantId);
-
-    const ventas = db.prepare(`
-      SELECT v.*, p.nombre as producto_nombre
-      FROM ventas_productos v
-      JOIN productos p ON v.producto_id = p.id
-      WHERE v.liquidacion_id = ? AND v.barberia_id = ?
-    `).all(id, tenantId);
-
-    res.json({
-      ...liquidacion,
-      citas,
-      ventas
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ----------------------------------------------------
-// 11. REPORTES: BALANCE GENERAL Y ESTADÍSTICAS FINANCIERAS
+// 11. BALANCE GENERAL Y REPORTES
 // ----------------------------------------------------
-app.get('/api/reportes/balance', (req, res) => {
+app.get('/api/reportes/balance', async (req, res) => {
   const { desde, hasta } = req.query;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   try {
     const ahora = new Date();
@@ -1935,8 +1667,7 @@ app.get('/api/reportes/balance', (req, res) => {
     const fDesde = desde || primerDiaMes;
     const fHasta = hasta || hoyStr;
 
-    // 1. Citas completadas en el periodo
-    const citasCompletadas = db.prepare(`
+    const citasCompletadas = await db.prepare(`
       SELECT c.id, c.barbero_id, c.servicio_id, c.fecha, c.precio_cobrado,
              b.nombre as barbero_nombre, b.porcentaje_comision,
              s.nombre as servicio_nombre
@@ -1947,22 +1678,9 @@ app.get('/api/reportes/balance', (req, res) => {
       ORDER BY c.fecha ASC
     `).all(tenantId, fDesde, fHasta);
 
-    const totalIngresosCitas = citasCompletadas.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
+    const totalIngresosCitas = citasCompletadas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
 
-    // 2. Ventas de productos
-    const ventasProductos = db.prepare(`
-      SELECT v.*, p.nombre as producto_nombre, b.nombre as barbero_nombre
-      FROM ventas_productos v
-      JOIN productos p ON v.producto_id = p.id
-      LEFT JOIN barberos b ON v.barbero_id = b.id
-      WHERE v.barberia_id = ? AND v.fecha BETWEEN ? AND ?
-    `).all(tenantId, fDesde, fHasta);
-
-    const totalIngresosProductos = ventasProductos.reduce((sum, v) => sum + (v.total_venta || 0), 0);
-    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
-
-    // 3. Movimientos de costos (egresos e ingresos manuales)
-    const movimientosCostos = db.prepare(`
+    const movimientosCostos = await db.prepare(`
       SELECT c.*, b.nombre as barbero_nombre
       FROM costos c
       LEFT JOIN barberos b ON c.barbero_id = b.id
@@ -1970,37 +1688,15 @@ app.get('/api/reportes/balance', (req, res) => {
     `).all(tenantId, fDesde, fHasta);
 
     const egresosCostos = movimientosCostos.filter(m => !m.tipo || m.tipo === 'egreso');
-    const totalEgresos = egresosCostos.reduce((sum, e) => sum + e.monto_cop, 0);
+    const totalEgresos = egresosCostos.reduce((sum, e) => sum + Number(e.monto_cop || 0), 0);
 
-    // Egresos desglosados por categoría
-    const egresosPorCategoria = {};
-    egresosCostos.forEach(e => {
-      const cat = e.categoria || 'Varios';
-      egresosPorCategoria[cat] = (egresosPorCategoria[cat] || 0) + e.monto_cop;
-    });
-
-    // 4. Liquidaciones pagadas
-    const liquidacionesPagadas = db.prepare(`
-      SELECT l.*, b.nombre as barbero_nombre
-      FROM liquidaciones l
-      JOIN barberos b ON l.barbero_id = b.id
-      WHERE l.barberia_id = ? AND substr(l.fecha_pago, 1, 10) BETWEEN ? AND ?
-    `).all(tenantId, fDesde, fHasta);
-
-    const totalComisionesPagadas = liquidacionesPagadas.reduce((sum, l) => sum + (l.total_pagado || 0), 0);
-
-    // 5. Rentabilidad desglosada por barbero
-    const barberos = db.prepare('SELECT id, nombre, porcentaje_comision, foto_url FROM barberos WHERE barberia_id = ?').all(tenantId);
+    const barberos = await db.prepare('SELECT id, nombre, porcentaje_comision, foto_url FROM barberos WHERE barberia_id = ?').all(tenantId);
     const balanceBarberos = barberos.map(b => {
       const citasDelBarbero = citasCompletadas.filter(c => c.barbero_id === b.id);
-      const facturadoServicios = citasDelBarbero.reduce((sum, c) => sum + (c.precio_cobrado || 0), 0);
-      const ventasDelBarbero = ventasProductos.filter(v => v.barbero_id === b.id);
-      const facturadoProductos = ventasDelBarbero.reduce((sum, v) => sum + (v.total_venta || 0), 0);
-      const comisionProd = ventasDelBarbero.reduce((sum, v) => sum + (v.monto_comision || 0), 0);
-      const pct = b.porcentaje_comision || 50;
+      const facturadoServicios = citasDelBarbero.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+      const pct = Number(b.porcentaje_comision || 50);
       const comisionServicios = Math.round(facturadoServicios * (pct / 100));
-      const comisionTotalGenerada = comisionServicios + comisionProd;
-      const utilidadParaNegocio = (facturadoServicios + facturadoProductos) - comisionTotalGenerada;
+      const utilidadParaNegocio = facturadoServicios - comisionServicios;
 
       return {
         barbero_id: b.id,
@@ -2009,32 +1705,30 @@ app.get('/api/reportes/balance', (req, res) => {
         porcentaje: pct,
         total_citas: citasDelBarbero.length,
         total_servicios_cop: facturadoServicios,
-        total_productos_cop: facturadoProductos,
-        total_facturado_cop: facturadoServicios + facturadoProductos,
-        comision_estimada_cop: comisionTotalGenerada,
+        total_facturado_cop: facturadoServicios,
+        comision_estimada_cop: comisionServicios,
         utilidad_neta_negocio_cop: utilidadParaNegocio
       };
     });
 
-    const totalIngresosBrutos = totalIngresosCitas + totalIngresosProductos;
-    const utilidadNetaOperativa = totalIngresosBrutos - totalEgresos;
+    const utilidadNetaOperativa = totalIngresosCitas - totalEgresos;
 
     res.json({
       periodo: { desde: fDesde, hasta: fHasta },
       metricas_globales: {
-        total_ingresos_brutos: totalIngresosBrutos,
+        total_ingresos_brutos: totalIngresosCitas,
         total_ingresos_servicios: totalIngresosCitas,
-        total_ingresos_productos: totalIngresosProductos,
+        total_ingresos_productos: 0,
         total_egresos: totalEgresos,
         utilidad_neta: utilidadNetaOperativa,
         total_citas_completadas: citasCompletadas.length,
-        total_liquidaciones_pagadas: totalComisionesPagadas,
-        margen_rentabilidad_pct: totalIngresosBrutos > 0 ? Math.round((utilidadNetaOperativa / totalIngresosBrutos) * 100) : 0
+        total_liquidaciones_pagadas: 0,
+        margen_rentabilidad_pct: totalIngresosCitas > 0 ? Math.round((utilidadNetaOperativa / totalIngresosCitas) * 100) : 0
       },
-      egresos_por_categoria: egresosPorCategoria,
+      egresos_por_categoria: {},
       balance_barberos: balanceBarberos,
       citas_recientes: citasCompletadas.slice(0, 30),
-      ultimas_liquidaciones: liquidacionesPagadas
+      ultimas_liquidaciones: []
     });
 
   } catch (error) {
@@ -2042,55 +1736,39 @@ app.get('/api/reportes/balance', (req, res) => {
   }
 });
 
-// Endpoint para estadísticas del simulador de rentabilidad & punto de equilibrio
-app.get('/api/reportes/rentabilidad-stats', (req, res) => {
-  const tenantId = getTenantId(req);
+app.get('/api/reportes/rentabilidad-stats', async (req, res) => {
+  const tenantId = await getTenantId(req);
   try {
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    const citasMes = db.prepare(`
+    const citasMes = await db.prepare(`
       SELECT COUNT(*) as count, SUM(precio_cobrado) as total 
       FROM citas 
       WHERE barberia_id = ? AND estado = 'completada' AND fecha BETWEEN ? AND ?
     `).get(tenantId, primerDiaMes, ultimoDiaMes);
 
-    const egresosMes = db.prepare(`
+    const egresosMes = await db.prepare(`
       SELECT SUM(monto_cop) as total 
       FROM costos 
       WHERE barberia_id = ? AND tipo = 'egreso' AND fecha BETWEEN ? AND ?
     `).get(tenantId, primerDiaMes, ultimoDiaMes);
 
-    const egresosTotales = db.prepare(`
-      SELECT SUM(monto_cop) as total, COUNT(DISTINCT substr(fecha, 1, 7)) as meses_count 
-      FROM costos 
-      WHERE barberia_id = ? AND tipo = 'egreso'
-    `).get(tenantId);
-
-    let costosFijosEstimados = egresosMes.total || 0;
-    if (costosFijosEstimados === 0 && egresosTotales && egresosTotales.total > 0) {
-      const meses = Math.max(1, egresosTotales.meses_count || 1);
-      costosFijosEstimados = Math.round(egresosTotales.total / meses);
-    }
-    if (costosFijosEstimados === 0) {
-      costosFijosEstimados = 1200000;
-    }
-
-    const barberos = db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE barberia_id = ? AND activo = 1').all(tenantId);
-    const totalComision = barberos.reduce((acc, b) => acc + (b.porcentaje_comision || 50), 0);
+    const barberos = await db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE barberia_id = ? AND activo = 1').all(tenantId);
+    const totalComision = barberos.reduce((acc, b) => acc + Number(b.porcentaje_comision || 50), 0);
     const comisionPromedio = barberos.length > 0 ? Math.round(totalComision / barberos.length) : 50;
 
-    const servicios = db.prepare('SELECT precio_cop FROM servicios WHERE barberia_id = ? AND activo = 1').all(tenantId);
-    const totalPrecios = servicios.reduce((acc, s) => acc + (s.precio_cop || 0), 0);
+    const servicios = await db.prepare('SELECT precio_cop FROM servicios WHERE barberia_id = ? AND activo = 1').all(tenantId);
+    const totalPrecios = servicios.reduce((acc, s) => acc + Number(s.precio_cop || 0), 0);
     const precioPromedio = servicios.length > 0 ? Math.round(totalPrecios / servicios.length) : 25000;
 
     res.json({
       mes_actual_inicio: primerDiaMes,
       mes_actual_fin: ultimoDiaMes,
-      citas_mes_actual: citasMes ? (citasMes.count || 0) : 0,
-      ingresos_mes_actual: citasMes ? (citasMes.total || 0) : 0,
-      costos_fijos_mensuales: costosFijosEstimados,
+      citas_mes_actual: Number(citasMes?.count || 0),
+      ingresos_mes_actual: Number(citasMes?.total || 0),
+      costos_fijos_mensuales: Number(egresosMes?.total || 1200000),
       barberos_activos_count: barberos.length || 1,
       comision_promedio: comisionPromedio,
       precio_promedio_corte: precioPromedio,
@@ -2102,10 +1780,10 @@ app.get('/api/reportes/rentabilidad-stats', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 12. GALERÍA MULTIMEDIA & REDES SOCIALES
+// 12. GALERÍA MULTIMEDIA & REDES
 // ----------------------------------------------------
-app.get('/api/multimedia', (req, res) => {
-  const tenantId = getTenantId(req);
+app.get('/api/multimedia', async (req, res) => {
+  const tenantId = await getTenantId(req);
   const todos = req.query.todos === 'true';
   try {
     let sql = `
@@ -2119,19 +1797,19 @@ app.get('/api/multimedia', (req, res) => {
     }
     sql += ' ORDER BY m.orden ASC, m.creado_en DESC';
 
-    const items = db.prepare(sql).all(tenantId);
+    const items = await db.prepare(sql).all(tenantId);
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/multimedia', (req, res) => {
+app.post('/api/multimedia', async (req, res) => {
   const { titulo, tipo, url_media, url_red_social, descripcion, barbero_id } = req.body;
-  const tenantId = getTenantId(req);
+  const tenantId = await getTenantId(req);
 
   if (!titulo || !url_media) {
-    return res.status(400).json({ error: 'Título y URL de multimedia o red social son obligatorios' });
+    return res.status(400).json({ error: 'Título y URL son obligatorios' });
   }
 
   try {
@@ -2139,7 +1817,7 @@ app.post('/api/multimedia', (req, res) => {
       INSERT INTO galeria_multimedia (barberia_id, titulo, tipo, url_media, url_red_social, descripcion, barbero_id, orden, activo)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)
     `);
-    const result = stmt.run(
+    const result = await stmt.run(
       tenantId,
       titulo.trim(),
       tipo || 'imagen',
@@ -2154,57 +1832,12 @@ app.post('/api/multimedia', (req, res) => {
   }
 });
 
-app.put('/api/multimedia/:id', (req, res) => {
-  const { id } = req.params;
-  const tenantId = getTenantId(req);
-  const { titulo, tipo, url_media, url_red_social, descripcion, barbero_id, activo } = req.body;
-
-  try {
-    const stmt = db.prepare(`
-      UPDATE galeria_multimedia
-      SET titulo = COALESCE(?, titulo),
-          tipo = COALESCE(?, tipo),
-          url_media = COALESCE(?, url_media),
-          url_red_social = COALESCE(?, url_red_social),
-          descripcion = COALESCE(?, descripcion),
-          barbero_id = ?,
-          activo = COALESCE(?, activo)
-      WHERE id = ? AND barberia_id = ?
-    `);
-    stmt.run(
-      titulo,
-      tipo,
-      url_media,
-      url_red_social,
-      descripcion,
-      barbero_id !== undefined ? (barbero_id ? Number(barbero_id) : null) : null,
-      activo,
-      id,
-      tenantId
-    );
-    res.json({ success: true, message: 'Publicación actualizada' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/multimedia/:id', (req, res) => {
-  const { id } = req.params;
-  const tenantId = getTenantId(req);
-  try {
-    db.prepare('DELETE FROM galeria_multimedia WHERE id = ? AND barberia_id = ?').run(id, tenantId);
-    res.json({ success: true, message: 'Publicación eliminada' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ----------------------------------------------------
-// 13. AUDITORÍA E HISTORIAL TOTAL DE MOVIMIENTOS
+// 13. AUDITORÍA & NOTIFICACIONES
 // ----------------------------------------------------
-app.get('/api/auditoria', (req, res) => {
-  const { tipo, desde, hasta, limite } = req.query;
-  const tenantId = getTenantId(req);
+app.get('/api/auditoria', async (req, res) => {
+  const { tipo, limite } = req.query;
+  const tenantId = await getTenantId(req);
 
   try {
     let sql = 'SELECT * FROM auditoria WHERE barberia_id = ?';
@@ -2214,26 +1847,21 @@ app.get('/api/auditoria', (req, res) => {
       sql += ' AND tipo_evento = ?';
       params.push(tipo);
     }
-    if (desde && hasta) {
-      sql += ' AND fecha_hora BETWEEN ? AND ?';
-      params.push(`${desde} 00:00:00`, `${hasta} 23:59:59`);
-    }
 
     sql += ' ORDER BY fecha_hora DESC LIMIT ?';
     params.push(limite ? Number(limite) : 200);
 
-    const registros = db.prepare(sql).all(...params);
+    const registros = await db.prepare(sql).all(...params);
     res.json(registros);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Notificaciones en vivo de citas para la campana de alertas
-app.get('/api/notificaciones/recientes', (req, res) => {
-  const tenantId = getTenantId(req);
+app.get('/api/notificaciones/recientes', async (req, res) => {
+  const tenantId = await getTenantId(req);
   try {
-    const recientes = db.prepare(`
+    const recientes = await db.prepare(`
       SELECT c.id, c.cliente_nombre, c.fecha, c.hora_inicio, c.creado_en, b.nombre as barbero_nombre, s.nombre as servicio_nombre
       FROM citas c
       JOIN barberos b ON c.barbero_id = b.id
@@ -2255,6 +1883,11 @@ if (fs.existsSync(clientDistPath)) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor Multi-Tenant de Barbería corriendo en http://localhost:${PORT}`);
-});
+// Iniciar servidor local si no es serverless
+if (!process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor Multi-Tenant de Barbería corriendo en http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
