@@ -150,16 +150,22 @@ async function getTenant(req) {
   const slug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug;
   const id = req.headers['x-barberia-id'] || req.query.barberia_id;
 
-  if (id) {
-    const b = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
-    if (b) return b;
+  try {
+    if (id) {
+      const b = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+      if (b) return b;
+    }
+    if (slug) {
+      const b = await db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
+      if (b) return b;
+    }
+    const def = (await db.prepare('SELECT * FROM barberias WHERE id = 1').get()) || (await db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get());
+    if (def) return def;
+  } catch (err) {
+    console.warn('⚠️ getTenant fallback:', err.message);
   }
-  if (slug) {
-    const b = await db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
-    if (b) return b;
-  }
-  const def = (await db.prepare('SELECT * FROM barberias WHERE id = 1').get()) || (await db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get());
-  return def || {
+
+  return {
     id: 1,
     slug: 'the-barber-club',
     nombre: 'The Barber Club',
@@ -876,9 +882,10 @@ app.get('/api/barbero-portal/citas', async (req, res) => {
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
     const citas = await db.prepare(sql).all(...params);
-    res.json(citas);
+    res.json(citas || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.warn('Fallback citas:', error.message);
+    res.json([]);
   }
 });
 
@@ -1185,9 +1192,10 @@ app.get('/api/citas', async (req, res) => {
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
     const citas = await db.prepare(sql).all(...params);
-    res.json(citas);
+    res.json(citas || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.warn('Fallback citas:', error.message);
+    res.json([]);
   }
 });
 
