@@ -10,12 +10,14 @@
     "test": "node test/api_test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "multer": "^2.5.0",
-    "pg": "^8.23.1"
+    "pg": "^8.13.1"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.8.1"
   }
 }

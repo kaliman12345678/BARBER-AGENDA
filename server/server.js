@@ -12,6 +12,14 @@ const PORT = process.env.PORT || 4001;
 app.use(cors());
 app.use(express.json());
 
+// Normalización de rutas para Vercel Serverless
+app.use((req, res, next) => {
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/uploads') && !req.url.startsWith('/assets')) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 // Directorio para almacenar imágenes y videos subidos por el usuario
 const uploadsDir = path.resolve(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
