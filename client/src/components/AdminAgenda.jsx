@@ -21,11 +21,14 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
+import DateRangeFilter from './DateRangeFilter';
 
 export default function AdminAgenda({ barberos, servicios }) {
-  // Modo de visualización: 'dia' (por fecha específica) o 'todas' (todas las citas)
-  const [vistaModo, setVistaModo] = useState('todas'); // 'todas' o 'dia'
-  const [fecha, setFecha] = useState(getTodayStr());
+  // Filtro de tiempo universal y buscador de cliente
+  const [filtroTiempo, setFiltroTiempo] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [busqueda, setBusqueda] = useState('');
   const [barberoId, setBarberoId] = useState('');
   const [citas, setCitas] = useState([]);
   const [cargando, setCargando] = useState(false);
@@ -56,25 +59,38 @@ export default function AdminAgenda({ barberos, servicios }) {
 
   useEffect(() => {
     cargarCitas();
-  }, [fecha, barberoId, vistaModo]);
+  }, [filtroTiempo, fechaDesde, fechaHasta, barberoId]);
 
   async function cargarCitas() {
     setCargando(true);
     try {
       let url = '/api/citas';
       const params = [];
-      if (vistaModo === 'dia' && fecha) {
-        params.push(`fecha=${fecha}`);
+      if (filtroTiempo === 'hoy') {
+        const hoy = getTodayStr();
+        params.push(`fecha=${hoy}`);
+      } else if (filtroTiempo === 'ayer') {
+        const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        params.push(`fecha=${ayer}`);
+      } else if (filtroTiempo === '7d') {
+        const hace7 = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        const hoy = getTodayStr();
+        params.push(`desde=${hace7}&hasta=${hoy}`);
+      } else if (filtroTiempo === 'rango' && fechaDesde && fechaHasta) {
+        params.push(`desde=${fechaDesde}&hasta=${fechaHasta}`);
       }
       if (barberoId) {
         params.push(`barbero_id=${barberoId}`);
+      }
+      if (busqueda.trim()) {
+        params.push(`q=${encodeURIComponent(busqueda.trim())}`);
       }
       if (params.length > 0) {
         url += `?${params.join('&')}`;
       }
       const res = await fetch(url);
       const data = await res.json();
-      setCitas(data);
+      setCitas(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error al cargar citas:', err);
     } finally {
@@ -206,111 +222,53 @@ export default function AdminAgenda({ barberos, servicios }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       
-      {/* Barra superior de controles */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 shadow-xs">
-        
-        {/* Selector de modo y selector de fecha */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Botones de Modo: Todas vs Por Día */}
-          <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200/80">
-            <button
-              type="button"
-              onClick={() => setVistaModo('todas')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                vistaModo === 'todas'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Ver Todas las Citas
-            </button>
-            <button
-              type="button"
-              onClick={() => setVistaModo('dia')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                vistaModo === 'dia'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Filtrar por Día
-            </button>
-          </div>
+      {/* FILTRO DE FECHAS UNIVERSAL & MOTOR DE BÚSQUEDA */}
+      <DateRangeFilter
+        filtroTiempo={filtroTiempo}
+        setFiltroTiempo={setFiltroTiempo}
+        fechaDesde={fechaDesde}
+        setFechaDesde={setFechaDesde}
+        fechaHasta={fechaHasta}
+        setFechaHasta={setFechaHasta}
+        busqueda={busqueda}
+        setBusqueda={setBusqueda}
+        onBuscar={cargarCitas}
+        placeholder="Buscar cita por cliente o teléfono..."
+      />
 
-          {/* Navegación por día solo cuando vistaModo === 'dia' */}
-          {vistaModo === 'dia' && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => moverDia(-1)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Día anterior"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
-                <input
-                  type="date"
-                  value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
-                  className="bg-transparent text-slate-800 text-xs font-semibold focus:outline-none cursor-pointer"
-                />
-              </div>
-
-              <button
-                onClick={() => moverDia(1)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Día siguiente"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => setFecha(getTodayStr())}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-blue-600 text-xs font-bold transition-colors"
-              >
-                Hoy
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Filtro por barbero y botón Nueva Cita */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-1 md:flex-initial">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={barberoId}
-              onChange={(e) => setBarberoId(e.target.value)}
-              className="bg-transparent text-slate-800 text-sm focus:outline-none cursor-pointer font-medium"
-            >
-              <option value="">Todos los Barberos</option>
-              {barberos.map(b => (
-                <option key={b.id} value={b.id}>{b.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={() => {
-              setNuevaCita(prev => ({
-                ...prev,
-                barbero_id: barberos[0]?.id || '',
-                servicio_id: servicios[0]?.id || '',
-                fecha: fecha
-              }));
-              setMostrarModalNueva(true);
-            }}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm flex items-center gap-2 shadow-md shadow-blue-500/20 whitespace-nowrap transition-all"
+      {/* BARRA SECUNDARIA: FILTRO POR BARBERO & BOTÓN NUEVA CITA */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-1 sm:max-w-xs">
+          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+          <select
+            value={barberoId}
+            onChange={(e) => setBarberoId(e.target.value)}
+            className="w-full bg-transparent text-slate-800 text-xs focus:outline-none cursor-pointer font-bold"
           >
-            <Plus className="w-4 h-4" />
-            <span>Agendar Presencial</span>
-          </button>
+            <option value="">Todos los Barberos del Equipo</option>
+            {barberos.map(b => (
+              <option key={b.id} value={b.id}>{b.nombre}</option>
+            ))}
+          </select>
         </div>
 
+        <button
+          onClick={() => {
+            setNuevaCita(prev => ({
+              ...prev,
+              barbero_id: barberos[0]?.id || '',
+              servicio_id: servicios[0]?.id || '',
+              fecha: getTodayStr()
+            }));
+            setMostrarModalNueva(true);
+          }}
+          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Agendar Cita Presencial</span>
+        </button>
       </div>
 
       {/* Título de la agenda */}

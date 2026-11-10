@@ -17,7 +17,8 @@ import {
   Package,
   Calculator,
   History,
-  Crown
+  Crown,
+  Award
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -33,6 +34,7 @@ import AdminProductos from './AdminProductos';
 import AdminRentabilidad from './AdminRentabilidad';
 import AdminAuditoria from './AdminAuditoria';
 import AdminNotifications from './AdminNotifications';
+import AdminClientes from './AdminClientes';
 
 export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [activeTab, setActiveTab] = useState('agenda');
@@ -65,6 +67,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
 
   const allTabs = [
     { id: 'agenda', label: 'Agenda & Citas', icon: Calendar, visible: modulos.agenda !== false },
+    { id: 'clientes', label: 'Clientes Preferenciales', icon: Award, badge: 'VIP & Fidelidad', visible: modulos.fidelizacion_clientes !== false },
     { id: 'bloqueos', label: 'Bloquear Horarios', icon: Ban, visible: modulos.agenda !== false },
     { id: 'liquidaciones', label: 'Plantilla de Pagos (%)', icon: Percent, badge: 'Principal', visible: modulos.liquidaciones !== false },
     { id: 'costos', label: 'Caja & Egresos', icon: DollarSign, visible: modulos.costos !== false },
@@ -301,6 +304,12 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               <AdminAgenda 
                 barberos={barberos.filter(b => b.activo)} 
                 servicios={servicios.filter(s => s.activo)} 
+              />
+            )}
+
+            {activeTab === 'clientes' && (
+              <AdminClientes 
+                shopConfig={shopConfig} 
               />
             )}
 

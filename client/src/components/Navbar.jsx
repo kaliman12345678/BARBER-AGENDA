@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scissors, ShieldCheck, Calendar, LogOut, Phone, UserCheck, Lock, LogIn } from 'lucide-react';
+import { Scissors, ShieldCheck, Calendar, LogOut, Phone, UserCheck, Lock, LogIn, MessageCircle } from 'lucide-react';
 
 export default function Navbar({ 
   activeView, 
@@ -106,10 +106,24 @@ export default function Navbar({
             /* Vista para clientes comunes: Limpia, profesional con solo Agenda e Iniciar Sesión */
             <div className="flex items-center gap-2 sm:gap-3">
               
-              <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
+              <span className="hidden xs:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>Agenda tu cita</span>
               </span>
+
+              {/* Botón WhatsApp directo (sin mostrar números en texto plano) */}
+              {shopPhone && (
+                <a
+                  href={`https://wa.me/${shopPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`¡Hola ${shopName}! Quisiera consultar sobre sus servicios de barbería.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Chatear por WhatsApp con la barbería"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-white/20 text-white" />
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </a>
+              )}
 
               {/* Botón único de Iniciar Sesión */}
               <button

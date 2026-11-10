@@ -36,8 +36,15 @@ import {
   EyeOff,
   BarChart3,
   CreditCard,
-  Menu
+  Menu,
+  Search,
+  MessageCircle,
+  Filter,
+  Award,
+  Sliders,
+  Save
 } from 'lucide-react';
+import DateRangeFilter from './DateRangeFilter';
 
 const COLOR_PRESETS = [
   { name: 'Azul EXAKTA', hex: '#2563eb' },
@@ -82,6 +89,45 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     eslogan: 'Tu estilo en las mejores manos'
   });
 
+  // Filtros de búsqueda en Barberías
+  const [busquedaBarberias, setBusquedaBarberias] = useState('');
+
+  // Citas Globales
+  const [citasGlobales, setCitasGlobales] = useState([]);
+  const [cargandoCitas, setCargandoCitas] = useState(false);
+  const [filtroTiempoCitas, setFiltroTiempoCitas] = useState('hoy');
+  const [fechaDesdeCitas, setFechaDesdeCitas] = useState('');
+  const [fechaHastaCitas, setFechaHastaCitas] = useState('');
+  const [busquedaCitas, setBusquedaCitas] = useState('');
+  const [filtroBarberiaEnCitas, setFiltroBarberiaEnCitas] = useState('todas');
+
+  // Barberos Globales
+  const [barberosGlobales, setBarberosGlobales] = useState([]);
+  const [cargandoBarberos, setCargandoBarberos] = useState(false);
+
+  // Creador / Asignador de Plan Personalizado
+  const [planPersonalizadoTarget, setPlanPersonalizadoTarget] = useState('');
+  const [planPersonalizadoForm, setPlanPersonalizadoForm] = useState({
+    nombre_plan: 'Plan Personalizado',
+    precio_usd: 50,
+    precio_cop: 200000,
+    max_barberos: 10,
+    modulos: {
+      agenda: true,
+      portal_barberos: true,
+      liquidaciones: true,
+      costos: true,
+      productos: true,
+      rentabilidad: true,
+      galeria: true,
+      auditoria: true,
+      fidelizacion_clientes: true,
+      notificaciones_audio: true
+    }
+  });
+  const [guardandoPlanCustom, setGuardandoPlanCustom] = useState(false);
+  const [mensajeExitoCustom, setMensajeExitoCustom] = useState('');
+
   useEffect(() => {
     const token = sessionStorage.getItem('barberia_superadmin_token');
     if (token) {
@@ -89,6 +135,16 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       cargarBarberias();
     }
   }, []);
+
+  useEffect(() => {
+    if (isSuperLoggedIn) {
+      if (seccionActiva === 'citas') {
+        cargarCitasGlobales();
+      } else if (seccionActiva === 'barberos') {
+        cargarBarberosGlobales();
+      }
+    }
+  }, [seccionActiva, isSuperLoggedIn, filtroTiempoCitas, fechaDesdeCitas, fechaHastaCitas, filtroBarberiaEnCitas]);
 
   async function handleLoginSuper(e) {
     if (e) e.preventDefault();
@@ -133,10 +189,69 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       const res = await fetch('/api/superadmin/barberias');
       if (res.ok) {
         const data = await res.json();
-        setBarberias(Array.isArray(data) ? data : []);
+        const lista = Array.isArray(data) ? data : [];
+        setBarberias(lista);
+        if (lista.length > 0 && !planPersonalizadoTarget) {
+          setPlanPersonalizadoTarget(String(lista[0].id));
+        }
       }
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  async function cargarCitasGlobales() {
+    setCargandoCitas(true);
+    try {
+      let url = '/api/superadmin/citas-globales';
+      const params = [];
+      const hoy = new Date().toISOString().split('T')[0];
+
+      if (filtroTiempoCitas === 'hoy') {
+        params.push(`desde=${hoy}&hasta=${hoy}`);
+      } else if (filtroTiempoCitas === 'ayer') {
+        const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        params.push(`desde=${ayer}&hasta=${ayer}`);
+      } else if (filtroTiempoCitas === '7d') {
+        const hace7 = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        params.push(`desde=${hace7}&hasta=${hoy}`);
+      } else if (filtroTiempoCitas === 'rango' && fechaDesdeCitas && fechaHastaCitas) {
+        params.push(`desde=${fechaDesdeCitas}&hasta=${fechaHastaCitas}`);
+      }
+
+      if (filtroBarberiaEnCitas && filtroBarberiaEnCitas !== 'todas') {
+        params.push(`barberia_id=${filtroBarberiaEnCitas}`);
+      }
+      if (busquedaCitas.trim()) {
+        params.push(`q=${encodeURIComponent(busquedaCitas.trim())}`);
+      }
+
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setCitasGlobales(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCargandoCitas(false);
+    }
+  }
+
+  async function cargarBarberosGlobales() {
+    setCargandoBarberos(true);
+    try {
+      const res = await fetch('/api/superadmin/barberos-globales');
+      if (res.ok) {
+        const data = await res.json();
+        setBarberosGlobales(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCargandoBarberos(false);
     }
   }
 
@@ -180,7 +295,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         });
       }
     } catch (err) {
-      console.error('Error cargando detalle:', err);
+      console.error(err);
     } finally {
       setCargandoDetalle(false);
     }
@@ -188,8 +303,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   async function handleToggleActivo(barberia, e) {
     if (e) e.stopPropagation();
+    const nuevoEstado = barberia.activo !== 0 ? 0 : 1;
     try {
-      const nuevoEstado = barberia.activo === 1 ? 0 : 1;
       const res = await fetch(`/api/superadmin/barberias/${barberia.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -221,12 +336,50 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         })
       });
       if (res.ok) {
-        cargarBarberias();
+        await cargarBarberias();
         handleAbrirDetalle({ ...barberiaDetalle.barberia, plan: nuevoPlan || barberiaDetalle.barberia.plan, modulos_activos: nuevosModulos });
         alert('Configuración de módulos y plan actualizada correctamente.');
       }
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  async function handleGuardarPlanPersonalizado(e) {
+    e.preventDefault();
+    if (!planPersonalizadoTarget) {
+      alert('Selecciona una barbería para asignarle el plan personalizado.');
+      return;
+    }
+
+    setGuardandoPlanCustom(true);
+    setMensajeExitoCustom('');
+    try {
+      const res = await fetch(`/api/superadmin/barberias/${planPersonalizadoTarget}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: 'personalizado',
+          precio_mensual_usd: Number(planPersonalizadoForm.precio_usd),
+          precio_mensual_cop: Number(planPersonalizadoForm.precio_cop),
+          modulos_activos: {
+            ...planPersonalizadoForm.modulos,
+            max_barberos: Number(planPersonalizadoForm.max_barberos)
+          }
+        })
+      });
+      if (res.ok) {
+        await cargarBarberias();
+        setMensajeExitoCustom('¡Plan Personalizado guardado y asignado exitosamente al cliente!');
+        setTimeout(() => setMensajeExitoCustom(''), 4000);
+      } else {
+        alert('Error al guardar el plan personalizado');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    } finally {
+      setGuardandoPlanCustom(false);
     }
   }
 
@@ -314,13 +467,19 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     return Math.max(1, 30 - diasTranscurridos);
   }
 
+  function getWhatsAppUrl(telefono, nombre = '') {
+    const telLimpio = (telefono || '').replace(/[^0-9]/g, '');
+    const mensaje = `Hola ${nombre ? nombre : ''}, te contactamos desde la administración general de EXAKTA.`;
+    return `https://wa.me/${telLimpio}?text=${encodeURIComponent(mensaje)}`;
+  }
+
   const totalBarberias = barberias.length;
   const barberiasActivas = barberias.filter(b => b.activo !== 0).length;
   const totalBarberosRed = barberias.reduce((acc, b) => acc + (b.total_barberos || 1), 0);
   const totalCitasRed = barberias.reduce((acc, b) => acc + (b.total_citas || 0), 0);
   
   const mrrTotalUSD = barberias.reduce((acc, b) => {
-    const val = b.plan === 'vip' ? 80 : (b.plan === 'pro' ? 45 : 20);
+    const val = b.plan === 'vip' ? 80 : (b.plan === 'pro' ? 45 : (b.plan === 'personalizado' ? (b.precio_mensual_usd || 50) : 20));
     return acc + val;
   }, 0);
 
@@ -337,46 +496,40 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     hour12: true
   });
 
+  // Filtrado de barberías por texto
+  const barberiasFiltradas = barberias.filter(b => {
+    if (!busquedaBarberias.trim()) return true;
+    const q = busquedaBarberias.toLowerCase();
+    return b.nombre?.toLowerCase().includes(q) || b.slug?.toLowerCase().includes(q) || b.telefono?.includes(q);
+  });
+
   // PANTALLA DE LOGIN CON PIN MAESTRO
   if (!isSuperLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-4">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-xl">
-          <div className="flex items-center justify-center gap-2.5 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-md">
-              E
-            </div>
-            <div>
-              <span className="text-xl font-black text-slate-900 tracking-tight">EXAKTA</span>
-              <span className="block text-[10px] text-blue-600 font-bold uppercase tracking-wider">SuperAdmin Suite</span>
-            </div>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-slate-200 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-700 to-sky-400 text-white font-black text-2xl flex items-center justify-center mx-auto shadow-md">
+            E
           </div>
-
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight">
-              Portal Maestro de Barberías
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Ingresa el PIN Maestro para gestionar clientes, suscriptores, planes y módulos. (PIN por defecto: <strong className="text-blue-600 font-mono">9999</strong>)
-            </p>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">EXAKTA SaaS</h2>
+            <p className="text-xs text-slate-500 mt-1">Panel Maestro SuperAdmin</p>
           </div>
 
           {pinError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{pinError}</span>
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+              {pinError}
             </div>
           )}
 
-          <form onSubmit={handleLoginSuper} className="space-y-4">
+          <form onSubmit={handleLoginSuper} className="space-y-3">
             <input
               type="password"
-              maxLength="8"
-              autoFocus
-              placeholder="••••"
+              placeholder="PIN Maestro (ej: 9999)"
               value={superPin}
               onChange={(e) => setSuperPin(e.target.value)}
-              className="w-full text-center text-3xl tracking-[0.5em] font-mono py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-lg font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              autoFocus
             />
 
             <div className="flex gap-2 pt-2">
@@ -402,7 +555,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     );
   }
 
-  // Componente Sidebar contenido (reutilizable en escritorio y móvil)
+  // Componente Sidebar contenido
   const SidebarContent = () => (
     <div className="flex flex-col justify-between h-full">
       <div className="p-4 space-y-4 overflow-y-auto">
@@ -424,7 +577,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             </div>
           </div>
 
-          {/* Botón cerrar en móvil */}
           <button
             onClick={() => setSidebarMovilAbierto(false)}
             className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
@@ -445,29 +597,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           <span>Crear Barbería</span>
         </button>
 
-        {/* ÍTEM DIRECTO: MIS BARBERÍAS CON CONTADOR */}
-        <div className="pt-1">
-          <button
-            onClick={() => {
-              setSeccionActiva('barberias');
-              setSidebarMovilAbierto(false);
-            }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-              seccionActiva === 'barberias'
-                ? 'bg-blue-50/70 text-blue-700 font-bold'
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Store className="w-4 h-4 text-slate-500" />
-              <span>Mis Barberías</span>
-            </div>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
-              {totalBarberias}
-            </span>
-          </button>
-        </div>
-
         {/* GRUPO: GESTIÓN */}
         <div className="space-y-0.5">
           <span className="px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
@@ -483,19 +612,24 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             }`}
           >
             <Activity className="w-4 h-4 text-blue-600" />
-            <span>Inicio</span>
+            <span>Inicio & Resumen</span>
           </button>
 
           <button
             onClick={() => { setSeccionActiva('barberias'); setSidebarMovilAbierto(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
               seccionActiva === 'barberias'
                 ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
                 : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <Building2 className="w-4 h-4 text-slate-500" />
-            <span>Barberías Clientes</span>
+            <div className="flex items-center gap-2.5">
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <span>Barberías Clientes</span>
+            </div>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+              {totalBarberias}
+            </span>
           </button>
 
           <button
@@ -507,7 +641,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             }`}
           >
             <Crown className="w-4 h-4 text-amber-500" />
-            <span>Planes & Suscripciones</span>
+            <span>Planes & Beneficios</span>
           </button>
 
           <button
@@ -577,7 +711,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
       {/* PARTE INFERIOR DEL SIDEBAR */}
       <div className="p-3 border-t border-slate-100 space-y-2 bg-slate-50/50">
-        
         <button
           onClick={onVolverAApp}
           className="w-full py-2 px-3 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-between transition-colors shadow-xs"
@@ -608,7 +741,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             <LogOut className="w-4 h-4" />
           </button>
         </div>
-
       </div>
     </div>
   );
@@ -616,12 +748,12 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-600 selection:text-white">
 
-      {/* SIDEBAR ESCRITORIO (FIJO A LA IZQUIERDA) */}
+      {/* SIDEBAR ESCRITORIO */}
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200/90 flex-col justify-between shrink-0 sticky top-0 h-screen z-30">
         <SidebarContent />
       </aside>
 
-      {/* SIDEBAR MÓVIL DESLIZANTE (OFF-CANVAS DRAWER) */}
+      {/* SIDEBAR MÓVIL DESLIZANTE */}
       {sidebarMovilAbierto && (
         <div className="fixed inset-0 z-50 md:hidden animate-fadeIn">
           <div 
@@ -637,11 +769,9 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
 
-        {/* HEADER SUPERIOR RESPONSIVO */}
+        {/* HEADER SUPERIOR */}
         <header className="h-16 bg-white border-b border-slate-200/90 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-20">
-          
           <div className="flex items-center gap-3">
-            {/* Botón menú móvil */}
             <button
               onClick={() => setSidebarMovilAbierto(true)}
               className="md:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
@@ -657,28 +787,6 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           </div>
 
           <div className="flex items-center gap-3">
-            
-            {/* Filtros de tiempo scrollables en móvil */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold overflow-x-auto">
-              {[
-                { id: 'hoy', label: 'Hoy' },
-                { id: '7d', label: '7d' },
-                { id: '30d', label: '30d' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setFiltroTiempo(f.id)}
-                  className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
-                    filtroTiempo === f.id
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
             <div className="text-right hidden sm:block">
               <span className="text-[11px] text-slate-500 font-medium capitalize block leading-tight">
                 {fechaHoyStr}
@@ -687,314 +795,858 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 {horaHoyStr}
               </span>
             </div>
-
           </div>
-
         </header>
 
-        {/* CONTENIDO SCROLLEABLE */}
+        {/* CONTENIDO PRINCIPAL SCROLLEABLE SEGÚN SECCIÓN ACTIVA */}
         <main className="p-4 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
 
-          {/* SALUDO EXAKTA */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-sans">
-                Panel Maestro EXAKTA
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Control central de barberías clientes, planes, módulos independientes y métricas.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setModalCrearOpen(true)}
-              className="sm:hidden py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nueva Barbería</span>
-            </button>
-          </div>
-
-          {/* 4 TARJETAS PASTEL (KPIs) RESPONSIVAS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-
-            {/* TARJETA 1: AMBER */}
-            <div className="bg-[#fefce8] border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4" />
+          {/* ======================================================== */}
+          {/* SECCIÓN 1: INICIO & RESUMEN EJECUTIVO */}
+          {/* ======================================================== */}
+          {seccionActiva === 'inicio' && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                    Panel Maestro EXAKTA
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Control central de barberías clientes, planes, módulos independientes y métricas globales.
+                  </p>
                 </div>
-                <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-700 px-2 py-0.5 bg-amber-100/60 rounded-full">
-                  Atención
-                </span>
-              </div>
-              <div>
-                <span className="text-2xl sm:text-3xl font-black text-amber-950 block leading-tight">
-                  {cuentasPorVencer}
-                </span>
-                <span className="text-xs font-bold text-amber-900 block mt-1">
-                  Por vencer / Inactivas
-                </span>
-                <p className="text-[11px] text-amber-700/90 leading-tight mt-1">
-                  Cuentas con suscripción por vencer en &lt; 5 días.
-                </p>
-              </div>
-              <button
-                onClick={() => setSeccionActiva('barberias')}
-                className="text-[11px] font-extrabold text-amber-800 hover:text-amber-950 flex items-center gap-1 pt-1"
-              >
-                <span>Revisar cuentas</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
 
-            {/* TARJETA 2: PURPLE */}
-            <div className="bg-[#faf5ff] border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
-                  <Scissors className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] uppercase font-extrabold tracking-wider text-purple-700 px-2 py-0.5 bg-purple-100/60 rounded-full">
-                  Equipo
-                </span>
-              </div>
-              <div>
-                <span className="text-2xl sm:text-3xl font-black text-purple-950 block leading-tight">
-                  {totalBarberosRed}
-                </span>
-                <span className="text-xs font-bold text-purple-900 block mt-1">
-                  Barberos en la red
-                </span>
-                <p className="text-[11px] text-purple-700/90 leading-tight mt-1">
-                  Personal profesional atendiendo turnos en los locales.
-                </p>
-              </div>
-              <button
-                onClick={() => setSeccionActiva('barberias')}
-                className="text-[11px] font-extrabold text-purple-800 hover:text-purple-950 flex items-center gap-1 pt-1"
-              >
-                <span>Ver equipo completo</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* TARJETA 3: BLUE */}
-            <div className="bg-[#f0f9ff] border border-sky-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] uppercase font-extrabold tracking-wider text-sky-700 px-2 py-0.5 bg-sky-100/60 rounded-full">
-                  MRR SaaS
-                </span>
-              </div>
-              <div>
-                <span className="text-2xl sm:text-3xl font-black text-sky-950 block leading-tight">
-                  ${mrrTotalUSD} USD
-                </span>
-                <span className="text-xs font-bold text-sky-900 block mt-1">
-                  Facturación mensual
-                </span>
-                <p className="text-[11px] text-sky-700/90 leading-tight mt-1">
-                  Ingresos recurrentes generados por las suscripciones.
-                </p>
-              </div>
-              <button
-                onClick={() => setSeccionActiva('planes')}
-                className="text-[11px] font-extrabold text-sky-800 hover:text-sky-950 flex items-center gap-1 pt-1"
-              >
-                <span>Ver planes activos</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* TARJETA 4: GREEN */}
-            <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <Store className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-700 px-2 py-0.5 bg-emerald-100/60 rounded-full">
-                  Locales
-                </span>
-              </div>
-              <div>
-                <span className="text-2xl sm:text-3xl font-black text-emerald-950 block leading-tight">
-                  {barberiasActivas} / {totalBarberias}
-                </span>
-                <span className="text-xs font-bold text-emerald-900 block mt-1">
-                  Barberías activas
-                </span>
-                <p className="text-[11px] text-emerald-700/90 leading-tight mt-1">
-                  Clientes operando con agendamiento público en vivo.
-                </p>
-              </div>
-              <button
-                onClick={() => setSeccionActiva('barberias')}
-                className="text-[11px] font-extrabold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 pt-1"
-              >
-                <span>Ver lista completa</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-          </div>
-
-          {/* BANNER STATUS */}
-          <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-            <div className="flex items-center gap-2.5 text-xs text-emerald-800">
-              <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              </div>
-              <span>
-                Plataforma <strong>EXAKTA Multi-Tenant</strong> operando con normalidad.
-              </span>
-            </div>
-            <button
-              onClick={cargarBarberias}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 self-end sm:self-auto"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Sincronizar</span>
-            </button>
-          </div>
-
-          {/* LISTA DE BARBERÍAS CON CLIC A DETALLE COMPLETO */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4">
-            
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 font-sans">
-                  Barberías Registradas ({totalBarberias})
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Toca cualquier barbería para inspeccionar su <strong>detalle completo</strong>, equipo de barberos, plan y días para vencer.
-                </p>
+                <button
+                  onClick={() => setModalCrearOpen(true)}
+                  className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nueva Barbería</span>
+                </button>
               </div>
 
-              <button
-                onClick={() => setModalCrearOpen(true)}
-                className="hidden sm:flex py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold items-center gap-1.5 transition-colors shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Nueva Barbería</span>
-              </button>
-            </div>
-
-            {/* GRILLA DE TARJETAS DE BARBERÍA */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {barberias.map((barberia) => {
-                const diasRestantes = calcularDiasVencer(barberia);
-                const planName = (barberia.plan || 'basico').toUpperCase();
-                const estaActiva = barberia.activo !== 0;
-
-                return (
-                  <div
-                    key={barberia.id}
-                    onClick={() => handleAbrirDetalle(barberia)}
-                    className="p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative flex flex-col justify-between space-y-3 sm:space-y-4"
+              {/* 4 TARJETAS PASTEL (KPIs) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-[#fefce8] border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-700 px-2 py-0.5 bg-amber-100/60 rounded-full">
+                      Atención
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-black text-amber-950 block leading-tight">
+                      {cuentasPorVencer}
+                    </span>
+                    <span className="text-xs font-bold text-amber-900 block mt-1">Por vencer / Inactivas</span>
+                    <p className="text-[11px] text-amber-700/90 leading-tight mt-1">
+                      Cuentas con suscripción por vencer en &lt; 5 días.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSeccionActiva('barberias')}
+                    className="text-[11px] font-extrabold text-amber-800 hover:text-amber-950 flex items-center gap-1 pt-1"
                   >
-                    {/* CABECERA */}
-                    <div className="flex items-start justify-between gap-2">
+                    <span>Revisar cuentas</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="bg-[#f5f3ff] border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-purple-700 px-2 py-0.5 bg-purple-100/60 rounded-full">
+                      Finanzas
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-black text-purple-950 block leading-tight">
+                      ${mrrTotalUSD} USD
+                    </span>
+                    <span className="text-xs font-bold text-purple-900 block mt-1">MRR Mensual Estimado</span>
+                    <p className="text-[11px] text-purple-700/90 leading-tight mt-1">
+                      Facturación recurrente mensual en la red.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSeccionActiva('metricas')}
+                    className="text-[11px] font-extrabold text-purple-800 hover:text-purple-950 flex items-center gap-1 pt-1"
+                  >
+                    <span>Ver métricas</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="bg-[#f0f9ff] border border-sky-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
+                      <Scissors className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-sky-700 px-2 py-0.5 bg-sky-100/60 rounded-full">
+                      Equipo
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-black text-sky-950 block leading-tight">
+                      {totalBarberosRed}
+                    </span>
+                    <span className="text-xs font-bold text-sky-900 block mt-1">Barberos en Red</span>
+                    <p className="text-[11px] text-sky-700/90 leading-tight mt-1">
+                      Profesionales activos en todos los locales.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSeccionActiva('barberos')}
+                    className="text-[11px] font-extrabold text-sky-800 hover:text-sky-950 flex items-center gap-1 pt-1"
+                  >
+                    <span>Ver equipo en red</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <Store className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-700 px-2 py-0.5 bg-emerald-100/60 rounded-full">
+                      Locales
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-black text-emerald-950 block leading-tight">
+                      {barberiasActivas} / {totalBarberias}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-900 block mt-1">Barberías Activas</span>
+                    <p className="text-[11px] text-emerald-700/90 leading-tight mt-1">
+                      Clientes operando con agendamiento en vivo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSeccionActiva('barberias')}
+                    className="text-[11px] font-extrabold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 pt-1"
+                  >
+                    <span>Ver lista completa</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* LISTA RÁPIDA DE BARBERÍAS */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h3 className="font-extrabold text-base text-slate-900">Barberías Recientes</h3>
+                  <button
+                    onClick={() => setSeccionActiva('barberias')}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <span>Ver todas ({totalBarberias})</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {barberias.slice(0, 6).map(b => (
+                    <div
+                      key={b.id}
+                      onClick={() => handleAbrirDetalle(b)}
+                      className="p-3.5 rounded-2xl border border-slate-200/90 hover:border-blue-400 bg-white hover:bg-blue-50/20 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs"
+                    >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0"
-                          style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
+                          className="w-10 h-10 rounded-xl text-white font-black text-xs flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: b.color_primario || '#2563eb' }}
                         >
-                          {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                          {b.nombre?.slice(0, 2).toUpperCase() || 'BB'}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                            {barberia.nombre}
-                          </h4>
-                          <span className="text-[11px] text-slate-400 font-mono block truncate">
-                            /?b={barberia.slug}
+                          <span className="font-extrabold text-xs text-slate-900 block truncate">{b.nombre}</span>
+                          <span className="text-[10px] text-slate-400 font-mono block truncate">/{b.slug}</span>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        {b.plan}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 2: BARBERÍAS CLIENTES (DIRECTORIO COMPLETO) */}
+          {/* ======================================================== */}
+          {seccionActiva === 'barberias' && (
+            <div className="space-y-5 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                    Directorio de Barberías Clientes ({barberiasFiltradas.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Haz clic en cualquier barbería para ver su detalle completo, barberos, plan y días restantes.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setModalCrearOpen(true)}
+                  className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Crear Barbería</span>
+                </button>
+              </div>
+
+              {/* BUSCADOR DE BARBERÍAS */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
+                <Search className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                <input
+                  type="text"
+                  placeholder="Buscar barbería por nombre, slug o teléfono..."
+                  value={busquedaBarberias}
+                  onChange={(e) => setBusquedaBarberias(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+                />
+                {busquedaBarberias && (
+                  <button onClick={() => setBusquedaBarberias('')} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* GRILLA DE TARJETAS DE BARBERÍA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {barberiasFiltradas.map((barberia) => {
+                  const diasRestantes = calcularDiasVencer(barberia);
+                  const estaActiva = barberia.activo !== 0;
+
+                  return (
+                    <div
+                      key={barberia.id}
+                      onClick={() => handleAbrirDetalle(barberia)}
+                      className="p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative flex flex-col justify-between space-y-3 sm:space-y-4"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0"
+                            style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
+                          >
+                            {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                              {barberia.nombre}
+                            </h4>
+                            <span className="text-[11px] text-slate-400 font-mono block truncate">
+                              /?b={barberia.slug}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
+                          barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                          barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                          barberia.plan === 'personalizado' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                          'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          PLAN {barberia.plan?.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Días restantes</span>
+                          <span className={`text-xs font-black ${diasRestantes <= 5 ? 'text-rose-600' : 'text-slate-900'}`}>
+                            {diasRestantes} días
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Barberos</span>
+                          <span className="text-xs font-black text-slate-900">{barberia.total_barberos || 1}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Citas</span>
+                          <span className="text-xs font-black text-slate-900">{barberia.total_citas || 0}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => handleToggleActivo(barberia, e)}
+                            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg transition-colors ${
+                              estaActiva
+                                ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700'
+                                : 'bg-rose-50 text-rose-700 hover:bg-emerald-50 hover:text-emerald-700'
+                            }`}
+                          >
+                            {estaActiva ? '● Activa' : '● Pausada'}
+                          </button>
+                          
+                          {barberia.telefono && (
+                            <a
+                              href={getWhatsAppUrl(barberia.telefono, barberia.nombre)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Escribir por WhatsApp"
+                              className="p-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => handleCopiarEnlace(barberia.slug, e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                            title="Copiar link público"
+                          >
+                            {slugCopiado === barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
+                            onClick={(e) => handleEntrarComoDueno(barberia, e)}
+                            className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Lock className="w-3 h-3" />
+                            <span>Entrar</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 3: PLANES, BENEFICIOS & PLAN PERSONALIZADO */}
+          {/* ======================================================== */}
+          {seccionActiva === 'planes' && (
+            <div className="space-y-6 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Gestión de Planes & Beneficios SaaS
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configura planes estándar y diseña <strong>Planes Personalizados</strong> para clientes específicos con precios y módulos a medida.
+                </p>
+              </div>
+
+              {/* TARJETAS DE PLANES DISPONIBLES */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {[
+                  {
+                    id: 'basico',
+                    nombre: 'Plan Básico',
+                    precio: '$20 USD',
+                    precioCop: '~$80.000 COP',
+                    barberos: 'Hasta 2 Barberos',
+                    color: 'border-slate-300 bg-white',
+                    badge: 'bg-slate-100 text-slate-800',
+                    features: ['Agenda & Turnos Online', 'Notificaciones de Audio', 'Soporte Básico']
+                  },
+                  {
+                    id: 'pro',
+                    nombre: 'Plan Profesional',
+                    precio: '$45 USD',
+                    precioCop: '~$180.000 COP',
+                    barberos: 'Hasta 5 Barberos',
+                    color: 'border-blue-300 bg-blue-50/20',
+                    badge: 'bg-blue-100 text-blue-800',
+                    features: ['Portal Móvil para Barberos', 'Plantilla de Pagos (%)', 'Caja & Egresos', 'Tienda & Productos', 'Galería Multimedia']
+                  },
+                  {
+                    id: 'vip',
+                    nombre: 'Plan VIP / Ilimitado',
+                    precio: '$80 USD',
+                    precioCop: '~$320.000 COP',
+                    barberos: 'Barberos Ilimitados',
+                    color: 'border-amber-300 bg-amber-50/20',
+                    badge: 'bg-amber-100 text-amber-900',
+                    features: ['Todo lo del plan PRO', 'Clientes Preferenciales & Fidelidad', 'Simulador Rentabilidad', 'Historial Auditoría Completo']
+                  },
+                  {
+                    id: 'personalizado',
+                    nombre: 'Plan Personalizado',
+                    precio: 'A Medida',
+                    precioCop: 'Tarifa Flexible',
+                    barberos: 'Límite Configurable',
+                    color: 'border-purple-300 bg-purple-50/20',
+                    badge: 'bg-purple-100 text-purple-900',
+                    features: ['Beneficios a medida por cliente', 'Habilitar o quitar módulos', 'Precio USD/COP negociado', 'Soporte prioritario']
+                  }
+                ].map(p => (
+                  <div key={p.id} className={`p-4 sm:p-5 rounded-2xl border ${p.color} shadow-xs flex flex-col justify-between space-y-4`}>
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${p.badge}`}>
+                          {p.nombre}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-2xl font-black text-slate-900 block">{p.precio}</span>
+                        <span className="text-xs text-slate-400 font-medium block">{p.precioCop}</span>
+                      </div>
+                      <span className="text-xs font-bold text-blue-600 block mt-1">{p.barberos}</span>
+
+                      <ul className="mt-3 space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                        {p.features.map((f, idx) => (
+                          <li key={idx} className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* CREADOR INTERACTIVO DE PLAN PERSONALIZADO PARA CLIENTE ESPECÍFICO */}
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xs space-y-5">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                  <div className="p-2.5 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
+                      Asignador de Plan Personalizado para Cliente
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Elige una barbería y configura exactamente sus módulos permitidos, precio acordado y cupos de barberos.
+                    </p>
+                  </div>
+                </div>
+
+                {mensajeExitoCustom && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{mensajeExitoCustom}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleGuardarPlanPersonalizado} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Barbería Destino *
+                      </label>
+                      <select
+                        value={planPersonalizadoTarget}
+                        onChange={(e) => setPlanPersonalizadoTarget(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      >
+                        {barberias.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.nombre} (Plan actual: {b.plan?.toUpperCase()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Precio Mensual (USD)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={planPersonalizadoForm.precio_usd}
+                        onChange={(e) => setPlanPersonalizadoForm({ ...planPersonalizadoForm, precio_usd: e.target.value })}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Límite Máximo de Barberos
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999"
+                        value={planPersonalizadoForm.max_barberos}
+                        onChange={(e) => setPlanPersonalizadoForm({ ...planPersonalizadoForm, max_barberos: e.target.value })}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* TOGGLES DE BENEFICIOS / MÓDULOS */}
+                  <div>
+                    <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2">
+                      Módulos & Beneficios Asignados para este Plan
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                      {[
+                        { key: 'agenda', label: 'Agenda & Reservas Públicas' },
+                        { key: 'portal_barberos', label: 'Portal Móvil para Barberos' },
+                        { key: 'fidelizacion_clientes', label: 'Clientes Preferenciales & Fidelidad' },
+                        { key: 'liquidaciones', label: 'Liquidaciones & Comisiones (%)' },
+                        { key: 'costos', label: 'Caja & Egresos' },
+                        { key: 'productos', label: 'Tienda de Productos' },
+                        { key: 'rentabilidad', label: 'Simulador de Rentabilidad' },
+                        { key: 'galeria', label: 'Galería & Redes Sociales' },
+                        { key: 'auditoria', label: 'Historial de Auditoría & Logs' },
+                      ].map((m) => {
+                        const isChecked = planPersonalizadoForm.modulos[m.key] !== false;
+                        return (
+                          <label
+                            key={m.key}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                              isChecked
+                                ? 'bg-white border-purple-200 shadow-xs text-purple-950 font-bold'
+                                : 'bg-transparent border-slate-200 text-slate-400'
+                            }`}
+                          >
+                            <span>{m.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                setPlanPersonalizadoForm({
+                                  ...planPersonalizadoForm,
+                                  modulos: {
+                                    ...planPersonalizadoForm.modulos,
+                                    [m.key]: e.target.checked
+                                  }
+                                });
+                              }}
+                              className="w-4 h-4 text-purple-600 rounded-md border-slate-300 focus:ring-purple-500"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={guardandoPlanCustom}
+                    className="py-3 px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{guardandoPlanCustom ? 'Guardando...' : 'Guardar y Asignar Plan Personalizado'}</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 4: CITAS PROCESADAS EN RED (GLOBAL) */}
+          {/* ======================================================== */}
+          {seccionActiva === 'citas' && (
+            <div className="space-y-4 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Citas Procesadas en Toda la Red ({citasGlobales.length})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Filtra por rangos de fecha rápidos o selecciona en el calendario. Busca clientes por nombre o teléfono.
+                </p>
+              </div>
+
+              {/* FILTRO DE FECHAS UNIVERSAL & MOTOR DE BÚSQUEDA */}
+              <DateRangeFilter
+                filtroTiempo={filtroTiempoCitas}
+                setFiltroTiempo={setFiltroTiempoCitas}
+                fechaDesde={fechaDesdeCitas}
+                setFechaDesde={setFechaDesdeCitas}
+                fechaHasta={fechaHastaCitas}
+                setFechaHasta={setFechaHastaCitas}
+                busqueda={busquedaCitas}
+                setBusqueda={setBusquedaCitas}
+                onBuscar={cargarCitasGlobales}
+                placeholder="Buscar cliente por nombre o teléfono..."
+              />
+
+              {/* FILTRO POR BARBERÍA ESPECÍFICA */}
+              <div className="flex items-center gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs max-w-sm">
+                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                <select
+                  value={filtroBarberiaEnCitas}
+                  onChange={(e) => setFiltroBarberiaEnCitas(e.target.value)}
+                  className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="todas">Todas las Barberías</option>
+                  {barberias.map(b => (
+                    <option key={b.id} value={b.id}>{b.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* TABLA DE CITAS */}
+              {cargandoCitas ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
+                  <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs text-slate-500 font-medium">Cargando citas de la red...</p>
+                </div>
+              ) : citasGlobales.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-2">
+                  <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">No se encontraron citas con los filtros aplicados</p>
+                  <p className="text-[11px] text-slate-400">Intenta cambiando el rango de fechas o limpiando la búsqueda.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase font-black text-[10px] tracking-wider">
+                        <tr>
+                          <th className="p-3.5 pl-5">Cliente</th>
+                          <th className="p-3.5">Barbería</th>
+                          <th className="p-3.5">Barbero</th>
+                          <th className="p-3.5">Servicio</th>
+                          <th className="p-3.5">Fecha & Hora</th>
+                          <th className="p-3.5 pr-5 text-right">Contacto</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {citasGlobales.map((cita) => (
+                          <tr key={cita.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="p-3.5 pl-5">
+                              <span className="font-bold text-slate-900 block truncate">{cita.cliente_nombre}</span>
+                              <span className="text-[11px] text-slate-400 font-mono">{cita.cliente_telefono}</span>
+                            </td>
+                            <td className="p-3.5">
+                              <span className="font-semibold text-slate-700 block truncate">
+                                {cita.barberia_nombre || 'Barbería'}
+                              </span>
+                            </td>
+                            <td className="p-3.5">
+                              <span className="font-semibold text-slate-800">{cita.barbero_nombre || '-'}</span>
+                            </td>
+                            <td className="p-3.5">
+                              <span className="text-slate-600">{cita.servicio_nombre || '-'}</span>
+                            </td>
+                            <td className="p-3.5">
+                              <span className="font-bold text-slate-800 block">{cita.fecha}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{cita.hora_inicio}</span>
+                            </td>
+                            <td className="p-3.5 pr-5 text-right">
+                              {cita.cliente_telefono ? (
+                                <a
+                                  href={getWhatsAppUrl(cita.cliente_telefono, cita.cliente_nombre)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-colors"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 italic text-[10px]">Sin teléfono</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 5: BARBEROS EN RED */}
+          {/* ======================================================== */}
+          {seccionActiva === 'barberos' && (
+            <div className="space-y-4 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Barberos Registrados en la Red ({barberosGlobales.length})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Directorio global de todo el equipo de profesionales afiliados a las barberías.
+                </p>
+              </div>
+
+              {cargandoBarberos ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
+                  <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">Cargando barberos...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {barberosGlobales.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col justify-between space-y-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={b.foto_url || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150'}
+                          alt={b.nombre}
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-200"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-sm text-slate-900 truncate">{b.nombre}</h4>
+                          <span className="text-xs text-blue-600 font-bold block truncate">
+                            {b.barberia_nombre || 'Barbería'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono block">
+                            {b.horario_inicio || '09:00'} - {b.horario_fin || '20:00'}
                           </span>
                         </div>
                       </div>
 
-                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
-                        barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                        barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                        'bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}>
-                        Plan {planName}
-                      </span>
-                    </div>
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold text-slate-500">
+                          Comisión: <strong>{b.porcentaje_comision || 50}%</strong>
+                        </span>
 
-                    {/* MÉTRICAS */}
-                    <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-xl bg-slate-50 text-center border border-slate-100">
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-medium block">Días vencimiento</span>
-                        <span className={`text-xs font-black ${
-                          diasRestantes <= 5 ? 'text-rose-600 animate-pulse' : 'text-slate-800'
-                        }`}>
-                          {diasRestantes} días
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-medium block">Barberos</span>
-                        <span className="text-xs font-black text-slate-800">
-                          {barberia.total_barberos || 1}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-medium block">Citas</span>
-                        <span className="text-xs font-black text-slate-800">
-                          {barberia.total_citas || 0}
-                        </span>
+                        {b.telefono ? (
+                          <a
+                            href={getWhatsAppUrl(b.telefono, b.nombre)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="py-1 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Sin teléfono</span>
+                        )}
                       </div>
                     </div>
-
-                    {/* PIE */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${estaActiva ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                        <span className="text-[11px] font-bold text-slate-600">
-                          {estaActiva ? 'Activa' : 'Pausada'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => handleEntrarComoDueno(barberia, e)}
-                          title="Entrar a administrar como Dueño de este local"
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 transition-colors"
-                        >
-                          <Lock className="w-3 h-3 text-slate-500" />
-                          <span>Panel Dueño</span>
-                        </button>
-
-                        <span className="text-blue-600 font-bold text-[11px] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                          <span>Detalle</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-          </div>
+          {/* ======================================================== */}
+          {/* SECCIÓN 6: FACTURACIÓN MRR & MÉTRICAS */}
+          {/* ======================================================== */}
+          {seccionActiva === 'metricas' && (
+            <div className="space-y-6 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Facturación MRR & Métricas de Suscripción
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Desglose financiero consolidado del modelo de suscripción SaaS de EXAKTA.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">MRR Mensual</span>
+                  <span className="text-3xl font-black text-slate-900 block font-mono">${mrrTotalUSD} USD</span>
+                  <span className="text-xs text-slate-500 block">~${(mrrTotalUSD * 4000).toLocaleString('es-CO')} COP</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">ARR Anual Proyectado</span>
+                  <span className="text-3xl font-black text-emerald-600 block font-mono">${mrrTotalUSD * 12} USD</span>
+                  <span className="text-xs text-slate-500 block">Proyección 12 meses</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">Suscripciones Activas</span>
+                  <span className="text-3xl font-black text-blue-600 block font-mono">{barberiasActivas}</span>
+                  <span className="text-xs text-slate-500 block">De un total de {totalBarberias} locales</span>
+                </div>
+              </div>
+
+              {/* DISTRIBUCIÓN POR PLAN */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wider">
+                  Distribución de Clientes por Plan
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { id: 'vip', label: 'Plan VIP ($80)', color: 'bg-amber-500' },
+                    { id: 'pro', label: 'Plan Profesional ($45)', color: 'bg-blue-600' },
+                    { id: 'basico', label: 'Plan Básico ($20)', color: 'bg-slate-500' },
+                    { id: 'personalizado', label: 'Plan Personalizado (Tarifa flexible)', color: 'bg-purple-600' },
+                  ].map(p => {
+                    const cant = barberias.filter(b => (b.plan || 'basico') === p.id).length;
+                    const pct = totalBarberias > 0 ? Math.round((cant / totalBarberias) * 100) : 0;
+                    return (
+                      <div key={p.id} className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>{p.label} ({cant} clientes)</span>
+                          <span className="text-slate-400">{pct}%</span>
+                        </div>
+                        <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className={`h-full ${p.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 7: AUDITORÍA & LOGS */}
+          {/* ======================================================== */}
+          {seccionActiva === 'auditoria' && (
+            <div className="space-y-4 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Auditoría del Sistema & Logs Maestros
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Registro de eventos administrativos, autenticaciones y modificaciones en la plataforma EXAKTA.
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-3">
+                {[
+                  { time: 'Hace 5 min', event: 'SuperAdmin Access', desc: 'Ingreso al panel maestro con PIN Maestro verificado', type: 'info' },
+                  { time: 'Hace 2 horas', event: 'Plan Update', desc: 'Actualización de módulos activos en inquilinos', type: 'success' },
+                  { time: 'Hoy', event: 'Database Health Check', desc: 'Sincronización multi-tenant ejecutada sin advertencias', type: 'success' },
+                ].map((log, idx) => (
+                  <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <span className="font-extrabold text-slate-900 block">{log.event}</span>
+                        <span className="text-slate-500 text-[11px]">{log.desc}</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono shrink-0">{log.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </main>
-
       </div>
 
-      {/* MODAL DETALLE COMPLETO DE BARBERÍA (RESPONSIVO MÓVIL) */}
+      {/* ======================================================== */}
+      {/* MODAL: DETALLE COMPLETO DE BARBERÍA */}
+      {/* ======================================================== */}
       {modalDetalleOpen && barberiaDetalle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-slideUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-slideIn">
             
             {/* CABECERA */}
-            <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-3">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/60">
               <div className="flex items-center gap-3 min-w-0">
                 <div
-                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-md shrink-0"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center text-white font-black text-sm sm:text-base shadow-sm shrink-0"
                   style={{ backgroundColor: barberiaDetalle.barberia.color_primario || '#2563eb' }}
                 >
-                  {barberiaDetalle.barberia.nombre?.slice(0, 2).toUpperCase()}
+                  {barberiaDetalle.barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1029,58 +1681,34 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </div>
             </div>
 
-            {/* PESTAÑAS DETALLE SCROLLEABLES EN MÓVIL */}
+            {/* PESTAÑAS */}
             <div className="px-4 sm:px-6 border-b border-slate-100 flex items-center gap-4 sm:gap-6 text-xs font-bold bg-white overflow-x-auto">
-              <button
-                onClick={() => setTabDetalle('resumen')}
-                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
-                  tabDetalle === 'resumen'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Resumen & Días para Vencer
-              </button>
-              <button
-                onClick={() => setTabDetalle('barberos')}
-                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
-                  tabDetalle === 'barberos'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Equipo Barberos ({barberiaDetalle.barberos?.length || 0})
-              </button>
-              <button
-                onClick={() => setTabDetalle('modulos')}
-                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
-                  tabDetalle === 'modulos'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Módulos Activos
-              </button>
-              <button
-                onClick={() => setTabDetalle('ajustes')}
-                className={`py-3 border-b-2 whitespace-nowrap transition-all ${
-                  tabDetalle === 'ajustes'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Datos del Local & PIN
-              </button>
+              {[
+                { id: 'resumen', label: 'Resumen & Suscripción' },
+                { id: 'barberos', label: `Equipo Barberos (${barberiaDetalle.barberos?.length || 0})` },
+                { id: 'modulos', label: 'Módulos & Beneficios' },
+                { id: 'ajustes', label: 'Datos del Local & PIN' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTabDetalle(tab.id)}
+                  className={`py-3 border-b-2 whitespace-nowrap transition-all ${
+                    tabDetalle === tab.id
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* CONTENIDO SCROLLEABLE */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
-
-              {/* PESTAÑA 1: RESUMEN */}
+            {/* CONTENIDO MODAL */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              
+              {/* TAB 1: RESUMEN */}
               {tabDetalle === 'resumen' && (
                 <div className="space-y-4">
-                  
-                  {/* CARD DE DÍAS PARA VENCER */}
                   <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1099,11 +1727,9 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                         <span className="text-3xl sm:text-4xl font-black tracking-tight text-white font-mono">
                           {barberiaDetalle.suscripcion?.dias_para_vencer}
                         </span>
-                        <span className="text-xs text-slate-300 font-bold ml-2">
-                          días restantes para vencer
-                        </span>
+                        <span className="text-xs text-slate-300 font-bold ml-2">días restantes para vencer</span>
                         <p className="text-[11px] text-slate-400 mt-1">
-                          Próxima fecha de renovación: <strong className="text-slate-200">{barberiaDetalle.suscripcion?.fecha_renovacion}</strong>
+                          Próxima renovación: <strong className="text-slate-200">{barberiaDetalle.suscripcion?.fecha_renovacion}</strong>
                         </p>
                       </div>
 
@@ -1112,60 +1738,11 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                         <span className="text-lg sm:text-xl font-black text-amber-400 font-mono">
                           ${barberiaDetalle.suscripcion?.precio_usd} USD
                         </span>
-                        <span className="text-[10px] text-slate-400 block">
-                          (~${barberiaDetalle.suscripcion?.precio_cop?.toLocaleString('es-CO')} COP)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* BARRA DE PROGRESO */}
-                    <div className="space-y-1 pt-1">
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400">
-                        <span>Progreso del ciclo mensual</span>
-                        <span>{barberiaDetalle.suscripcion?.porcentaje_ciclo}% transcurrido</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-500 rounded-full"
-                          style={{ width: `${Math.min(100, barberiaDetalle.suscripcion?.porcentaje_ciclo || 30)}%` }}
-                        />
                       </div>
                     </div>
                   </div>
 
-                  {/* 4 MÉTRICAS */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Citas Totales</span>
-                      <span className="text-lg sm:text-xl font-black text-slate-900 mt-0.5 block">
-                        {barberiaDetalle.metricas?.total_citas || 0}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Citas Mes</span>
-                      <span className="text-lg sm:text-xl font-black text-blue-600 mt-0.5 block">
-                        {barberiaDetalle.metricas?.citas_este_mes || 0}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Barberos</span>
-                      <span className="text-lg sm:text-xl font-black text-purple-600 mt-0.5 block">
-                        {barberiaDetalle.barberos?.length || 1}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Servicios</span>
-                      <span className="text-lg sm:text-xl font-black text-emerald-600 mt-0.5 block">
-                        {barberiaDetalle.servicios?.length || 2}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* LINK PÚBLICO */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2.5">
                     <div className="min-w-0">
                       <span className="text-xs font-bold text-slate-800 block">Enlace Público de Agendamiento</span>
                       <span className="text-[11px] text-blue-600 font-mono truncate block">
@@ -1174,93 +1751,82 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     </div>
                     <button
                       onClick={(e) => handleCopiarEnlace(barberiaDetalle.barberia.slug, e)}
-                      className="py-1.5 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors self-start sm:self-auto shrink-0"
+                      className="py-1.5 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5 shrink-0"
                     >
-                      {slugCopiado === barberiaDetalle.barberia.slug ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-700">¡Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Copiar Link</span>
-                        </>
-                      )}
+                      {slugCopiado === barberiaDetalle.barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>Copiar Link</span>
                     </button>
                   </div>
-
                 </div>
               )}
 
-              {/* PESTAÑA 2: BARBEROS */}
+              {/* TAB 2: BARBEROS */}
               {tabDetalle === 'barberos' && (
                 <div className="space-y-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
-                    Barberos asignados a esta sucursal ({barberiaDetalle.barberos?.length || 0})
-                  </span>
-
-                  <div className="space-y-2">
-                    {barberiaDetalle.barberos?.map((b) => (
-                      <div key={b.id} className="p-3.5 rounded-2xl border border-slate-200/80 bg-white flex items-center justify-between gap-3 shadow-xs">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <img
-                            src={b.foto_url || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150'}
-                            alt={b.nombre}
-                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <span className="text-xs font-extrabold text-slate-900 block leading-tight truncate">
-                              {b.nombre}
-                            </span>
-                            <span className="text-[11px] text-slate-500 truncate block">
-                              {b.especialidad || 'Cortes & Barba'} • Comisión: {b.porcentaje_comision || 50}%
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                            {b.activo ? 'En Turno' : 'Inactivo'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
-                            {b.horario_inicio || '09:00'} - {b.horario_fin || '20:00'}
+                  {barberiaDetalle.barberos?.map((b) => (
+                    <div key={b.id} className="p-3 rounded-2xl border border-slate-200 bg-white flex items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={b.foto_url || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150'}
+                          alt={b.nombre}
+                          className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-extrabold text-slate-900 block truncate">{b.nombre}</span>
+                          <span className="text-[11px] text-slate-500 truncate block">
+                            {b.especialidad || 'Cortes & Barba'} • Comisión: {b.porcentaje_comision || 50}%
                           </span>
                         </div>
                       </div>
-                    ))}
-                  </div>
+
+                      {b.telefono && (
+                        <a
+                          href={getWhatsAppUrl(b.telefono, b.nombre)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-1.5 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>WhatsApp</span>
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {/* PESTAÑA 3: MÓDULOS */}
+              {/* TAB 3: MÓDULOS */}
               {tabDetalle === 'modulos' && (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                       Cambiar Plan de Suscripción
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {['basico', 'pro', 'vip'].map((p) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'basico', label: 'Básico', price: '$20/m' },
+                        { id: 'pro', label: 'Pro', price: '$45/m' },
+                        { id: 'vip', label: 'VIP', price: '$80/m' },
+                        { id: 'personalizado', label: 'Custom', price: 'A medida' }
+                      ].map((p) => (
                         <button
-                          key={p}
+                          key={p.id}
                           type="button"
                           onClick={() => {
-                            const newMods = p === 'basico' ? { agenda: true, max_barberos: 2, portal_barberos: false, liquidaciones: false, costos: false, notificaciones_audio: true, productos: false, rentabilidad: false, galeria: false, auditoria: false } :
-                                            p === 'pro' ? { agenda: true, max_barberos: 5, portal_barberos: true, liquidaciones: true, costos: true, notificaciones_audio: true, productos: true, rentabilidad: false, galeria: true, auditoria: false } :
-                                            { agenda: true, max_barberos: 999, portal_barberos: true, liquidaciones: true, costos: true, notificaciones_audio: true, productos: true, rentabilidad: true, galeria: true, auditoria: true };
-                            handleGuardarModulosDetalle(newMods, p);
+                            const newMods = p.id === 'basico' ? { agenda: true, max_barberos: 2, portal_barberos: false, liquidaciones: false, costos: false, notificaciones_audio: true, productos: false, rentabilidad: false, galeria: false, auditoria: false, fidelizacion_clientes: false } :
+                                            p.id === 'pro' ? { agenda: true, max_barberos: 5, portal_barberos: true, liquidaciones: true, costos: true, notificaciones_audio: true, productos: true, rentabilidad: false, galeria: true, auditoria: false, fidelizacion_clientes: false } :
+                                            p.id === 'vip' ? { agenda: true, max_barberos: 999, portal_barberos: true, liquidaciones: true, costos: true, notificaciones_audio: true, productos: true, rentabilidad: true, galeria: true, auditoria: true, fidelizacion_clientes: true } :
+                                            barberiaDetalle.barberia.modulos_activos || {};
+                            handleGuardarModulosDetalle(newMods, p.id);
                           }}
-                          className={`p-3 rounded-2xl border text-center transition-all ${
-                            barberiaDetalle.barberia.plan === p
+                          className={`p-2.5 rounded-2xl border text-center transition-all ${
+                            barberiaDetalle.barberia.plan === p.id
                               ? 'border-blue-600 bg-blue-50 font-black text-blue-700 shadow-xs'
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          <span className="text-xs uppercase font-extrabold block">{p}</span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5">
-                            {p === 'basico' ? '$20/mes' : p === 'pro' ? '$45/mes' : '$80/mes'}
-                          </span>
+                          <span className="text-xs uppercase font-extrabold block">{p.label}</span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">{p.price}</span>
                         </button>
                       ))}
                     </div>
@@ -1274,6 +1840,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       {[
                         { key: 'agenda', label: 'Agenda & Reservas Públicas' },
                         { key: 'portal_barberos', label: 'Portal Móvil para Barberos del Equipo' },
+                        { key: 'fidelizacion_clientes', label: 'Clientes Preferenciales & Fidelización' },
                         { key: 'liquidaciones', label: 'Plantilla de Pagos (%) & Liquidaciones' },
                         { key: 'costos', label: 'Caja, Ingresos y Egresos' },
                         { key: 'productos', label: 'Tienda de Productos & Inventario' },
@@ -1305,17 +1872,15 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
               )}
 
-              {/* PESTAÑA 4: DATOS DEL LOCAL & PIN */}
+              {/* TAB 4: AJUSTES */}
               {tabDetalle === 'ajustes' && (
                 <div className="space-y-4">
-                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-amber-900 block">PIN de Administrador Dueño</span>
-                      <span className="text-xs text-amber-700/80">
-                        Clave exclusiva para que el dueño ingrese a este local.
-                      </span>
+                      <span className="text-xs text-amber-700/80">Clave para que el dueño ingrese al local</span>
                     </div>
-                    <span className="text-lg font-black font-mono tracking-widest text-amber-950 px-3 py-1 bg-white border border-amber-300 rounded-xl self-start sm:self-auto">
+                    <span className="text-lg font-black font-mono tracking-widest text-amber-950 px-3 py-1 bg-white border border-amber-300 rounded-xl">
                       {barberiaDetalle.barberia.pin_admin || '1234'}
                     </span>
                   </div>
@@ -1323,20 +1888,24 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <div className="space-y-3 text-xs">
                     <div className="flex justify-between py-2 border-b border-slate-100">
                       <span className="text-slate-400 font-semibold">Teléfono</span>
-                      <span className="font-bold text-slate-800">{barberiaDetalle.barberia.telefono || 'Sin registrar'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800">{barberiaDetalle.barberia.telefono || 'Sin registrar'}</span>
+                        {barberiaDetalle.barberia.telefono && (
+                          <a
+                            href={getWhatsAppUrl(barberiaDetalle.barberia.telefono, barberiaDetalle.barberia.nombre)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded-lg bg-emerald-50 text-emerald-700"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex justify-between py-2 border-b border-slate-100">
                       <span className="text-slate-400 font-semibold">Dirección</span>
                       <span className="font-bold text-slate-800">{barberiaDetalle.barberia.direccion || 'Sin registrar'}</span>
-                    </div>
-
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-400 font-semibold">Color de Marca</span>
-                      <div className="flex items-center gap-1.5 font-mono font-bold">
-                        <span className="w-4 h-4 rounded-full border border-slate-200" style={{ backgroundColor: barberiaDetalle.barberia.color_primario || '#2563eb' }} />
-                        <span>{barberiaDetalle.barberia.color_primario || '#2563eb'}</span>
-                      </div>
                     </div>
 
                     <div className="flex justify-between py-2 border-b border-slate-100">
@@ -1349,211 +1918,146 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                             : 'bg-rose-100 text-rose-800 hover:bg-emerald-100 hover:text-emerald-800'
                         }`}
                       >
-                        {barberiaDetalle.barberia.activo !== 0 ? 'Cuenta Activa (Pausar)' : 'Pausada (Reactivar)'}
+                        {barberiaDetalle.barberia.activo !== 0 ? 'Cuenta Activa' : 'Cuenta Pausada'}
                       </button>
                     </div>
 
                     {barberiaDetalle.barberia.id !== 1 && (
-                      <div className="pt-4">
+                      <div className="pt-2">
                         <button
                           onClick={(e) => handleEliminarBarberia(barberiaDetalle.barberia.id, barberiaDetalle.barberia.nombre, e)}
                           className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 border border-rose-200 transition-colors"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Eliminar esta barbería definitivamente</span>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Eliminar Barbería</span>
                         </button>
                       </div>
                     )}
                   </div>
-
                 </div>
               )}
 
             </div>
-
-            {/* PIE DEL MODAL */}
-            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">
-                EXAKTA Multi-Tenant • ID: {barberiaDetalle.barberia.id}
-              </span>
-              <button
-                onClick={() => setModalDetalleOpen(false)}
-                className="py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
-
           </div>
         </div>
       )}
 
-      {/* MODAL ALTA DE NUEVA BARBERÍA */}
+      {/* ======================================================== */}
+      {/* MODAL: CREAR NUEVA BARBERÍA */}
+      {/* ======================================================== */}
       {modalCrearOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-2xl relative animate-slideUp max-h-[92vh] overflow-y-auto">
-            
-            <button
-              onClick={() => setModalCrearOpen(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center shrink-0">
-                <Store className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-slideIn space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-base text-slate-900">Nueva Barbería en EXAKTA</h3>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900 leading-tight">
-                  Alta de Nueva Barbería
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Crea una cuenta en EXAKTA con base de datos y agenda propia.
-                </p>
-              </div>
+              <button onClick={() => setModalCrearOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <form onSubmit={handleCrearBarberia} className="space-y-4">
-              
+            <form onSubmit={handleCrearBarberia} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Nombre de la Barbería *
-                </label>
+                <label className="block font-bold text-slate-700 mb-1">Nombre Comercial *</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Fade Master Studio"
+                  placeholder="Ej: Golden Scissors Barber Club"
                   value={nuevaBarberia.nombre}
-                  onChange={(e) => {
-                    const nom = e.target.value;
-                    const autoSlug = nom.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                    setNuevaBarberia({ ...nuevaBarberia, nombre: nom, slug: autoSlug });
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600"
+                  onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, nombre: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Identificador URL (Slug) *
-                </label>
-                <div className="flex items-center">
-                  <span className="px-3 py-2.5 bg-slate-100 border border-r-0 border-slate-200 rounded-l-xl text-xs text-slate-500 font-mono">
-                    /?b=
-                  </span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Slug URL</label>
                   <input
                     type="text"
-                    required
-                    placeholder="fade-master"
+                    placeholder="golden-scissors"
                     value={nuevaBarberia.slug}
                     onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, slug: e.target.value })}
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-r-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Plan de Suscripción *
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'basico', label: 'Básico', price: '$20/mes', desc: 'Hasta 2 barberos' },
-                    { id: 'pro', label: 'Pro', price: '$45/mes', desc: 'Hasta 5 barberos' },
-                    { id: 'vip', label: 'VIP', price: '$80/mes', desc: 'Todo ilimitado' }
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setNuevaBarberia({ ...nuevaBarberia, plan: p.id })}
-                      className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
-                        nuevaBarberia.plan === p.id
-                          ? 'border-blue-600 bg-blue-50/70 shadow-xs ring-1 ring-blue-600'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className="text-xs font-black text-slate-900 block">{p.label}</span>
-                      <span className="text-[11px] font-extrabold text-blue-600 block">{p.price}</span>
-                      <span className="text-[10px] text-slate-500 block mt-0.5">{p.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Color de Marca
-                </label>
-                <div className="flex items-center gap-2">
-                  {COLOR_PRESETS.map((c) => (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      onClick={() => setNuevaBarberia({ ...nuevaBarberia, color_primario: c.hex })}
-                      className="w-8 h-8 rounded-full border-2 transition-transform flex items-center justify-center"
-                      style={{
-                        backgroundColor: c.hex,
-                        borderColor: nuevaBarberia.color_primario === c.hex ? '#0f172a' : 'transparent',
-                        transform: nuevaBarberia.color_primario === c.hex ? 'scale(1.15)' : 'scale(1)'
-                      }}
-                    >
-                      {nuevaBarberia.color_primario === c.hex && (
-                        <Check className="w-4 h-4 text-white drop-shadow-xs" />
-                      )}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Plan Inicial</label>
+                  <select
+                    value={nuevaBarberia.plan}
+                    onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, plan: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="basico">Básico ($20)</option>
+                    <option value="pro">Profesional ($45)</option>
+                    <option value="vip">VIP ($80)</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Teléfono
-                  </label>
+                  <label className="block font-bold text-slate-700 mb-1">PIN de Acceso Dueño</label>
                   <input
-                    type="text"
-                    placeholder="3001234567"
-                    value={nuevaBarberia.telefono}
-                    onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, telefono: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600"
+                    type="password"
+                    maxLength={6}
+                    value={nuevaBarberia.pin_admin}
+                    onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, pin_admin: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    PIN Admin Inicial
-                  </label>
+                  <label className="block font-bold text-slate-700 mb-1">WhatsApp / Teléfono</label>
                   <input
-                    type="text"
-                    maxLength="8"
-                    value={nuevaBarberia.pin_admin}
-                    onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, pin_admin: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-600 text-center"
+                    type="tel"
+                    placeholder="3001234567"
+                    value={nuevaBarberia.telefono}
+                    onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, telefono: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2.5 pt-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Color de Marca</label>
+                <div className="flex items-center gap-2">
+                  {COLOR_PRESETS.map(c => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => setNuevaBarberia({ ...nuevaBarberia, color_primario: c.hex })}
+                      className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                        nuevaBarberia.color_primario === c.hex ? 'scale-110 border-slate-900 shadow-xs' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setModalCrearOpen(false)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={cargando || !nuevaBarberia.nombre.trim()}
-                  className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
+                  disabled={cargando}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-sm"
                 >
-                  <span>{cargando ? 'Creando...' : 'Crear Barbería'}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {cargando ? 'Creando...' : 'Crear Barbería'}
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}

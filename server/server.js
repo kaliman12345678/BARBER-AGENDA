@@ -115,7 +115,8 @@ function getDefaultModulesForPlan(plan) {
       productos: false,
       rentabilidad: false,
       galeria: false,
-      auditoria: false
+      auditoria: false,
+      fidelizacion_clientes: false
     };
   } else if (plan === 'pro') {
     return {
@@ -128,7 +129,8 @@ function getDefaultModulesForPlan(plan) {
       productos: true,
       rentabilidad: false,
       galeria: true,
-      auditoria: false
+      auditoria: false,
+      fidelizacion_clientes: false
     };
   } else {
     return {
@@ -141,7 +143,8 @@ function getDefaultModulesForPlan(plan) {
       productos: true,
       rentabilidad: true,
       galeria: true,
-      auditoria: true
+      auditoria: true,
+      fidelizacion_clientes: true
     };
   }
 }
@@ -570,7 +573,11 @@ app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
     const preciosPlanes = {
       basico: { usd: 20, cop: 80000 },
       pro: { usd: 45, cop: 180000 },
-      vip: { usd: 80, cop: 320000 }
+      vip: { usd: 80, cop: 320000 },
+      personalizado: { 
+        usd: barberia.precio_mensual_usd || 50, 
+        cop: barberia.precio_mensual_cop || 200000 
+      }
     };
     const infoPlan = preciosPlanes[barberia.plan] || preciosPlanes.basico;
 
@@ -888,6 +895,58 @@ app.delete('/api/superadmin/barberias/:id', async (req, res) => {
   }
 });
 
+app.get('/api/superadmin/citas-globales', async (req, res) => {
+  const { desde, hasta, q, barberia_id } = req.query;
+  try {
+    let sql = `
+      SELECT c.*, b.nombre as barbero_nombre, s.nombre as servicio_nombre, bar.nombre as barberia_nombre, bar.slug as barberia_slug
+      FROM citas c
+      LEFT JOIN barberos b ON c.barbero_id = b.id
+      LEFT JOIN servicios s ON c.servicio_id = s.id
+      LEFT JOIN barberias bar ON c.barberia_id = bar.id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (barberia_id && barberia_id !== 'todas') {
+      sql += ' AND c.barberia_id = ?';
+      params.push(barberia_id);
+    }
+    if (desde && hasta) {
+      sql += ' AND c.fecha BETWEEN ? AND ?';
+      params.push(desde, hasta);
+    } else if (desde) {
+      sql += ' AND c.fecha >= ?';
+      params.push(desde);
+    }
+    if (q) {
+      sql += ' AND (LOWER(c.cliente_nombre) LIKE ? OR c.cliente_telefono LIKE ?)';
+      params.push(`%${q.toLowerCase()}%`, `%${q}%`);
+    }
+    sql += ' ORDER BY c.fecha DESC, c.hora_inicio DESC LIMIT 200';
+    const citas = await db.prepare(sql).all(...params);
+    res.json(citas || []);
+  } catch (err) {
+    console.warn('Fallback superadmin citas globales:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/superadmin/barberos-globales', async (req, res) => {
+  try {
+    let sql = `
+      SELECT b.*, bar.nombre as barberia_nombre, bar.slug as barberia_slug
+      FROM barberos b
+      LEFT JOIN barberias bar ON b.barberia_id = bar.id
+      ORDER BY b.barberia_id ASC, b.id ASC
+    `;
+    const rows = await db.prepare(sql).all();
+    res.json(rows || []);
+  } catch (err) {
+    console.warn('Fallback superadmin barberos globales:', err.message);
+    res.json([]);
+  }
+});
+
 // ----------------------------------------------------
 // 3. BARBEROS (EQUIPO)
 // ----------------------------------------------------
@@ -1132,7 +1191,7 @@ app.get('/api/barberos/:id/record', async (req, res) => {
 });
 
 app.get('/api/barbero-portal/citas', async (req, res) => {
-  const { barbero_id, fecha, desde, hasta } = req.query;
+  const { barbero_id, fecha, desde, hasta, q } = req.query;
   const tenantId = await getTenantId(req);
 
   if (!barbero_id) {
@@ -1154,9 +1213,9 @@ app.get('/api/barbero-portal/citas', async (req, res) => {
         s.duracion_minutos
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
-      WHERE c.barbero_id = ? AND c.barberia_id = ?
+      WHERE c.barberia_id = ? AND c.barbero_id = ?
     `;
-    const params = [barbero_id, tenantId];
+    const params = [tenantId, barbero_id];
 
     if (fecha) {
       sql += ' AND c.fecha = ?';
@@ -1165,6 +1224,10 @@ app.get('/api/barbero-portal/citas', async (req, res) => {
     if (desde && hasta) {
       sql += ' AND c.fecha BETWEEN ? AND ?';
       params.push(desde, hasta);
+    }
+    if (q) {
+      sql += ' AND LOWER(c.cliente_nombre) LIKE ?';
+      params.push(`%${q.toLowerCase()}%`);
     }
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
@@ -1447,7 +1510,7 @@ app.get('/api/disponibilidad', async (req, res) => {
 // 6. CITAS / TURNOS MULTI-TENANT
 // ----------------------------------------------------
 app.get('/api/citas', async (req, res) => {
-  const { fecha, barbero_id, estado, desde, hasta } = req.query;
+  const { fecha, barbero_id, estado, desde, hasta, q } = req.query;
   const tenantId = await getTenantId(req);
 
   try {
@@ -1475,6 +1538,10 @@ app.get('/api/citas', async (req, res) => {
     if (estado) {
       sql += ' AND c.estado = ?';
       params.push(estado);
+    }
+    if (q) {
+      sql += ' AND (LOWER(c.cliente_nombre) LIKE ? OR c.cliente_telefono LIKE ?)';
+      params.push(`%${q.toLowerCase()}%`, `%${q}%`);
     }
 
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio ASC';
@@ -1682,6 +1749,207 @@ app.delete('/api/citas/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// ----------------------------------------------------
+// 6.1 CLIENTES PREFERENCIALES & FIDELIZACIÓN
+// ----------------------------------------------------
+const memoryClientes = [
+  {
+    id: 1,
+    barberia_id: 1,
+    cliente_nombre: 'Andrés Gómez',
+    cliente_telefono: '3001234567',
+    categoria: 'VIP',
+    fecha_cumpleanos: '1992-05-14',
+    beneficio_fidelidad: '10º corte gratis + Bebida de cortesía',
+    notas: 'Cliente fundador. Prefiere degradado bajo con navaja.'
+  },
+  {
+    id: 2,
+    barberia_id: 1,
+    cliente_nombre: 'Santiago Martínez',
+    cliente_telefono: '3109876543',
+    categoria: 'Preferencial',
+    fecha_cumpleanos: '1995-11-20',
+    beneficio_fidelidad: 'Descuento 15% en barba',
+    notas: 'Asiste cada 15 días puntualmente los sábados.'
+  },
+  {
+    id: 3,
+    barberia_id: 1,
+    cliente_nombre: 'Felipe Herrera',
+    cliente_telefono: '3154443322',
+    categoria: 'Frecuente',
+    fecha_cumpleanos: '1988-08-04',
+    beneficio_fidelidad: 'Lavado y peinado con cera gratis',
+    notas: 'Le gusta corte clásico tijera arriba.'
+  }
+];
+
+app.get('/api/clientes', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { q, categoria } = req.query;
+
+  try {
+    // 1. Acumular historial de citas por cliente
+    let sql = `
+      SELECT 
+        c.cliente_nombre,
+        c.cliente_telefono,
+        COUNT(c.id) as total_citas,
+        MAX(c.fecha) as ultima_visita,
+        MIN(c.fecha) as primera_visita,
+        COALESCE(SUM(s.precio), 0) as total_gastado
+      FROM citas c
+      LEFT JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.barberia_id = ?
+    `;
+    const params = [tenantId];
+    if (q) {
+      sql += ' AND (LOWER(c.cliente_nombre) LIKE ? OR c.cliente_telefono LIKE ?)';
+      params.push(`%${q.toLowerCase()}%`, `%${q}%`);
+    }
+    sql += ' GROUP BY c.cliente_nombre, c.cliente_telefono ORDER BY total_citas DESC, ultima_visita DESC';
+
+    let citasClientes = [];
+    try {
+      citasClientes = await db.prepare(sql).all(...params) || [];
+    } catch (_) {}
+
+    // 2. Mapa de fidelidad guardado en memoria
+    const mapaFidelidad = {};
+    memoryClientes.filter(m => m.barberia_id === tenantId).forEach(m => {
+      const tel = (m.cliente_telefono || '').replace(/[^0-9]/g, '');
+      if (tel) mapaFidelidad[tel] = m;
+      if (m.cliente_nombre) mapaFidelidad[m.cliente_nombre.toLowerCase().trim()] = m;
+    });
+
+    const resultadoMap = new Map();
+
+    for (const c of citasClientes) {
+      const telLimpio = (c.cliente_telefono || '').replace(/[^0-9]/g, '');
+      const nombreKey = (c.cliente_nombre || '').toLowerCase().trim();
+      const fid = (telLimpio && mapaFidelidad[telLimpio]) || mapaFidelidad[nombreKey] || {};
+
+      let cat = fid.categoria;
+      if (!cat) {
+        const n = Number(c.total_citas || 0);
+        cat = n >= 8 ? 'VIP' : (n >= 4 ? 'Preferencial' : (n >= 2 ? 'Frecuente' : 'Nuevo'));
+      }
+
+      resultadoMap.set(telLimpio || nombreKey, {
+        id: fid.id || `c-${telLimpio || Math.random().toString().slice(2, 7)}`,
+        barberia_id: tenantId,
+        cliente_nombre: fid.cliente_nombre || c.cliente_nombre,
+        cliente_telefono: fid.cliente_telefono || c.cliente_telefono,
+        categoria: cat,
+        fecha_cumpleanos: fid.fecha_cumpleanos || null,
+        beneficio_fidelidad: fid.beneficio_fidelidad || '',
+        notas: fid.notas || '',
+        total_citas: Number(c.total_citas || 1),
+        ultima_visita: c.ultima_visita,
+        primera_visita: c.primera_visita,
+        total_gastado: Number(c.total_gastado || 0)
+      });
+    }
+
+    // Agregar clientes en memoria que no tengan citas aún
+    memoryClientes.filter(m => m.barberia_id === tenantId).forEach(m => {
+      const telLimpio = (m.cliente_telefono || '').replace(/[^0-9]/g, '');
+      const nombreKey = (m.cliente_nombre || '').toLowerCase().trim();
+      if (!resultadoMap.has(telLimpio) && !resultadoMap.has(nombreKey)) {
+        if (!q || m.cliente_nombre?.toLowerCase().includes(q.toLowerCase()) || m.cliente_telefono?.includes(q)) {
+          resultadoMap.set(telLimpio || nombreKey, {
+            id: m.id,
+            barberia_id: tenantId,
+            cliente_nombre: m.cliente_nombre,
+            cliente_telefono: m.cliente_telefono,
+            categoria: m.categoria || 'VIP',
+            fecha_cumpleanos: m.fecha_cumpleanos || null,
+            beneficio_fidelidad: m.beneficio_fidelidad || '',
+            notas: m.notas || '',
+            total_citas: 0,
+            ultima_visita: null,
+            primera_visita: null,
+            total_gastado: 0
+          });
+        }
+      }
+    });
+
+    let list = Array.from(resultadoMap.values());
+    if (categoria && categoria !== 'todos') {
+      list = list.filter(item => item.categoria.toLowerCase() === categoria.toLowerCase());
+    }
+
+    res.json(list);
+  } catch (err) {
+    console.warn('Error en GET /api/clientes:', err.message);
+    const fall = memoryClientes.filter(m => m.barberia_id === tenantId);
+    res.json(fall);
+  }
+});
+
+app.post('/api/clientes', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { cliente_nombre, cliente_telefono, categoria, fecha_cumpleanos, beneficio_fidelidad, notas } = req.body;
+
+  if (!cliente_nombre || !cliente_telefono) {
+    return res.status(400).json({ error: 'Nombre y teléfono son obligatorios' });
+  }
+
+  const telLimpio = cliente_telefono.replace(/[^0-9]/g, '');
+  const existingIdx = memoryClientes.findIndex(c => c.barberia_id === tenantId && c.cliente_telefono.replace(/[^0-9]/g, '') === telLimpio);
+
+  const clienteData = {
+    id: existingIdx >= 0 ? memoryClientes[existingIdx].id : Date.now(),
+    barberia_id: tenantId,
+    cliente_nombre: cliente_nombre.trim(),
+    cliente_telefono: cliente_telefono.trim(),
+    categoria: categoria || 'VIP',
+    fecha_cumpleanos: fecha_cumpleanos || null,
+    beneficio_fidelidad: beneficio_fidelidad || '',
+    notas: notas || ''
+  };
+
+  if (existingIdx >= 0) {
+    memoryClientes[existingIdx] = clienteData;
+  } else {
+    memoryClientes.unshift(clienteData);
+  }
+
+  res.json({ success: true, cliente: clienteData });
+});
+
+app.patch('/api/clientes/:id', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+  const { categoria, fecha_cumpleanos, beneficio_fidelidad, notas, cliente_nombre, cliente_telefono } = req.body;
+
+  const idx = memoryClientes.findIndex(c => c.barberia_id === tenantId && String(c.id) === String(id));
+  if (idx >= 0) {
+    if (categoria !== undefined) memoryClientes[idx].categoria = categoria;
+    if (fecha_cumpleanos !== undefined) memoryClientes[idx].fecha_cumpleanos = fecha_cumpleanos;
+    if (beneficio_fidelidad !== undefined) memoryClientes[idx].beneficio_fidelidad = beneficio_fidelidad;
+    if (notas !== undefined) memoryClientes[idx].notas = notas;
+    if (cliente_nombre !== undefined) memoryClientes[idx].cliente_nombre = cliente_nombre;
+    if (cliente_telefono !== undefined) memoryClientes[idx].cliente_telefono = cliente_telefono;
+    return res.json({ success: true, cliente: memoryClientes[idx] });
+  }
+
+  const newClient = {
+    id: Number(id) || Date.now(),
+    barberia_id: tenantId,
+    cliente_nombre: cliente_nombre || 'Cliente',
+    cliente_telefono: cliente_telefono || '',
+    categoria: categoria || 'VIP',
+    fecha_cumpleanos: fecha_cumpleanos || null,
+    beneficio_fidelidad: beneficio_fidelidad || '',
+    notas: notas || ''
+  };
+  memoryClientes.unshift(newClient);
+  res.json({ success: true, cliente: newClient });
 });
 
 // ----------------------------------------------------

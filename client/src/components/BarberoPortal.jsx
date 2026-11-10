@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
+import DateRangeFilter from './DateRangeFilter';
 
 export default function BarberoPortal({ barbero, onLogout }) {
   const [tab, setTab] = useState('citas'); // 'citas', 'record', 'balance', 'calculadora', 'portafolio'
@@ -32,7 +33,10 @@ export default function BarberoPortal({ barbero, onLogout }) {
   const [balance, setBalance] = useState(null);
   const [recordData, setRecordData] = useState(null);
   const [cargando, setCargando] = useState(false);
-  const [filtroFecha, setFiltroFecha] = useState('todas'); // 'todas', 'hoy'
+  const [filtroFecha, setFiltroFecha] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [busquedaCitas, setBusquedaCitas] = useState('');
 
   // Portafolio multimedia del barbero
   const [misPublicaciones, setMisPublicaciones] = useState([]);
@@ -56,7 +60,7 @@ export default function BarberoPortal({ barbero, onLogout }) {
 
   useEffect(() => {
     cargarDatos();
-  }, [filtroFecha]);
+  }, [filtroFecha, fechaDesde, fechaHasta]);
 
   async function cargarDatos() {
     setCargando(true);
@@ -64,6 +68,17 @@ export default function BarberoPortal({ barbero, onLogout }) {
       let urlCitas = `/api/barbero-portal/citas?barbero_id=${barbero.id}`;
       if (filtroFecha === 'hoy') {
         urlCitas += `&fecha=${getTodayStr()}`;
+      } else if (filtroFecha === 'ayer') {
+        const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        urlCitas += `&fecha=${ayer}`;
+      } else if (filtroFecha === '7d') {
+        const hace7 = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        urlCitas += `&desde=${hace7}&hasta=${getTodayStr()}`;
+      } else if (filtroFecha === 'rango' && fechaDesde && fechaHasta) {
+        urlCitas += `&desde=${fechaDesde}&hasta=${fechaHasta}`;
+      }
+      if (busquedaCitas.trim()) {
+        urlCitas += `&q=${encodeURIComponent(busquedaCitas.trim())}`;
       }
 
       const [resC, resB, resR, resM] = await Promise.all([
@@ -263,36 +278,21 @@ export default function BarberoPortal({ barbero, onLogout }) {
       {/* PESTAÑA 1: MIS CITAS ASIGNADAS (SIN DATOS PRIVADOS CLIENTE) */}
       {/* ======================================================== */}
       {tab === 'citas' && (
-        <div className="space-y-5 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 font-sans">
-                Turnos Programados para Atender
-              </h3>
-              <p className="text-xs text-slate-500">
-                Consulta los turnos que la administración te ha asignado.
-              </p>
-            </div>
-
-            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-auto">
-              <button
-                onClick={() => setFiltroFecha('todas')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filtroFecha === 'todas' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Todos los Turnos
-              </button>
-              <button
-                onClick={() => setFiltroFecha('hoy')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filtroFecha === 'hoy' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Solo Hoy
-              </button>
-            </div>
-          </div>
+        <div className="space-y-4 animate-fadeIn">
+          
+          {/* FILTRO DE FECHA UNIVERSAL & MOTOR DE BÚSQUEDA */}
+          <DateRangeFilter
+            filtroTiempo={filtroFecha}
+            setFiltroTiempo={setFiltroFecha}
+            fechaDesde={fechaDesde}
+            setFechaDesde={setFechaDesde}
+            fechaHasta={fechaHasta}
+            setFechaHasta={setFechaHasta}
+            busqueda={busquedaCitas}
+            setBusqueda={setBusquedaCitas}
+            onBuscar={cargarDatos}
+            placeholder="Buscar por nombre de cliente..."
+          />
 
           {cargando ? (
             <div className="py-16 text-center text-slate-400">
