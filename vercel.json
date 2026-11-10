@@ -16,11 +16,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/index.js?match=$1"
+      "dest": "/api/index.js"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "api/index.js?match=uploads/$1"
+      "dest": "/api/index.js"
     },
     {
       "src": "/assets/(.*)",

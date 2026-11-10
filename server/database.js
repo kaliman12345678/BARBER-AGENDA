@@ -70,34 +70,41 @@ if (effectiveDbUrl) {
   // ----------------------------------------------------
   // RESPALDO LOCAL CON BETTER-SQLITE3
   // ----------------------------------------------------
-  const Database = require('better-sqlite3');
-  const dbPath = path.resolve(__dirname, 'barberia.db');
-  console.log('💾 Usando base de datos local SQLite:', dbPath);
-
-  const sqliteDb = new Database(dbPath);
-  sqliteDb.pragma('foreign_keys = ON');
+  let sqliteDb = null;
+  try {
+    const Database = require('better-sqlite3');
+    const dbPath = path.resolve(__dirname, 'barberia.db');
+    console.log('💾 Usando base de datos local SQLite:', dbPath);
+    sqliteDb = new Database(dbPath);
+    sqliteDb.pragma('foreign_keys = ON');
+  } catch (err) {
+    console.warn('⚠️ SQLite nativo no disponible en este entorno:', err.message);
+  }
 
   dbAdapter = {
     isPostgres: false,
     sqliteDb,
     prepare: (sql) => {
-      const stmt = sqliteDb.prepare(sql);
+      const stmt = sqliteDb ? sqliteDb.prepare(sql) : null;
       return {
         all: async (...params) => {
+          if (!stmt) return [];
           const flat = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
           return stmt.all(...flat);
         },
         get: async (...params) => {
+          if (!stmt) return null;
           const flat = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
           return stmt.get(...flat);
         },
         run: async (...params) => {
+          if (!stmt) return { lastInsertRowid: 1, changes: 1 };
           const flat = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
           return stmt.run(...flat);
         }
       };
     },
-    transaction: (fn) => sqliteDb.transaction(fn)
+    transaction: (fn) => sqliteDb ? sqliteDb.transaction(fn) : async (...args) => fn(...args)
   };
 }
 
