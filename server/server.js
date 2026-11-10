@@ -1891,8 +1891,8 @@ if (fs.existsSync(clientDistPath)) {
   });
 }
 
-// Iniciar servidor local si no es serverless
-if (!process.env.VERCEL) {
+// Iniciar servidor local solo si se ejecuta directamente
+if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor Multi-Tenant de Barbería corriendo en http://localhost:${PORT}`);
   });
