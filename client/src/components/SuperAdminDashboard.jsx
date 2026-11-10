@@ -688,7 +688,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       key={p}
                       type="button"
                       onClick={() => {
-                        let newMods = { ...barberiaSeleccionada.modulos_activos };
+                        let newMods = { ...(barberiaSeleccionada.modulos_activos || {}) };
                         if (p === 'basico') {
                           newMods = { agenda: true, max_barberos: 2, portal_barberos: false, liquidaciones: false, costos: false, notificaciones_audio: true, productos: false, rentabilidad: false, galeria: false, auditoria: false };
                         } else if (p === 'pro') {
@@ -741,7 +741,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                             setBarberiaSeleccionada({
                               ...barberiaSeleccionada,
                               modulos_activos: {
-                                ...barberiaSeleccionada.modulos_activos,
+                                ...(barberiaSeleccionada.modulos_activos || {}),
                                 [m.key]: e.target.checked
                               }
                             });

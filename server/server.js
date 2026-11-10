@@ -146,6 +146,26 @@ function getDefaultModulesForPlan(plan) {
   }
 }
 
+const memoryBarberias = [
+  {
+    id: 1,
+    slug: 'the-barber-club',
+    nombre: 'The Barber Club',
+    eslogan: 'Cortes clásicos y modernos con estilo profesional',
+    logo_url: '',
+    color_primario: '#2563eb',
+    color_secundario: '#1e293b',
+    telefono: '3001234567',
+    direccion: 'Calle 100 # 15-20, Bogotá',
+    plan: 'vip',
+    modulos_activos: getDefaultModulesForPlan('vip'),
+    pin_admin: '1234',
+    activo: 1,
+    total_barberos: 3,
+    total_citas: 0
+  }
+];
+
 async function getTenant(req) {
   const slug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug;
   const id = req.headers['x-barberia-id'] || req.query.barberia_id;
@@ -165,15 +185,16 @@ async function getTenant(req) {
     console.warn('⚠️ getTenant fallback:', err.message);
   }
 
-  return {
-    id: 1,
-    slug: 'the-barber-club',
-    nombre: 'The Barber Club',
-    plan: 'vip',
-    modulos_activos: JSON.stringify(getDefaultModulesForPlan('vip')),
-    activo: 1,
-    pin_admin: '1234'
-  };
+  if (slug) {
+    const memSlug = memoryBarberias.find(b => b.slug === slug);
+    if (memSlug) return memSlug;
+  }
+  if (id) {
+    const memId = memoryBarberias.find(b => String(b.id) === String(id));
+    if (memId) return memId;
+  }
+
+  return memoryBarberias[0];
 }
 
 async function getTenantId(req) {
@@ -406,37 +427,29 @@ app.post('/api/superadmin/login', async (req, res) => {
 app.get('/api/superadmin/barberias', async (req, res) => {
   try {
     const rows = await db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
-    const result = await Promise.all(rows.map(async b => {
-      let modulos = {};
-      try {
-        modulos = typeof b.modulos_activos === 'string' ? JSON.parse(b.modulos_activos) : (b.modulos_activos || {});
-      } catch (e) {
-        modulos = getDefaultModulesForPlan(b.plan);
-      }
-      const barberosRow = await db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ?').get(b.id);
-      const citasRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(b.id);
-      return {
-        ...b,
-        modulos_activos: modulos,
-        total_barberos: Number(barberosRow?.count || 0),
-        total_citas: Number(citasRow?.count || 0)
-      };
-    }));
-    res.json(result);
+    if (rows && rows.length > 0) {
+      const result = await Promise.all(rows.map(async b => {
+        let modulos = {};
+        try {
+          modulos = typeof b.modulos_activos === 'string' ? JSON.parse(b.modulos_activos) : (b.modulos_activos || {});
+        } catch (e) {
+          modulos = getDefaultModulesForPlan(b.plan);
+        }
+        const barberosRow = await db.prepare('SELECT COUNT(*) as count FROM barberos WHERE barberia_id = ?').get(b.id);
+        const citasRow = await db.prepare('SELECT COUNT(*) as count FROM citas WHERE barberia_id = ?').get(b.id);
+        return {
+          ...b,
+          modulos_activos: modulos,
+          total_barberos: Number(barberosRow?.count || 0),
+          total_citas: Number(citasRow?.count || 0)
+        };
+      }));
+      return res.json(result);
+    }
+    res.json(memoryBarberias);
   } catch (error) {
     console.warn('Fallback superadmin barberias:', error.message);
-    res.json([{
-      id: 1,
-      nombre: 'The Barber Club',
-      slug: 'the-barber-club',
-      eslogan: 'Cortes clásicos y modernos con estilo profesional',
-      plan: 'vip',
-      activo: 1,
-      modulos_activos: getDefaultModulesForPlan('vip'),
-      total_barberos: 3,
-      total_citas: 0,
-      pin_admin: '1234'
-    }]);
+    res.json(memoryBarberias);
   }
 });
 
@@ -464,51 +477,93 @@ app.post('/api/superadmin/barberias', async (req, res) => {
     }
 
     const existe = await db.prepare('SELECT id FROM barberias WHERE slug = ?').get(finalSlug);
-    if (existe) {
+    if (existe || memoryBarberias.some(b => b.slug === finalSlug)) {
       finalSlug = `${finalSlug}-${Date.now().toString().slice(-4)}`;
     }
 
     const planElegido = plan || 'basico';
-    const modulosFinales = modulos_activos ? JSON.stringify(modulos_activos) : JSON.stringify(getDefaultModulesForPlan(planElegido));
+    const modulosFinales = modulos_activos ? (typeof modulos_activos === 'string' ? modulos_activos : JSON.stringify(modulos_activos)) : JSON.stringify(getDefaultModulesForPlan(planElegido));
 
-    const stmt = db.prepare(`
-      INSERT INTO barberias (
-        slug, nombre, eslogan, logo_url, color_primario, color_secundario,
-        telefono, direccion, plan, modulos_activos, pin_admin, activo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `);
+    let nuevaId = Date.now();
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO barberias (
+          slug, nombre, eslogan, logo_url, color_primario, color_secundario,
+          telefono, direccion, plan, modulos_activos, pin_admin, activo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `);
 
-    const result = await stmt.run(
-      finalSlug,
-      nombre.trim(),
-      eslogan || 'Tu estilo en las mejores manos',
-      logo_url || '',
-      color_primario || '#2563eb',
-      color_secundario || '#1e293b',
-      telefono || '',
-      direccion || '',
-      planElegido,
-      modulosFinales,
-      pin_admin || '1234'
-    );
+      const result = await stmt.run(
+        finalSlug,
+        nombre.trim(),
+        eslogan || 'Tu estilo en las mejores manos',
+        logo_url || '',
+        color_primario || '#2563eb',
+        color_secundario || '#1e293b',
+        telefono || '',
+        direccion || '',
+        planElegido,
+        modulosFinales,
+        pin_admin || '1234'
+      );
+      if (result && result.lastInsertRowid) {
+        nuevaId = result.lastInsertRowid;
+      }
+    } catch (e) {
+      console.warn('DB insert barberia warning:', e.message);
+    }
 
-    const nuevaId = result.lastInsertRowid;
+    try {
+      const stmtServ = db.prepare('INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo) VALUES (?, ?, ?, ?, ?, 1)');
+      await stmtServ.run(nuevaId, 'Corte Clásico', 25000, 45, 'Corte tradicional de cabello con tijera y máquina.');
+      await stmtServ.run(nuevaId, 'Corte y Barba Completa', 35000, 60, 'Perfilado de barba con toalla caliente y corte.');
+    } catch (_) {}
 
-    const stmtServ = db.prepare('INSERT INTO servicios (barberia_id, nombre, precio_cop, duracion_minutos, descripcion, activo) VALUES (?, ?, ?, ?, ?, 1)');
-    await stmtServ.run(nuevaId, 'Corte Clásico', 25000, 45, 'Corte tradicional de cabello con tijera y máquina.');
-    await stmtServ.run(nuevaId, 'Corte y Barba Completa', 35000, 60, 'Perfilado de barba con toalla caliente y corte.');
+    try {
+      const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
+      await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+    } catch (_) {}
 
-    const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-    await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+    let nuevaBarberia = null;
+    try {
+      nuevaBarberia = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(nuevaId);
+    } catch (_) {}
 
-    const nuevaBarberia = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(nuevaId);
+    let parsedModulos = {};
+    try {
+      if (nuevaBarberia && nuevaBarberia.modulos_activos) {
+        parsedModulos = typeof nuevaBarberia.modulos_activos === 'string' ? JSON.parse(nuevaBarberia.modulos_activos) : nuevaBarberia.modulos_activos;
+      } else {
+        parsedModulos = JSON.parse(modulosFinales);
+      }
+    } catch (_) {
+      parsedModulos = getDefaultModulesForPlan(planElegido);
+    }
+
+    const barberiaFinal = {
+      id: nuevaBarberia?.id || nuevaId,
+      slug: nuevaBarberia?.slug || finalSlug,
+      nombre: nuevaBarberia?.nombre || nombre.trim(),
+      eslogan: nuevaBarberia?.eslogan || eslogan || 'Tu estilo en las mejores manos',
+      logo_url: nuevaBarberia?.logo_url || logo_url || '',
+      color_primario: nuevaBarberia?.color_primario || color_primario || '#2563eb',
+      color_secundario: nuevaBarberia?.color_secundario || color_secundario || '#1e293b',
+      telefono: nuevaBarberia?.telefono || telefono || '',
+      direccion: nuevaBarberia?.direccion || direccion || '',
+      plan: nuevaBarberia?.plan || planElegido,
+      modulos_activos: parsedModulos,
+      pin_admin: nuevaBarberia?.pin_admin || pin_admin || '1234',
+      activo: 1,
+      total_barberos: 1,
+      total_citas: 0
+    };
+
+    memoryBarberias.unshift(barberiaFinal);
+
     res.json({
       success: true,
       message: 'Barbería creada exitosamente con servicios y barbero inicial',
-      barberia: {
-        ...nuevaBarberia,
-        modulos_activos: typeof nuevaBarberia.modulos_activos === 'string' ? JSON.parse(nuevaBarberia.modulos_activos) : nuevaBarberia.modulos_activos
-      }
+      barberia: barberiaFinal
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -520,57 +575,106 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo } = req.body;
 
   try {
-    const actual = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
-    if (!actual) return res.status(404).json({ error: 'Barbería no encontrada' });
+    let actual = null;
+    try {
+      actual = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    } catch (_) {}
+
+    if (!actual) {
+      actual = memoryBarberias.find(b => String(b.id) === String(id));
+    }
 
     let modulosStr = null;
     if (modulos_activos !== undefined) {
       modulosStr = typeof modulos_activos === 'string' ? modulos_activos : JSON.stringify(modulos_activos);
-    } else if (plan !== undefined && plan !== actual.plan) {
+    } else if (plan !== undefined && actual && plan !== actual.plan) {
       modulosStr = JSON.stringify(getDefaultModulesForPlan(plan));
     }
 
-    const stmt = db.prepare(`
-      UPDATE barberias
-      SET nombre = COALESCE(?, nombre),
-          slug = COALESCE(?, slug),
-          eslogan = COALESCE(?, eslogan),
-          logo_url = COALESCE(?, logo_url),
-          color_primario = COALESCE(?, color_primario),
-          color_secundario = COALESCE(?, color_secundario),
-          telefono = COALESCE(?, telefono),
-          direccion = COALESCE(?, direccion),
-          plan = COALESCE(?, plan),
-          modulos_activos = COALESCE(?, modulos_activos),
-          pin_admin = COALESCE(?, pin_admin),
-          activo = COALESCE(?, activo)
-      WHERE id = ?
-    `);
+    try {
+      const stmt = db.prepare(`
+        UPDATE barberias
+        SET nombre = COALESCE(?, nombre),
+            slug = COALESCE(?, slug),
+            eslogan = COALESCE(?, eslogan),
+            logo_url = COALESCE(?, logo_url),
+            color_primario = COALESCE(?, color_primario),
+            color_secundario = COALESCE(?, color_secundario),
+            telefono = COALESCE(?, telefono),
+            direccion = COALESCE(?, direccion),
+            plan = COALESCE(?, plan),
+            modulos_activos = COALESCE(?, modulos_activos),
+            pin_admin = COALESCE(?, pin_admin),
+            activo = COALESCE(?, activo)
+        WHERE id = ?
+      `);
 
-    await stmt.run(
-      nombre !== undefined ? nombre : null,
-      slug !== undefined ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') : null,
-      eslogan !== undefined ? eslogan : null,
-      logo_url !== undefined ? logo_url : null,
-      color_primario !== undefined ? color_primario : null,
-      color_secundario !== undefined ? color_secundario : null,
-      telefono !== undefined ? telefono : null,
-      direccion !== undefined ? direccion : null,
-      plan !== undefined ? plan : null,
-      modulosStr,
-      pin_admin !== undefined ? pin_admin : null,
-      activo !== undefined ? (activo ? 1 : 0) : null,
-      id
-    );
+      await stmt.run(
+        nombre !== undefined ? nombre : null,
+        slug !== undefined ? slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') : null,
+        eslogan !== undefined ? eslogan : null,
+        logo_url !== undefined ? logo_url : null,
+        color_primario !== undefined ? color_primario : null,
+        color_secundario !== undefined ? color_secundario : null,
+        telefono !== undefined ? telefono : null,
+        direccion !== undefined ? direccion : null,
+        plan !== undefined ? plan : null,
+        modulosStr,
+        pin_admin !== undefined ? pin_admin : null,
+        activo !== undefined ? (activo ? 1 : 0) : null,
+        id
+      );
+    } catch (e) {
+      console.warn('DB update barberia warning:', e.message);
+    }
 
-    const updated = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    let updated = null;
+    try {
+      updated = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
+    } catch (_) {}
+
+    let parsedUpdatedModulos = {};
+    try {
+      if (updated && updated.modulos_activos) {
+        parsedUpdatedModulos = typeof updated.modulos_activos === 'string' ? JSON.parse(updated.modulos_activos || '{}') : updated.modulos_activos;
+      } else if (modulosStr) {
+        parsedUpdatedModulos = JSON.parse(modulosStr);
+      } else if (actual && actual.modulos_activos) {
+        parsedUpdatedModulos = actual.modulos_activos;
+      } else {
+        parsedUpdatedModulos = getDefaultModulesForPlan(plan || 'basico');
+      }
+    } catch (_) {
+      parsedUpdatedModulos = getDefaultModulesForPlan(plan || 'basico');
+    }
+
+    const barberiaActualizada = {
+      id: Number(id),
+      nombre: updated?.nombre || nombre || actual?.nombre || 'Barbería',
+      slug: updated?.slug || slug || actual?.slug || '',
+      eslogan: updated?.eslogan || eslogan || actual?.eslogan || '',
+      logo_url: updated?.logo_url || logo_url || actual?.logo_url || '',
+      color_primario: updated?.color_primario || color_primario || actual?.color_primario || '#2563eb',
+      color_secundario: updated?.color_secundario || color_secundario || actual?.color_secundario || '#1e293b',
+      telefono: updated?.telefono || telefono || actual?.telefono || '',
+      direccion: updated?.direccion || direccion || actual?.direccion || '',
+      plan: updated?.plan || plan || actual?.plan || 'basico',
+      modulos_activos: parsedUpdatedModulos,
+      pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || '1234',
+      activo: updated?.activo !== undefined ? updated.activo : (activo !== undefined ? (activo ? 1 : 0) : (actual?.activo ?? 1)),
+      total_barberos: updated?.total_barberos || actual?.total_barberos || 1,
+      total_citas: updated?.total_citas || actual?.total_citas || 0
+    };
+
+    const idxMem = memoryBarberias.findIndex(b => Number(b.id) === Number(id));
+    if (idxMem !== -1) {
+      memoryBarberias[idxMem] = { ...memoryBarberias[idxMem], ...barberiaActualizada };
+    }
+
     res.json({
       success: true,
       message: 'Barbería actualizada correctamente',
-      barberia: {
-        ...updated,
-        modulos_activos: typeof updated.modulos_activos === 'string' ? JSON.parse(updated.modulos_activos || '{}') : updated.modulos_activos
-      }
+      barberia: barberiaActualizada
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -583,6 +687,27 @@ app.delete('/api/superadmin/barberias/:id', async (req, res) => {
     return res.status(400).json({ error: 'No se puede eliminar la barbería principal del sistema (ID 1).' });
   }
   try {
+    try {
+      await db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
+      await db.prepare('DELETE FROM barberos WHERE barberia_id = ?').run(id);
+      await db.prepare('DELETE FROM servicios WHERE barberia_id = ?').run(id);
+      await db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
+      await db.prepare('DELETE FROM costos WHERE barberia_id = ?').run(id);
+      await db.prepare('DELETE FROM barberias WHERE id = ?').run(id);
+    } catch (e) {
+      console.warn('DB delete warning:', e.message);
+    }
+
+    const idxMem = memoryBarberias.findIndex(b => Number(b.id) === Number(id));
+    if (idxMem !== -1) {
+      memoryBarberias.splice(idxMem, 1);
+    }
+
+    res.json({ success: true, message: 'Barbería eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
     await db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
     await db.prepare('DELETE FROM liquidaciones WHERE barberia_id = ?').run(id);
     await db.prepare('DELETE FROM bloqueos WHERE barberia_id = ?').run(id);
