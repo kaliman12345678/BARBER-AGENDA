@@ -924,7 +924,37 @@ app.get('/api/superadmin/citas-globales', async (req, res) => {
     }
     sql += ' ORDER BY c.fecha DESC, c.hora_inicio DESC LIMIT 200';
     const citas = await db.prepare(sql).all(...params);
-    res.json(citas || []);
+    if (citas && citas.length > 0) return res.json(citas);
+    
+    // Fallback de demostración si no hay citas en DB
+    res.json([
+      {
+        id: 1,
+        barberia_id: 1,
+        barberia_nombre: 'The Barber Club',
+        barberia_slug: 'the-barber-club',
+        cliente_nombre: 'Andrés Gómez',
+        cliente_telefono: '3001234567',
+        barbero_nombre: 'Carlos "El Patrón"',
+        servicio_nombre: 'Corte Clásico / Fade',
+        fecha: new Date().toISOString().split('T')[0],
+        hora_inicio: '10:00',
+        estado: 'confirmada'
+      },
+      {
+        id: 2,
+        barberia_id: 1,
+        barberia_nombre: 'The Barber Club',
+        barberia_slug: 'the-barber-club',
+        cliente_nombre: 'Santiago Martínez',
+        cliente_telefono: '3109876543',
+        barbero_nombre: 'Mateo Fade',
+        servicio_nombre: 'Arreglo de Barba VIP',
+        fecha: new Date().toISOString().split('T')[0],
+        hora_inicio: '11:30',
+        estado: 'confirmada'
+      }
+    ]);
   } catch (err) {
     console.warn('Fallback superadmin citas globales:', err.message);
     res.json([]);
@@ -940,7 +970,36 @@ app.get('/api/superadmin/barberos-globales', async (req, res) => {
       ORDER BY b.barberia_id ASC, b.id ASC
     `;
     const rows = await db.prepare(sql).all();
-    res.json(rows || []);
+    if (rows && rows.length > 0) return res.json(rows);
+
+    res.json([
+      {
+        id: 1,
+        barberia_id: 1,
+        barberia_nombre: 'The Barber Club',
+        nombre: 'Carlos "El Patrón"',
+        especialidad: 'Degradados & Barbas VIP',
+        telefono: '3001234567',
+        porcentaje_comision: 50,
+        horario_inicio: '09:00',
+        horario_fin: '20:00',
+        activo: 1,
+        foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300'
+      },
+      {
+        id: 2,
+        barberia_id: 1,
+        barberia_nombre: 'The Barber Club',
+        nombre: 'Mateo Fade',
+        especialidad: 'Cortes Clásicos & Diseños',
+        telefono: '3109876543',
+        porcentaje_comision: 50,
+        horario_inicio: '10:00',
+        horario_fin: '19:00',
+        activo: 1,
+        foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300'
+      }
+    ]);
   } catch (err) {
     console.warn('Fallback superadmin barberos globales:', err.message);
     res.json([]);
