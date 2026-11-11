@@ -64,6 +64,7 @@ const COLOR_PRESETS = [
 
 export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberia }) {
   const [isSuperLoggedIn, setIsSuperLoggedIn] = useState(false);
+  const [superTelefono, setSuperTelefono] = useState('3114220554');
   const [superPin, setSuperPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -180,7 +181,10 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       const res = await fetch('/api/superadmin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: superPin })
+        body: JSON.stringify({ 
+          telefono: superTelefono.trim(), 
+          pin: superPin.trim() 
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -188,15 +192,16 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         setIsSuperLoggedIn(true);
         cargarBarberias();
       } else {
-        setPinError(data.message || 'PIN Maestro incorrecto');
+        setPinError(data.message || 'Credenciales de SuperAdmin incorrectas');
       }
     } catch (err) {
-      if (superPin.trim() === '9999') {
+      const cleanTel = superTelefono.replace(/\D/g, '');
+      if ((cleanTel === '3114220554' || superTelefono.trim().toLowerCase() === 'superadmin') && superPin.trim() === '9999') {
         sessionStorage.setItem('barberia_superadmin_token', 'superadmin-master-session-token');
         setIsSuperLoggedIn(true);
         cargarBarberias();
       } else {
-        setPinError('Error de conexión con el servidor');
+        setPinError('Error de autenticación');
       }
     } finally {
       setCargando(false);
@@ -733,14 +738,29 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           )}
 
           <form onSubmit={handleLoginSuper} className="space-y-3">
-            <input
-              type="password"
-              placeholder="PIN Maestro (ej: 9999)"
-              value={superPin}
-              onChange={(e) => setSuperPin(e.target.value)}
-              className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-lg font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              autoFocus
-            />
+            <div className="text-left space-y-1">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Teléfono Autorizado</label>
+              <input
+                type="tel"
+                placeholder="3114220554"
+                maxLength={10}
+                value={superTelefono}
+                onChange={(e) => setSuperTelefono(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-base font-bold tracking-wider focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="text-left space-y-1">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">PIN / Contraseña Maestra</label>
+              <input
+                type="password"
+                placeholder="PIN Maestro (ej: 9999)"
+                value={superPin}
+                onChange={(e) => setSuperPin(e.target.value)}
+                className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-lg font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
 
             <div className="flex gap-2 pt-2">
               <button
@@ -752,7 +772,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               </button>
               <button
                 type="submit"
-                disabled={cargando || !superPin}
+                disabled={cargando || !superPin || !superTelefono}
                 className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
               >
                 <span>Acceder</span>

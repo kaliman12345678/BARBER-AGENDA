@@ -283,9 +283,10 @@ app.post('/api/auth/unified-login', async (req, res) => {
   const trimmedPin = pin ? String(pin).trim() : '';
   const trimmedPass = password ? String(password).trim() : '';
   const trimmedTel = telefono ? String(telefono).trim() : '';
+  const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
 
   try {
-    // 1. Verificar si es SuperAdmin (PIN o Contraseña 9999)
+    // 1. Verificar si es SuperAdmin (Requiere estrictamente teléfono 3114220554 y contraseña/PIN 9999)
     let superPin = '9999';
     try {
       const superRow = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
@@ -293,11 +294,8 @@ app.post('/api/auth/unified-login', async (req, res) => {
     } catch (_) {}
 
     const esSuperAdmin = 
-      (trimmedPin && trimmedPin === superPin) || 
-      (trimmedPass && trimmedPass === superPin) || 
-      (trimmedPin === '9999') || 
-      (trimmedPass === '9999') ||
-      (trimmedTel.toLowerCase() === 'superadmin' && (trimmedPass === superPin || trimmedPass === '9999' || !trimmedPass));
+      (cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin' || trimmedTel.toLowerCase() === 'admin@exakta.online') &&
+      (trimmedPass === superPin || trimmedPass === '9999' || trimmedPin === superPin || trimmedPin === '9999');
 
     if (esSuperAdmin) {
       return res.json({
@@ -309,7 +307,6 @@ app.post('/api/auth/unified-login', async (req, res) => {
     }
 
     // 2. Verificar si es Dueño / Administrador de la barbería
-    const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
     let barberiaDueño = null;
 
     // A. Buscar en barberías del store por email o teléfono y contraseña
@@ -404,13 +401,13 @@ app.post('/api/auth/unified-login', async (req, res) => {
       message: 'PIN o contraseña no reconocida. Verifica tus datos de acceso.'
     });
   } catch (error) {
-    if (trimmedPin === '9999' || trimmedPass === '9999') {
+    if ((cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin') && (trimmedPass === '9999' || trimmedPin === '9999')) {
       return res.json({ success: true, role: 'superadmin', token: 'superadmin-master-session-token' });
     }
     if (trimmedPin === '1234' || trimmedPass === '1234') {
       return res.json({ success: true, role: 'admin', token: 'auth-admin-session-token', barberia_id: tenantId || 1 });
     }
-    return res.status(401).json({ success: false, message: 'PIN o contraseña incorrecta.' });
+    return res.status(401).json({ success: false, message: 'Credenciales o contraseña incorrecta.' });
   }
 });
 
@@ -589,7 +586,16 @@ app.patch('/api/barberias/config', async (req, res) => {
 // ----------------------------------------------------
 
 app.post('/api/superadmin/login', async (req, res) => {
-  const { pin } = req.body;
+  const { pin, password, telefono, identifier } = req.body;
+  const inputTel = String(telefono || identifier || '').trim();
+  const inputPin = String(pin || password || '').trim();
+  const cleanTel = inputTel.replace(/\D/g, '');
+
+  const isAuthorized = (cleanTel === '3114220554' || inputTel.toLowerCase() === 'superadmin' || inputTel.toLowerCase() === 'admin@exakta.online');
+  if (!isAuthorized) {
+    return res.status(401).json({ success: false, message: 'Teléfono o usuario no autorizado para SuperAdmin' });
+  }
+
   try {
     let masterPin = '9999';
     try {
@@ -599,16 +605,16 @@ app.post('/api/superadmin/login', async (req, res) => {
       // Usar '9999' de fábrica si falla lectura
     }
 
-    if (String(pin).trim() === String(masterPin).trim()) {
+    if (inputPin === String(masterPin).trim() || inputPin === '9999') {
       return res.json({ success: true, token: 'superadmin-master-session-token' });
     } else {
-      return res.status(401).json({ success: false, message: 'PIN Maestro incorrecto' });
+      return res.status(401).json({ success: false, message: 'PIN o Contraseña incorrecta' });
     }
   } catch (error) {
-    if (String(pin).trim() === '9999') {
+    if (inputPin === '9999') {
       return res.json({ success: true, token: 'superadmin-master-session-token' });
     }
-    return res.status(401).json({ success: false, message: 'PIN Maestro incorrecto' });
+    return res.status(401).json({ success: false, message: 'PIN o Contraseña incorrecta' });
   }
 });
 
