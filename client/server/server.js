@@ -591,26 +591,28 @@ app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
     const diasParaVencer = Math.max(1, 30 - diffDias);
 
     const preciosPlanes = {
-      basico: { usd: 20, cop: 80000 },
-      pro: { usd: 45, cop: 180000 },
-      vip: { usd: 80, cop: 320000 },
+      basico: { cop: 80000 },
+      pro: { cop: 180000 },
+      vip: { cop: 320000 },
       personalizado: { 
-        usd: barberia.precio_mensual_usd || 50, 
         cop: barberia.precio_mensual_cop || 200000 
       }
     };
     const infoPlan = preciosPlanes[barberia.plan] || preciosPlanes.basico;
+    const precioCopFinal = barberia.precio_mensual_cop !== undefined && barberia.precio_mensual_cop !== null && barberia.precio_mensual_cop !== ''
+      ? Number(barberia.precio_mensual_cop)
+      : infoPlan.cop;
 
     res.json({
       success: true,
       barberia: {
         ...barberia,
+        precio_mensual_cop: precioCopFinal,
         modulos_activos: modulos
       },
       suscripcion: {
         plan: barberia.plan || 'basico',
-        precio_usd: infoPlan.usd,
-        precio_cop: infoPlan.cop,
+        precio_cop: precioCopFinal,
         dias_para_vencer: diasParaVencer,
         porcentaje_ciclo: Math.round(((30 - diasParaVencer) / 30) * 100),
         estado_pago: 'Al día',
@@ -671,7 +673,8 @@ app.post('/api/superadmin/barberias', async (req, res) => {
     direccion,
     plan,
     modulos_activos,
-    pin_admin
+    pin_admin,
+    precio_mensual_cop
   } = req.body;
 
   if (!nombre) return res.status(400).json({ error: 'El nombre de la barbería es obligatorio' });
@@ -757,6 +760,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       telefono: nuevaBarberia?.telefono || telefono || '',
       direccion: nuevaBarberia?.direccion || direccion || '',
       plan: nuevaBarberia?.plan || planElegido,
+      precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (planElegido === 'vip' ? 320000 : (planElegido === 'pro' ? 180000 : 80000)),
       modulos_activos: parsedModulos,
       pin_admin: nuevaBarberia?.pin_admin || pin_admin || '1234',
       activo: 1,
@@ -778,7 +782,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
 
 app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo } = req.body;
+  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop } = req.body;
 
   try {
     let actual = null;
@@ -865,6 +869,7 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
       telefono: updated?.telefono || telefono || actual?.telefono || '',
       direccion: updated?.direccion || direccion || actual?.direccion || '',
       plan: updated?.plan || plan || actual?.plan || 'basico',
+      precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (actual?.precio_mensual_cop ?? ((updated?.plan || plan || actual?.plan) === 'vip' ? 320000 : ((updated?.plan || plan || actual?.plan) === 'pro' ? 180000 : 80000))),
       modulos_activos: parsedUpdatedModulos,
       pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || '1234',
       activo: updated?.activo !== undefined ? updated.activo : (activo !== undefined ? (activo ? 1 : 0) : (actual?.activo ?? 1)),
@@ -1530,6 +1535,7 @@ app.delete('/api/servicios/:id', async (req, res) => {
 });
 
 // ----------------------------------------------------
+// ----------------------------------------------------
 // 5. MOTOR DE DISPONIBILIDAD
 // ----------------------------------------------------
 app.get('/api/disponibilidad', async (req, res) => {
@@ -1542,17 +1548,40 @@ app.get('/api/disponibilidad', async (req, res) => {
 
   try {
     const duracion = Number(duracion_minutos) || 45;
-    const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(barbero_id, tenantId);
+    let barbero = null;
+    try {
+      barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ? AND activo = 1').get(barbero_id, tenantId);
+    } catch (_) {}
 
+    // Fallback 1: Buscar en store local para este tenant
     if (!barbero) {
-      return res.status(404).json({ error: 'Barbero no encontrado o inactivo' });
+      const barberosStore = store.obtenerBarberos(tenantId, false);
+      barbero = barberosStore.find(b => String(b.id) === String(barbero_id));
+    }
+
+    // Fallback 2: Buscar en catálogo global de barberos
+    if (!barbero) {
+      barbero = store.barberos.find(b => String(b.id) === String(barbero_id));
+    }
+
+    // Fallback 3: Si no existe, crear objeto estándar para no bloquear la agenda
+    if (!barbero) {
+      barbero = {
+        id: Number(barbero_id),
+        nombre: 'Barbero Principal',
+        horario_inicio: '09:00',
+        horario_fin: '20:00',
+        dias_laborales: '1,2,3,4,5,6,7',
+        activo: 1
+      };
     }
 
     const fechaObj = new Date(`${fecha}T00:00:00`);
     let diaSemana = fechaObj.getDay();
     if (diaSemana === 0) diaSemana = 7;
 
-    const diasPermitidos = (barbero.dias_laborales || '1,2,3,4,5,6').split(',').map(Number);
+    const diasLaboralesStr = barbero.dias_laborales || '1,2,3,4,5,6,7';
+    const diasPermitidos = diasLaboralesStr.split(',').map(Number);
     if (!diasPermitidos.includes(diaSemana)) {
       return res.json({
         disponible_dia: false,
@@ -1561,21 +1590,52 @@ app.get('/api/disponibilidad', async (req, res) => {
       });
     }
 
-    const citas = await db.prepare(`
-      SELECT id, hora_inicio, hora_fin, cliente_nombre 
-      FROM citas 
-      WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
-    `).all(barbero_id, tenantId, fecha);
+    // Cargar citas existentes
+    let citas = [];
+    try {
+      citas = await db.prepare(`
+        SELECT id, hora_inicio, hora_fin, cliente_nombre 
+        FROM citas 
+        WHERE barbero_id = ? AND barberia_id = ? AND fecha = ? AND estado != 'cancelada'
+      `).all(barbero.id, tenantId, fecha);
+    } catch (_) {}
+    if (!citas || citas.length === 0) {
+      citas = (store.citas || []).filter(c => String(c.barberia_id) === String(tenantId) && String(c.barbero_id) === String(barbero.id) && c.fecha === fecha && c.estado !== 'cancelada');
+    }
 
-    const bloqueos = await db.prepare(`
-      SELECT id, hora_inicio, hora_fin, motivo 
-      FROM bloqueos 
-      WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
-    `).all(barbero_id, tenantId, fecha);
+    // Cargar bloqueos de horario o de día completo
+    let bloqueos = [];
+    try {
+      bloqueos = await db.prepare(`
+        SELECT id, hora_inicio, hora_fin, motivo 
+        FROM bloqueos 
+        WHERE (barbero_id = ? OR barbero_id IS NULL) AND barberia_id = ? AND fecha = ?
+      `).all(barbero.id, tenantId, fecha);
+    } catch (_) {}
+    if (!bloqueos || bloqueos.length === 0) {
+      bloqueos = store.obtenerBloqueos(tenantId, fecha, barbero.id);
+    }
+
+    // Verificar si hay bloqueo de día completo (00:00 a 23:59 o similar)
+    const bloqueoDia = bloqueos.find(b => (b.hora_inicio <= '09:00' && b.hora_fin >= '19:00') || (b.hora_inicio === '00:00' && b.hora_fin >= '23:00'));
+    if (bloqueoDia) {
+      return res.json({
+        disponible_dia: false,
+        motivo: `Día bloqueado: ${bloqueoDia.motivo || 'No disponible para reservas'}`,
+        slots: []
+      });
+    }
 
     const inicioMin = timeToMinutes(barbero.horario_inicio || '09:00');
     const finMin = timeToMinutes(barbero.horario_fin || '20:00');
     const step = 30;
+
+    // Control de hora actual si la fecha es hoy
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const esHoy = fecha === hoyStr;
+    const ahora = new Date();
+    // Hora local aproximada
+    const horaActualMin = ahora.getHours() * 60 + ahora.getMinutes();
 
     const slots = [];
     for (let m = inicioMin; m + duracion <= finMin; m += step) {
@@ -1594,6 +1654,9 @@ app.get('/api/disponibilidad', async (req, res) => {
       } else if (conflictoBloqueo) {
         disponible = false;
         razonOcupado = `Bloqueado: ${conflictoBloqueo.motivo}`;
+      } else if (esHoy && m < horaActualMin) {
+        disponible = false;
+        razonOcupado = 'Horario ya transcurrido';
       }
 
       slots.push({
@@ -2098,13 +2161,17 @@ let memoryResenas = [
   }
 ];
 
+// ----------------------------------------------------
+// RESEÑAS DE CLIENTES CON MODERACIÓN Y SUSCRIPCIÓN
+// ----------------------------------------------------
 app.get('/api/resenas', async (req, res) => {
   const tenantId = await getTenantId(req);
+  const todas = req.query.todas === 'true'; // Si viene de panel de admin
   try {
     let sql = `
       SELECT r.* 
       FROM resenas r 
-      WHERE r.barberia_id = ? 
+      WHERE r.barberia_id = ? ${todas ? '' : 'AND r.aprobada = 1'}
       ORDER BY r.id DESC
     `;
     let rows = [];
@@ -2112,53 +2179,89 @@ app.get('/api/resenas', async (req, res) => {
       rows = await db.prepare(sql).all(tenantId);
     } catch (_) {}
 
-    const memRows = memoryResenas.filter(r => r.barberia_id === tenantId);
-    const combinadas = (rows && rows.length > 0) ? rows : memRows;
+    let resenasList = (rows && rows.length > 0) ? rows : store.obtenerResenas(tenantId, todas);
 
-    const promedio = combinadas.length > 0
-      ? (combinadas.reduce((acc, r) => acc + Number(r.calificacion || 5), 0) / combinadas.length).toFixed(1)
+    const publicas = resenasList.filter(r => r.aprobada === 1 || r.aprobada === true);
+    const promedio = publicas.length > 0
+      ? (publicas.reduce((acc, r) => acc + Number(r.calificacion || 5), 0) / publicas.length).toFixed(1)
       : '5.0';
 
     res.json({
-      resenas: combinadas,
-      total: combinadas.length,
-      promedio: Number(promedio)
+      resenas: resenasList,
+      total: publicas.length,
+      promedio: Number(promedio),
+      pendientes_count: resenasList.filter(r => !r.aprobada).length
     });
   } catch (err) {
     console.warn('Error en GET /api/resenas:', err.message);
-    const fall = memoryResenas.filter(r => r.barberia_id === tenantId);
-    res.json({ resenas: fall, total: fall.length, promedio: 4.9 });
+    const fall = store.obtenerResenas(tenantId, todas);
+    res.json({ resenas: fall, total: fall.length, promedio: 4.9, pendientes_count: 0 });
   }
 });
 
 app.post('/api/resenas', async (req, res) => {
   const tenantId = await getTenantId(req);
-  const { cliente_nombre, calificacion, comentario, servicio_nombre } = req.body;
+  const { cliente_nombre, cliente_telefono, cliente_email, calificacion, comentario, servicio_nombre, suscribir_novedades } = req.body;
 
   if (!cliente_nombre || !calificacion || !comentario) {
     return res.status(400).json({ error: 'Nombre, calificación y comentario son obligatorios' });
+  }
+
+  // Guardar suscripción del cliente si proporcionó teléfono
+  if (cliente_telefono) {
+    try {
+      await db.prepare(`
+        INSERT INTO clientes (barberia_id, nombre, telefono, email, notas, total_citas)
+        VALUES (?, ?, ?, ?, 'Suscrito desde Opiniones Web', 0)
+        ON CONFLICT(telefono, barberia_id) DO NOTHING
+      `).run(tenantId, cliente_nombre.trim(), cliente_telefono.trim(), cliente_email || null);
+    } catch (_) {}
   }
 
   const nuevaResena = {
     id: Date.now(),
     barberia_id: tenantId,
     cliente_nombre: cliente_nombre.trim(),
+    cliente_telefono: cliente_telefono ? cliente_telefono.trim() : '',
+    cliente_email: cliente_email ? cliente_email.trim() : '',
     calificacion: Math.min(5, Math.max(1, Number(calificacion) || 5)),
     comentario: comentario.trim(),
     servicio_nombre: servicio_nombre || 'Servicio de Barbería',
     fecha: new Date().toISOString().split('T')[0],
-    aprobada: 1
+    aprobada: 0 // Requiere autorización del dueño
   };
 
   try {
     await db.prepare(`
       INSERT INTO resenas (barberia_id, cliente_nombre, calificacion, comentario, servicio_nombre, fecha, aprobada)
-      VALUES (?, ?, ?, ?, ?, ?, 1)
+      VALUES (?, ?, ?, ?, ?, ?, 0)
     `).run(tenantId, nuevaResena.cliente_nombre, nuevaResena.calificacion, nuevaResena.comentario, nuevaResena.servicio_nombre, nuevaResena.fecha);
   } catch (_) {}
 
-  memoryResenas.unshift(nuevaResena);
-  res.status(201).json({ success: true, resena: nuevaResena });
+  store.agregarResena(nuevaResena);
+  res.status(201).json({ 
+    success: true, 
+    message: 'Reseña enviada con éxito. Será visible tan pronto sea autorizada por el dueño.',
+    resena: nuevaResena 
+  });
+});
+
+app.patch('/api/resenas/:id', async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+  const { aprobada } = req.body;
+
+  const nuevoEstado = Number(aprobada) === 1 ? 1 : 0;
+  try {
+    await db.prepare('UPDATE resenas SET aprobada = ? WHERE id = ? AND barberia_id = ?').run(nuevoEstado, id, tenantId);
+  } catch (_) {}
+
+  const actualizada = store.actualizarResena(id, tenantId, { aprobada: nuevoEstado });
+  res.json({ 
+    success: true, 
+    message: nuevoEstado === 1 ? 'Reseña aprobada y publicada en el inicio' : 'Reseña ocultada',
+    resena: actualizada 
+  });
 });
 
 app.delete('/api/resenas/:id', async (req, res) => {
@@ -2169,16 +2272,12 @@ app.delete('/api/resenas/:id', async (req, res) => {
     await db.prepare('DELETE FROM resenas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
   } catch (_) {}
 
-  const idx = memoryResenas.findIndex(r => r.barberia_id === tenantId && String(r.id) === String(id));
-  if (idx !== -1) {
-    memoryResenas.splice(idx, 1);
-  }
-
-  res.json({ success: true, message: 'Reseña eliminada' });
+  store.eliminarResena(id, tenantId);
+  res.json({ success: true, message: 'Reseña eliminada correctamente' });
 });
 
 // ----------------------------------------------------
-// 7. BLOQUEOS DE HORARIO
+// 7. BLOQUEOS DE HORARIO Y DÍAS COMPLETOS POR BARBERO
 // ----------------------------------------------------
 app.get('/api/bloqueos', async (req, res) => {
   const { fecha, barbero_id } = req.query;
@@ -2202,7 +2301,20 @@ app.get('/api/bloqueos', async (req, res) => {
     }
     sql += ' ORDER BY b.fecha DESC, b.hora_inicio ASC';
 
-    const bloqueos = await db.prepare(sql).all(...params);
+    let bloqueos = [];
+    try {
+      bloqueos = await db.prepare(sql).all(...params);
+    } catch (_) {}
+
+    if (!bloqueos || bloqueos.length === 0) {
+      bloqueos = store.obtenerBloqueos(tenantId, fecha, barbero_id);
+      // Adjuntar nombre de barbero si aplica
+      bloqueos = bloqueos.map(b => {
+        const barbero = store.barberos.find(bar => String(bar.id) === String(b.barbero_id));
+        return { ...b, barbero_nombre: barbero ? barbero.nombre : 'Toda la Barbería' };
+      });
+    }
+
     res.json(bloqueos);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2210,23 +2322,36 @@ app.get('/api/bloqueos', async (req, res) => {
 });
 
 app.post('/api/bloqueos', async (req, res) => {
-  const { barbero_id, fecha, hora_inicio, hora_fin, motivo } = req.body;
+  const { barbero_id, fecha, hora_inicio, hora_fin, motivo, dia_completo } = req.body;
   const tenantId = await getTenantId(req);
 
-  if (!fecha || !hora_inicio || !hora_fin || !motivo) {
-    return res.status(400).json({ error: 'Fecha, hora de inicio, fin y motivo son requeridos' });
+  if (!fecha || !motivo) {
+    return res.status(400).json({ error: 'Fecha y motivo son requeridos' });
   }
+
+  const hInicio = dia_completo ? '00:00' : (hora_inicio || '09:00');
+  const hFin = dia_completo ? '23:59' : (hora_fin || '20:00');
+
+  const nuevoBloqueo = {
+    barberia_id: tenantId,
+    barbero_id: barbero_id ? Number(barbero_id) : null,
+    fecha,
+    hora_inicio: hInicio,
+    hora_fin: hFin,
+    motivo: motivo.trim()
+  };
 
   try {
     const stmt = db.prepare(`
       INSERT INTO bloqueos (barberia_id, barbero_id, fecha, hora_inicio, hora_fin, motivo)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    const result = await stmt.run(tenantId, barbero_id ? Number(barbero_id) : null, fecha, hora_inicio, hora_fin, motivo);
-    res.status(201).json({ id: result.lastInsertRowid, message: 'Horario bloqueado con éxito' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const result = await stmt.run(tenantId, nuevoBloqueo.barbero_id, fecha, hInicio, hFin, motivo);
+    nuevoBloqueo.id = result.lastInsertRowid;
+  } catch (_) {}
+
+  const guardado = store.agregarBloqueo(nuevoBloqueo);
+  res.status(201).json({ id: guardado.id, message: 'Horario bloqueado con éxito', bloqueo: guardado });
 });
 
 app.delete('/api/bloqueos/:id', async (req, res) => {
@@ -2234,10 +2359,9 @@ app.delete('/api/bloqueos/:id', async (req, res) => {
   const tenantId = await getTenantId(req);
   try {
     await db.prepare('DELETE FROM bloqueos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
-    res.json({ success: true, message: 'Bloqueo eliminado' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  } catch (_) {}
+  store.eliminarBloqueo(id, tenantId);
+  res.json({ success: true, message: 'Bloqueo eliminado y horario liberado' });
 });
 
 // ----------------------------------------------------
