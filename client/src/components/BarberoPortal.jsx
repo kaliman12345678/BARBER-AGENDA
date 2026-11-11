@@ -22,7 +22,8 @@ import {
   History,
   AlertCircle,
   Play,
-  RotateCw
+  RotateCw,
+  ArrowLeft
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
@@ -289,6 +290,28 @@ export default function BarberoPortal({ barbero, onLogout }) {
           );
         })}
       </div>
+
+      {/* Botón Atrás / Volver para todos los apartados del barbero */}
+      {tab !== 'citas' && (
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs animate-fadeIn">
+          <button
+            type="button"
+            onClick={() => setTab('citas')}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-800 hover:text-blue-700 text-xs font-black transition-all cursor-pointer border border-slate-200 hover:border-blue-300 shadow-xs active:scale-95"
+            title="Volver a tus citas asignadas"
+          >
+            <ArrowLeft className="w-4 h-4 text-blue-600" />
+            <span>Volver a Mis Citas</span>
+          </button>
+          
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 hidden sm:inline font-medium">Estás en:</span>
+            <span className="px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 font-extrabold border border-blue-200/80 text-xs capitalize">
+              {tab === 'record' ? 'Mi Récord' : tab === 'balance' ? 'Mi Utilidad' : tab === 'portafolio' ? 'Mi Portafolio' : 'Calculadora'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* PESTAÑA 1: MIS CITAS ASIGNADAS (SIN DATOS PRIVADOS CLIENTE) */}

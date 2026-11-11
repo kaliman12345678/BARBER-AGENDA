@@ -47,7 +47,8 @@ import {
   Share2,
   Bell,
   Mail,
-  RotateCw
+  RotateCw,
+  ArrowLeft
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
@@ -993,6 +994,20 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
               <span className="opacity-30">/</span>
               <span className="text-xs opacity-70 font-medium capitalize">{seccionActiva}</span>
             </div>
+
+            {/* Botón Atrás en Header cuando no está en inicio */}
+            {seccionActiva !== 'inicio' && (
+              <button
+                type="button"
+                onClick={() => setSeccionActiva('inicio')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer border border-slate-300 dark:border-slate-700 ml-1"
+                title="Volver a Inicio / Resumen"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="hidden sm:inline">Volver a Inicio</span>
+                <span className="sm:hidden">Atrás</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3">
@@ -1090,6 +1105,28 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
         {/* CONTENIDO PRINCIPAL SCROLLEABLE SEGÚN SECCIÓN ACTIVA */}
         <main className="p-4 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
+
+          {/* Botón Volver / Atrás en todas las secciones para SuperAdmin */}
+          {seccionActiva !== 'inicio' && (
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs animate-fadeIn">
+              <button
+                type="button"
+                onClick={() => setSeccionActiva('inicio')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-950 text-slate-800 hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-300 text-xs font-black transition-all cursor-pointer border border-slate-200 dark:border-slate-700 hover:border-blue-300 shadow-xs active:scale-95"
+                title="Volver a Inicio / Resumen"
+              >
+                <ArrowLeft className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Volver a Inicio (Resumen)</span>
+              </button>
+              
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 hidden sm:inline font-medium">Estás en:</span>
+                <span className="px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold border border-blue-200/80 dark:border-blue-800 text-xs capitalize">
+                  {seccionActiva}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* ======================================================== */}
           {/* SECCIÓN 1: INICIO & RESUMEN EJECUTIVO */}
@@ -1973,8 +2010,17 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <span className="sm:hidden">Dueño</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setModalDetalleOpen(false)}
-                  className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Volver a la lista de barberías"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Volver</span>
+                </button>
+                <button
+                  onClick={() => setModalDetalleOpen(false)}
+                  className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>

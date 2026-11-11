@@ -23,7 +23,8 @@ import {
   Share2,
   Copy,
   Check,
-  RotateCw
+  RotateCw,
+  ArrowLeft
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -133,8 +134,21 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
       {/* Barra superior de estado & Notificaciones en tiempo real */}
       <div className={`border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between shadow-xs transition-colors duration-300 ${temaObj.headerClass}`}>
         
-        {/* Lado izquierdo: Botón Menú Módulos en móvil, Título en escritorio */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        {/* Lado izquierdo: Botón Atrás + Menú en móvil, Título en escritorio */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Botón Atrás en móvil cuando no está en agenda */}
+          {activeTab !== 'agenda' && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('agenda')}
+              className="md:hidden flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer border border-slate-300"
+              title="Volver a Agenda"
+            >
+              <ArrowLeft className="w-4 h-4 text-blue-600" />
+              <span>Atrás</span>
+            </button>
+          )}
+
           {/* Botón Móvil: Menú de Módulos (Ubicado arriba para máxima comodidad) */}
           <button
             type="button"
@@ -372,6 +386,29 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
 
         {/* ÁREA DE CONTENIDO (A LA DERECHA) */}
         <main className="flex-1 min-w-0">
+          {/* Botón Atrás / Volver a Agenda para todos los módulos */}
+          {activeTab !== 'agenda' && (
+            <div className="mb-4 flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-xs animate-fadeIn">
+              <button
+                type="button"
+                onClick={() => setActiveTab('agenda')}
+                className="flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-800 hover:text-blue-700 text-xs font-black transition-all cursor-pointer border border-slate-200 hover:border-blue-300 shadow-xs active:scale-95"
+                title="Volver a la Agenda principal"
+              >
+                <ArrowLeft className="w-4 h-4 text-blue-600" />
+                <span>Volver a Agenda</span>
+              </button>
+              
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 hidden sm:inline font-medium">Estás en:</span>
+                <span className="px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 font-extrabold border border-blue-200/80 flex items-center gap-1.5 text-xs">
+                  <ActiveIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{activeTabObj.label}</span>
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="animate-fadeIn">
             {activeTab === 'agenda' && (
               <AdminAgenda 
