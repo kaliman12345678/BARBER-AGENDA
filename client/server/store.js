@@ -14,6 +14,7 @@ const DEFAULT_BARBERIAS = [
     logo_url: '',
     color_primario: '#2563eb',
     color_secundario: '#1e293b',
+    email: 'admin@thebarberclub.com',
     telefono: '3001234567',
     direccion: 'Calle 100 # 15-20, Bogotá',
     plan: 'vip',
@@ -133,6 +134,7 @@ class StoreManager {
     this.citas = [];
     this.bloqueos = [];
     this.resenas = [...DEFAULT_RESENAS];
+    this.notificaciones_superadmin = [];
     this.cargarDesdeDisco();
   }
 
@@ -159,6 +161,9 @@ class StoreManager {
         if (Array.isArray(parsed.resenas)) {
           this.resenas = parsed.resenas;
         }
+        if (Array.isArray(parsed.notificaciones_superadmin)) {
+          this.notificaciones_superadmin = parsed.notificaciones_superadmin;
+        }
       }
     } catch (err) {
       console.warn('Advertencia cargando store:', err.message);
@@ -174,6 +179,7 @@ class StoreManager {
         citas: this.citas,
         bloqueos: this.bloqueos,
         resenas: this.resenas,
+        notificaciones_superadmin: this.notificaciones_superadmin,
         actualizado: new Date().toISOString()
       };
       fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -331,6 +337,35 @@ class StoreManager {
       const el = this.resenas.splice(idx, 1)[0];
       this.guardarEnDisco();
       return el;
+    }
+    return null;
+  }
+
+  agregarNotificacionSuperAdmin(notif) {
+    const item = {
+      id: Date.now(),
+      fecha: new Date().toISOString(),
+      leida: false,
+      ...notif
+    };
+    this.notificaciones_superadmin.unshift(item);
+    if (this.notificaciones_superadmin.length > 50) {
+      this.notificaciones_superadmin = this.notificaciones_superadmin.slice(0, 50);
+    }
+    this.guardarEnDisco();
+    return item;
+  }
+
+  obtenerNotificacionesSuperAdmin() {
+    return this.notificaciones_superadmin;
+  }
+
+  marcarNotificacionLeida(id) {
+    const notif = this.notificaciones_superadmin.find(n => String(n.id) === String(id));
+    if (notif) {
+      notif.leida = true;
+      this.guardarEnDisco();
+      return notif;
     }
     return null;
   }

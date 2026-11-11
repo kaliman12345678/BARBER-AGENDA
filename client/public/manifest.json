@@ -1,0 +1,27 @@
+{
+  "short_name": "EXAKTA",
+  "name": "EXAKTA - Agenda Inteligente & Gestión",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b1329",
+  "theme_color": "#0b1329",
+  "display": "standalone",
+  "orientation": "portrait"
+}

@@ -200,6 +200,23 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!form.email || !emailRegex.test(form.email.trim())) {
+      setError('Por favor ingresa un correo electrónico válido (ej: nombre@barberia.com)');
+      return;
+    }
+
+    const cleanTel = form.telefono ? form.telefono.replace(/\D/g, '') : '';
+    if (cleanTel && cleanTel.length !== 10) {
+      setError('El número de teléfono debe tener exactamente 10 dígitos numéricos');
+      return;
+    }
+
+    if (!form.password || !form.password.trim()) {
+      setError('La contraseña de acceso asignada es obligatoria');
+      return;
+    }
+
     setGuardando(true);
     setError('');
 
@@ -210,7 +227,12 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          telefono: cleanTel,
+          email: form.email.trim(),
+          password: form.password.trim()
+        })
       });
 
       const data = await res.json();
@@ -561,14 +583,21 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Teléfono / WhatsApp
+                    Teléfono / WhatsApp (10 dígitos)
                   </label>
                   <input
                     type="tel"
-                    placeholder="Ej. 315 222 3344"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="Ej. 3152223344"
                     value={form.telefono}
-                    onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    onChange={(e) => setForm({ ...form, telefono: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onKeyDown={(e) => {
+                      if (!/[0-9]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                   />
                 </div>
 

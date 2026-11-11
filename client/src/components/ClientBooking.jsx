@@ -179,8 +179,14 @@ export default function ClientBooking({ shopConfig }) {
   // Enviar reserva
   async function handleSubmitReserva(e) {
     e.preventDefault();
-    if (!clienteNombre.trim() || !clienteTelefono.trim()) {
+    const telLimpio = clienteTelefono.replace(/\D/g, '');
+    if (!clienteNombre.trim() || !telLimpio) {
       setErrorEnvio('Por favor completa tu nombre y número de WhatsApp');
+      return;
+    }
+
+    if (telLimpio.length !== 10) {
+      setErrorEnvio('El número de teléfono debe contener exactamente 10 dígitos numéricos (ej: 3001234567)');
       return;
     }
 
@@ -195,7 +201,7 @@ export default function ClientBooking({ shopConfig }) {
           barbero_id: barberoSeleccionado.id,
           servicio_id: servicioSeleccionado.id,
           cliente_nombre: clienteNombre.trim(),
-          cliente_telefono: clienteTelefono.trim(),
+          cliente_telefono: telLimpio,
           fecha: fechaSeleccionada,
           hora_inicio: slotSeleccionado.hora_inicio,
           notas: clienteNotas.trim()
@@ -762,21 +768,28 @@ export default function ClientBooking({ shopConfig }) {
 
             <div>
               <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${t.subtitle}`}>
-                Número de WhatsApp / Celular *
+                Número de WhatsApp / Celular (10 dígitos) *
               </label>
               <div className="relative">
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
-                  placeholder="Ej. 312 345 6789"
+                  placeholder="Ej. 3001234567"
                   value={clienteTelefono}
-                  onChange={(e) => setClienteTelefono(e.target.value)}
+                  onChange={(e) => setClienteTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onKeyDown={(e) => {
+                    if (!/[0-9]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
                   className={`w-full rounded-xl pl-11 pr-4 py-3 text-sm font-semibold focus:outline-none transition-colors border ${t.input}`}
                 />
                 <Phone className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 opacity-50" />
               </div>
               <p className={`text-[11px] mt-1 ${t.subtitle}`}>
-                Te enviaremos la confirmación directa a este WhatsApp.
+                Ingresa exactamente tus 10 dígitos numéricos de contacto.
               </p>
             </div>
 

@@ -21,7 +21,8 @@ import {
   ExternalLink,
   History,
   AlertCircle,
-  Play
+  Play,
+  RotateCw
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
@@ -230,13 +231,28 @@ export default function BarberoPortal({ barbero, onLogout }) {
           </div>
         </div>
 
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 rounded-xl text-xs font-bold transition-colors self-start md:self-auto border border-slate-200 hover:border-rose-200"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Cerrar Sesión</span>
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              cargarDatos();
+              window.location.reload();
+            }}
+            title="Actualizar turnos y datos sin cerrar sesión"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200"
+          >
+            <RotateCw className="w-4 h-4 text-blue-600" />
+            <span>Actualizar</span>
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 rounded-xl text-xs font-bold transition-colors border border-slate-200 hover:border-rose-200 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Salir</span>
+          </button>
+        </div>
       </div>
 
       {/* Pestañas de Navegación del Barbero */}

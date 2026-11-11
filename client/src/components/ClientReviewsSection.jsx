@@ -10,7 +10,7 @@ export default function ClientReviewsSection({ shopConfig }) {
 
   const [form, setForm] = useState({
     cliente_nombre: '',
-    cliente_telefono: '',
+    cliente_email: '',
     calificacion: 5,
     comentario: '',
     servicio_nombre: 'Corte de Cabello',
@@ -20,13 +20,13 @@ export default function ClientReviewsSection({ shopConfig }) {
   useEffect(() => {
     cargarResenas();
     // Pre-cargar si el cliente ya ingresó sus datos previamente en este navegador
-    const guardadoTel = localStorage.getItem('cliente_telefono_reservas') || '';
+    const guardadoEmail = localStorage.getItem('cliente_email_reservas') || '';
     const guardadoNombre = localStorage.getItem('cliente_nombre_reservas') || '';
-    if (guardadoNombre || guardadoTel) {
+    if (guardadoNombre || guardadoEmail) {
       setForm(prev => ({
         ...prev,
         cliente_nombre: guardadoNombre,
-        cliente_telefono: guardadoTel
+        cliente_email: guardadoEmail
       }));
     }
   }, []);
@@ -48,21 +48,32 @@ export default function ClientReviewsSection({ shopConfig }) {
 
   async function handleEnviarResena(e) {
     e.preventDefault();
-    if (!form.cliente_nombre.trim() || !form.cliente_telefono.trim() || !form.comentario.trim()) {
-      alert('Por favor ingresa tu nombre, número de WhatsApp para suscribirte y tu comentario');
+    const emailVal = form.cliente_email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!form.cliente_nombre.trim() || !emailVal || !form.comentario.trim()) {
+      alert('Por favor ingresa tu nombre, correo electrónico para suscribirte y tu comentario');
+      return;
+    }
+
+    if (!emailRegex.test(emailVal)) {
+      alert('Por favor ingresa una dirección de correo electrónico con formato real (ej: usuario@correo.com)');
       return;
     }
 
     setEnviando(true);
     try {
-      // Guardar en localStorage para futuras reservas
+      // Guardar en localStorage para futuras visitas
       localStorage.setItem('cliente_nombre_reservas', form.cliente_nombre.trim());
-      localStorage.setItem('cliente_telefono_reservas', form.cliente_telefono.trim());
+      localStorage.setItem('cliente_email_reservas', emailVal);
 
       const res = await fetch('/api/resenas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          cliente_email: emailVal
+        })
       });
       if (res.ok) {
         setEnviadoExito(true);
@@ -262,19 +273,19 @@ export default function ClientReviewsSection({ shopConfig }) {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    WhatsApp / Celular (Requerido para Suscripción) *
+                    Correo Electrónico (Requerido para Suscripción) *
                   </label>
                   <input
-                    type="tel"
+                    type="email"
                     required
-                    placeholder="Ej: 3001234567"
-                    value={form.cliente_telefono}
-                    onChange={(e) => setForm({ ...form, cliente_telefono: e.target.value })}
+                    placeholder="Ej: tu-correo@ejemplo.com"
+                    value={form.cliente_email}
+                    onChange={(e) => setForm({ ...form, cliente_email: e.target.value.trim() })}
                     style={{ color: '#0f172a' }}
                     className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    Te identifica como cliente verificado y suscribe a novedades.
+                    Te suscribe a promociones exclusivas con tu correo electrónico verificado.
                   </span>
                 </div>
 

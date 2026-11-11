@@ -22,7 +22,8 @@ import {
   Star,
   Share2,
   Copy,
-  Check
+  Check,
+  RotateCw
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -161,8 +162,19 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
           </div>
         </div>
 
-        {/* Lado derecho: Link Clientes + Selector de Tema + Notificaciones */}
+        {/* Lado derecho: Actualizar + Link Clientes + Selector de Tema + Notificaciones */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Botón Actualizar Dueño */}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            title="Actualizar datos y recargar cambios"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+          >
+            <RotateCw className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Actualizar</span>
+          </button>
+
           {/* Botón para que el dueño copie su enlace de clientes */}
           <button
             type="button"

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, ShieldAlert, ArrowRight, Smartphone, KeyRound, X, Eye, EyeOff, Delete, Crown, Scissors } from 'lucide-react';
 
 export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
-  const [modo, setModo] = useState('pin'); // 'pin' | 'credenciales'
+  const [modo, setModo] = useState('credenciales'); // 'credenciales' por defecto
   const [pin, setPin] = useState('');
   const [mostrarPin, setMostrarPin] = useState(false);
   const [telefono, setTelefono] = useState('');
@@ -26,7 +26,7 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
       if (res.ok && data.success) {
         onLoginSuccess(data);
       } else {
-        setError(data.message || 'PIN o credenciales incorrectas. Verifica tus datos.');
+        setError(data.message || 'Credenciales o contraseña incorrectas. Verifica tus datos.');
       }
     } catch (err) {
       // Respaldo de emergencia sin red
@@ -53,7 +53,7 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
       ejecutarLogin({ pin: pin.trim() });
     } else {
       if (!telefono.trim() || !password.trim()) {
-        setError('Por favor ingresa tu correo/celular y contraseña.');
+        setError('Por favor ingresa tu correo o número de teléfono y tu contraseña.');
         return;
       }
       ejecutarLogin({ telefono: telefono.trim(), password: password.trim() });
@@ -84,7 +84,7 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
         <button
           onClick={onCancel}
           type="button"
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -101,30 +101,30 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
           Acceso de Operadores
         </h3>
         <p className="text-slate-500 text-xs mt-1 mb-5">
-          Ingresa tu PIN o credenciales autorizadas.
+          Dueños y barberos ingresan con su correo o celular y contraseña asignada.
         </p>
 
-        {/* Pestañas modo PIN / Correo */}
+        {/* Pestañas modo Correo / PIN */}
         <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
           <button
             type="button"
-            onClick={() => { setModo('pin'); setError(''); }}
-            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              modo === 'pin' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>PIN de Acceso</span>
-          </button>
-          <button
-            type="button"
             onClick={() => { setModo('credenciales'); setError(''); }}
-            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               modo === 'credenciales' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Smartphone className="w-3.5 h-3.5" />
-            <span>Correo / Clave</span>
+            <span>Correo / Celular</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setModo('pin'); setError(''); }}
+            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              modo === 'pin' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>PIN Numérico</span>
           </button>
         </div>
 
@@ -203,39 +203,39 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
           ) : (
             <div className="space-y-3 text-left">
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                  Correo o Celular
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Correo o Número de Teléfono
                 </label>
                 <input
                   type="text"
                   autoComplete="username"
                   required
-                  placeholder="ej: admin@barberia.com o 3001234567"
+                  placeholder="ej: correo@barberia.com o 3001234567"
                   value={telefono}
                   onChange={(e) => {
                     setError('');
                     setTelefono(e.target.value);
                   }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                  Contraseña
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Contraseña Asignada
                 </label>
                 <div className="relative">
                   <input
                     type={mostrarPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    placeholder="Escribe tu contraseña aquí"
+                    placeholder="Escribe tu contraseña"
                     value={password}
                     onChange={(e) => {
                       setError('');
                       setPassword(e.target.value);
                     }}
-                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
                   />
                   <button
                     type="button"

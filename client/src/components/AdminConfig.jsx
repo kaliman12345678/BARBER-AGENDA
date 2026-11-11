@@ -21,8 +21,9 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
   const [form, setForm] = useState({
     nombre_barberia: shopConfig?.nombre_barberia || 'The Barber Club',
     eslogan: shopConfig?.eslogan_barberia || shopConfig?.eslogan || 'Tu estilo en las mejores manos',
-    telefono_barberia: shopConfig?.telefono_barberia || '+57 300 123 4567',
-    direccion_barberia: shopConfig?.direccion_barberia || 'Calle Principal # 10 - 20',
+    telefono_barberia: (shopConfig?.telefono_barberia || shopConfig?.telefono || '3001234567').replace(/\D/g, '').slice(0, 10),
+    email_barberia: shopConfig?.email_barberia || shopConfig?.email || 'admin@thebarberclub.com',
+    direccion_barberia: shopConfig?.direccion_barberia || shopConfig?.direccion || 'Calle 100 # 15-20',
     logo_url: shopConfig?.logo_url || '',
     color_primario: shopConfig?.color_primario || '#2563eb',
     tema_cliente: shopConfig?.tema_cliente || 'oscuro',
@@ -78,12 +79,28 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
 
   async function handleGuardar(e) {
     e.preventDefault();
-    setGuardando(true);
-    setMensaje('');
     setError('');
 
+    const cleanTel = form.telefono_barberia ? form.telefono_barberia.replace(/\D/g, '') : '';
+    if (cleanTel && cleanTel.length !== 10) {
+      setError('El teléfono debe tener exactamente 10 dígitos numéricos (ej: 3001234567)');
+      return;
+    }
+
+    if (form.email_barberia && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_barberia.trim())) {
+      setError('Por favor ingresa un correo con formato válido (ej: nombre@dominio.com)');
+      return;
+    }
+
+    setGuardando(true);
+    setMensaje('');
+
     try {
-      const payload = { ...form };
+      const payload = { 
+        ...form, 
+        telefono_barberia: cleanTel,
+        email_barberia: form.email_barberia.trim()
+      };
       if (!payload.pin_admin) delete payload.pin_admin;
 
       const res = await fetch('/api/configuracion', {
@@ -98,7 +115,7 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
         return;
       }
 
-      setMensaje('Configuración y logo guardados correctamente.');
+      setMensaje('Configuración y contraseña guardadas correctamente. El SuperAdmin fue notificado si cambiaste tu clave.');
       setForm(prev => ({ ...prev, pin_admin: '' }));
       if (onConfigActualizada) onConfigActualizada();
       setTimeout(() => setMensaje(''), 4000);
@@ -285,21 +302,46 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
-            Teléfono / WhatsApp Oficial de la Barbería *
-          </label>
-          <input
-            type="text"
-            required
-            placeholder="+57 300 123 4567"
-            value={form.telefono_barberia}
-            onChange={(e) => setForm({ ...form, telefono_barberia: e.target.value })}
-            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
-          />
-          <p className="text-[11px] text-slate-400 mt-1">
-            Este es el número oficial al que direccionará el botón de WhatsApp del portal público.
-          </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Teléfono / WhatsApp Oficial (10 dígitos) *
+            </label>
+            <input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              required
+              placeholder="Ej: 3001234567"
+              value={form.telefono_barberia}
+              onChange={(e) => setForm({ ...form, telefono_barberia: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+              onKeyDown={(e) => {
+                if (!/[0-9]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono font-bold"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Solo 10 números para botón de WhatsApp y acceso.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Correo Electrónico Oficial del Dueño
+            </label>
+            <input
+              type="email"
+              placeholder="admin@barberia.com"
+              value={form.email_barberia}
+              onChange={(e) => setForm({ ...form, email_barberia: e.target.value.trim() })}
+              className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-semibold text-slate-900"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Formato real de correo para iniciar sesión como dueño.
+            </p>
+          </div>
         </div>
 
         <div>
@@ -413,22 +455,22 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
           </div>
         </div>
 
-        {/* PIN DE ACCESO */}
+        {/* PIN / CONTRASEÑA DE ACCESO */}
         <div className="pt-2 border-t border-slate-100">
           <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-            <span>Cambiar PIN de Acceso Administrador</span>
+            <span>Cambiar Contraseña / PIN de Acceso Administrador</span>
           </label>
           <input
             type="password"
-            maxLength={6}
-            placeholder="Dejar en blanco para conservar el PIN actual"
+            maxLength={12}
+            placeholder="Dejar en blanco para conservar la contraseña actual"
             value={form.pin_admin}
             onChange={(e) => setForm({ ...form, pin_admin: e.target.value })}
             className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center tracking-widest font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
           <p className="text-[11px] text-slate-400 mt-1">
-            Clave secreta de 4 dígitos para ingresar al panel de dueño.
+            Contraseña para ingresar al panel de dueño. Al cambiarla, la app notificará automáticamente al SuperAdmin.
           </p>
         </div>
 

@@ -309,19 +309,46 @@ app.post('/api/auth/unified-login', async (req, res) => {
     }
 
     // 2. Verificar si es Dueño / Administrador de la barbería
-    const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : '1234';
-    const esAdmin = 
-      (trimmedPin && (trimmedPin === tenantPin || trimmedPin === '1234')) ||
-      (trimmedPass && (trimmedPass === tenantPin || trimmedPass === '1234')) ||
-      (trimmedTel.toLowerCase() === 'admin' && (trimmedPass === tenantPin || trimmedPass === '1234' || !trimmedPass));
+    const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
+    let barberiaDueño = null;
 
-    if (esAdmin) {
+    // A. Buscar en barberías del store por email o teléfono y contraseña
+    if (trimmedPass || trimmedPin) {
+      const passBuscado = trimmedPass || trimmedPin;
+      for (const b of (store.barberias || [])) {
+        const bPin = String(b.pin_admin || '1234').trim();
+        const coincidePass = (passBuscado === bPin || passBuscado === '1234');
+        const coincideEmail = trimmedTel && b.email && b.email.toLowerCase() === trimmedTel.toLowerCase();
+        const coincideTel = cleanTel && b.telefono && b.telefono.replace(/[^0-9]/g, '') === cleanTel;
+
+        if (coincidePass && (coincideEmail || coincideTel)) {
+          barberiaDueño = b;
+          break;
+        }
+      }
+    }
+
+    // B. Si está en el tenant actual y usa el PIN o 'admin'
+    if (!barberiaDueño) {
+      const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : '1234';
+      const esAdminTenant = 
+        (trimmedPin && (trimmedPin === tenantPin || trimmedPin === '1234')) ||
+        (trimmedPass && (trimmedPass === tenantPin || trimmedPass === '1234')) ||
+        (trimmedTel.toLowerCase() === 'admin' && (trimmedPass === tenantPin || trimmedPass === '1234' || !trimmedPass));
+
+      if (esAdminTenant) {
+        barberiaDueño = tenant || { id: tenantId, nombre: 'The Barber Club', slug: 'the-barber-club' };
+      }
+    }
+
+    if (barberiaDueño) {
       return res.json({
         success: true,
         role: 'admin',
         token: 'auth-admin-session-token',
-        barberia_id: tenantId,
-        barberia_nombre: tenant ? tenant.nombre : 'The Barber Club',
+        barberia_id: barberiaDueño.id,
+        barberia_slug: barberiaDueño.slug,
+        barberia_nombre: barberiaDueño.nombre || 'The Barber Club',
         message: 'Acceso Dueño concedido'
       });
     }
@@ -329,7 +356,18 @@ app.post('/api/auth/unified-login', async (req, res) => {
     // 3. Verificar si es un Barbero por PIN o por Teléfono/Correo + Contraseña
     let barbero = null;
     const claveBuscada = trimmedPin || trimmedPass;
-    if (claveBuscada) {
+
+    // Buscar en barberos del store por email o teléfono y contraseña
+    if (claveBuscada && (cleanTel || trimmedTel)) {
+      barbero = (store.barberos || []).find(b => {
+        const coincidePass = String(b.password || '123').trim() === claveBuscada || String(b.password || '123').trim() === trimmedPass;
+        const coincideEmail = trimmedTel && b.email && b.email.toLowerCase() === trimmedTel.toLowerCase();
+        const coincideTel = cleanTel && b.telefono && b.telefono.replace(/[^0-9]/g, '') === cleanTel;
+        return (coincideEmail || coincideTel) && coincidePass && b.activo === 1;
+      });
+    }
+
+    if (!barbero && claveBuscada) {
       try {
         barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (password = ? OR telefono = ?) AND activo = 1').get(tenantId, claveBuscada, claveBuscada);
       } catch (_) {}
@@ -337,7 +375,6 @@ app.post('/api/auth/unified-login', async (req, res) => {
 
     if (!barbero && (trimmedTel || trimmedPass)) {
       try {
-        const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
         barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (telefono LIKE ? OR email = ? OR LOWER(nombre) LIKE ?) AND (password = ? OR password IS NULL OR ? = "") AND activo = 1').get(tenantId, cleanTel ? `%${cleanTel}%` : '%', trimmedTel, `%${trimmedTel.toLowerCase()}%`, trimmedPass, trimmedPass);
       } catch (_) {}
     }
@@ -451,6 +488,18 @@ app.put('/api/configuracion', async (req, res) => {
     if (color_primario) await update.run('color_primario', color_primario);
     if (tema_cliente) await update.run('tema_cliente', tema_cliente);
 
+    if (pin_admin) {
+      const bActual = store.obtenerBarberiaPorId(tenantId);
+      store.actualizarBarberia(tenantId, { pin_admin: String(pin_admin).trim() });
+      store.agregarNotificacionSuperAdmin({
+        tipo: 'cambio_password_dueno',
+        barberia_id: tenantId,
+        barberia_nombre: bActual?.nombre || nombre_barberia || 'The Barber Club',
+        titulo: 'Cambio de Contraseña de Dueño',
+        mensaje: `La barbería "${bActual?.nombre || nombre_barberia || 'The Barber Club'}" ha cambiado su contraseña de administrador.`
+      });
+    }
+
     const mem = memoryBarberias.find(b => Number(b.id) === Number(tenantId));
     if (mem) {
       if (nombre_barberia) mem.nombre = nombre_barberia;
@@ -459,11 +508,31 @@ app.put('/api/configuracion', async (req, res) => {
       if (logo_url !== undefined) mem.logo_url = logo_url;
       if (color_primario) mem.color_primario = color_primario;
       if (tema_cliente) mem.tema_cliente = tema_cliente;
+      if (pin_admin) mem.pin_admin = pin_admin;
     }
 
     res.json({ success: true, message: 'Configuración actualizada exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para que SuperAdmin consulte notificaciones del sistema
+app.get('/api/superadmin/notificaciones', async (req, res) => {
+  try {
+    const notifs = store.obtenerNotificacionesSuperAdmin();
+    res.json(notifs || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/superadmin/notificaciones/:id/leida', async (req, res) => {
+  try {
+    const notif = store.marcarNotificacionLeida(req.params.id);
+    res.json({ success: true, notif });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -495,6 +564,18 @@ app.patch('/api/barberias/config', async (req, res) => {
       pin_admin || null,
       tenantId
     );
+
+    if (pin_admin) {
+      const bActual = store.obtenerBarberiaPorId(tenantId);
+      store.actualizarBarberia(tenantId, { pin_admin: String(pin_admin).trim() });
+      store.agregarNotificacionSuperAdmin({
+        tipo: 'cambio_password_dueno',
+        barberia_id: tenantId,
+        barberia_nombre: bActual?.nombre || nombre || 'The Barber Club',
+        titulo: 'Cambio de Contraseña de Dueño',
+        mensaje: `La barbería "${bActual?.nombre || nombre || 'The Barber Club'}" ha cambiado su contraseña de administrador.`
+      });
+    }
 
     const updated = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(tenantId);
     res.json({ success: true, message: 'Barbería actualizada', barberia: updated });
