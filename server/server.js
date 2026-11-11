@@ -50,8 +50,8 @@ function checkLoginRateLimit(req, res, next) {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
   const windowMs = 5 * 60 * 1000; // 5 minutos
-  const maxAttempts = 10;
-  const blockDurationMs = 15 * 60 * 1000; // 15 minutos
+  const maxAttempts = 4; // Máximo 4 intentos fallidos permitidos
+  const blockDurationMs = 15 * 60 * 1000; // 15 minutos de bloqueo
 
   let record = loginAttemptsMap.get(ip);
   if (!record) {
@@ -63,7 +63,7 @@ function checkLoginRateLimit(req, res, next) {
     const minutosRestantes = Math.ceil((record.blockedUntil - now) / 60000);
     return res.status(429).json({
       success: false,
-      message: `Demasiados intentos fallidos. Por seguridad, el acceso está bloqueado temporalmente por ${minutosRestantes} minuto(s).`
+      message: `Demasiados intentos fallidos (máximo 4 permitidos). Por seguridad, el acceso está bloqueado temporalmente por ${minutosRestantes} minuto(s).`
     });
   }
 
@@ -76,8 +76,9 @@ function checkLoginRateLimit(req, res, next) {
   req._recordFailedLogin = () => {
     record.attempts += 1;
     if (record.attempts >= maxAttempts) {
-      record.blockedUntil = now + blockDurationMs;
+      record.blockedUntil = Date.now() + blockDurationMs;
     }
+    return Math.max(0, maxAttempts - record.attempts);
   };
 
   req._resetLoginAttempts = () => {
@@ -529,18 +530,29 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
       });
     }
 
-    if (req._recordFailedLogin) req._recordFailedLogin();
-    return res.status(401).json({
+    const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+    const msg = restantes !== null && restantes > 0
+      ? `Credenciales o contraseña incorrectas. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+      : (restantes === 0
+        ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+        : 'Credenciales o contraseña incorrectas. Verifica tus datos de acceso.');
+
+    return res.status(restantes === 0 ? 429 : 401).json({
       success: false,
-      message: 'Credenciales o contraseña incorrectas. Verifica tus datos de acceso.'
+      message: msg
     });
   } catch (error) {
     if ((cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin') && (trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS)) {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, role: 'superadmin', token: generateSessionToken('exa_sup') });
     }
-    if (req._recordFailedLogin) req._recordFailedLogin();
-    return res.status(401).json({ success: false, message: 'Credenciales o contraseña incorrecta.' });
+    const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+    const msg = restantes !== null && restantes > 0
+      ? `Credenciales o contraseña incorrectas. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+      : (restantes === 0
+        ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+        : 'Credenciales o contraseña incorrecta.');
+    return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
   }
 });
 
@@ -567,12 +579,22 @@ app.post('/api/auth/verify-pin', checkLoginRateLimit, async (req, res) => {
         is_superadmin: inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS
       });
     } else {
-      if (req._recordFailedLogin) req._recordFailedLogin();
-      return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
+      const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+      const msg = restantes !== null && restantes > 0
+        ? `Contraseña o PIN incorrecto. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+        : (restantes === 0
+          ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+          : 'Contraseña o PIN incorrecto');
+      return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
     }
   } catch (error) {
-    if (req._recordFailedLogin) req._recordFailedLogin();
-    return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
+    const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+    const msg = restantes !== null && restantes > 0
+      ? `Contraseña o PIN incorrecto. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+      : (restantes === 0
+        ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+        : 'Contraseña o PIN incorrecto');
+    return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
   }
 });
 
@@ -725,8 +747,13 @@ app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
 
   const isAuthorized = (cleanTel === '3114220554' || inputTel.toLowerCase() === 'superadmin' || inputTel.toLowerCase() === 'admin@exakta.online');
   if (!isAuthorized) {
-    if (req._recordFailedLogin) req._recordFailedLogin();
-    return res.status(401).json({ success: false, message: 'Teléfono o usuario no autorizado para SuperAdmin' });
+    const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+    const msg = restantes !== null && restantes > 0
+      ? `Teléfono o usuario no autorizado. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+      : (restantes === 0
+        ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+        : 'Teléfono o usuario no autorizado para SuperAdmin');
+    return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
   }
 
   const defaultMaster = DEFAULT_SUPERADMIN_PASS;
@@ -741,16 +768,26 @@ app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, token: generateSessionToken('exa_sup') });
     } else {
-      if (req._recordFailedLogin) req._recordFailedLogin();
-      return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
+      const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+      const msg = restantes !== null && restantes > 0
+        ? `Contraseña de SuperAdmin incorrecta. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+        : (restantes === 0
+          ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+          : 'Contraseña de SuperAdmin incorrecta');
+      return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
     }
   } catch (error) {
     if (inputPin === defaultMaster) {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, token: generateSessionToken('exa_sup') });
     }
-    if (req._recordFailedLogin) req._recordFailedLogin();
-    return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
+    const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+    const msg = restantes !== null && restantes > 0
+      ? `Contraseña de SuperAdmin incorrecta. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+      : (restantes === 0
+        ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+        : 'Contraseña de SuperAdmin incorrecta');
+    return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
   }
 });
 
@@ -1483,8 +1520,13 @@ app.post('/api/barberos/login', checkLoginRateLimit, async (req, res) => {
     }
 
     if (!barbero) {
-      if (req._recordFailedLogin) req._recordFailedLogin();
-      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
+      const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
+      const msg = restantes !== null && restantes > 0
+        ? `Credenciales inválidas. Te quedan ${restantes} intento(s) antes del bloqueo de seguridad.`
+        : (restantes === 0
+          ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
+          : 'Credenciales inválidas. Verifica tu correo y contraseña.');
+      return res.status(restantes === 0 ? 429 : 401).json({ error: msg });
     }
 
     if (barbero.activo === 0) {
