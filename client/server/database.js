@@ -16,8 +16,8 @@ if (effectiveDbUrl) {
   const pool = new Pool({
     connectionString: effectiveDbUrl,
     ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 2500,
-    statement_timeout: 3000
+    connectionTimeoutMillis: 10000,
+    statement_timeout: 10000
   });
 
   dbAdapter = {

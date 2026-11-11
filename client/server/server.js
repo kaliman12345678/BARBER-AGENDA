@@ -437,12 +437,13 @@ app.get('/api/configuracion', async (req, res) => {
 });
 
 app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
-  const { pin, telefono, password } = req.body;
+  const { pin, telefono, email, identificador, password } = req.body;
+  const rawId = identificador || email || telefono || '';
   const tenant = await getTenant(req);
   const tenantId = tenant ? tenant.id : 1;
   const trimmedPin = pin ? String(pin).trim() : '';
   const trimmedPass = password ? String(password).trim() : '';
-  const trimmedTel = telefono ? String(telefono).trim() : '';
+  const trimmedTel = String(rawId).trim();
   const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
 
   try {
@@ -1186,14 +1187,17 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
     try {
       const stmt = db.prepare(`
         INSERT INTO barberias (
-          slug, nombre, eslogan, logo_url, color_primario, color_secundario,
-          telefono, direccion, plan, modulos_activos, pin_admin, activo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+          id, slug, nombre, eslogan, logo_url, color_primario, color_secundario,
+          telefono, direccion, plan, modulos_activos, pin_admin, activo, email, precio_mensual_cop
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `);
 
       const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Admin');
+      const emailFinal = email && email.trim() ? email.trim().toLowerCase() : `${finalSlug}@barberia.com`;
+      const precioMensualFinal = Number(precio_mensual_cop) || (planElegido === 'basico' ? 70000 : planElegido === 'pro' ? 120000 : 180000);
 
       const result = await stmt.run(
+        nuevaId,
         finalSlug,
         nombre.trim(),
         eslogan || 'Tu estilo en las mejores manos',
@@ -1204,7 +1208,9 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
         direccion || '',
         planElegido,
         modulosFinales,
-        pinFinal
+        pinFinal,
+        emailFinal,
+        precioMensualFinal
       );
       if (result && result.lastInsertRowid) {
         nuevaId = result.lastInsertRowid;
@@ -1294,7 +1300,7 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
 
 app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
-  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop } = req.body;
+  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop, email } = req.body;
 
   if (pin_admin !== undefined && String(pin_admin).trim() !== '') {
     if (!isAlphanumericPass(pin_admin)) {
@@ -1333,7 +1339,9 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
             plan = COALESCE(?, plan),
             modulos_activos = COALESCE(?, modulos_activos),
             pin_admin = COALESCE(?, pin_admin),
-            activo = COALESCE(?, activo)
+            activo = COALESCE(?, activo),
+            email = COALESCE(?, email),
+            precio_mensual_cop = COALESCE(?, precio_mensual_cop)
         WHERE id = ?
       `);
 
@@ -1350,6 +1358,8 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
         modulosStr,
         pin_admin !== undefined ? pin_admin : null,
         activo !== undefined ? (activo ? 1 : 0) : null,
+        email !== undefined ? email.trim().toLowerCase() : null,
+        precio_mensual_cop !== undefined ? Number(precio_mensual_cop) : null,
         id
       );
     } catch (e) {
