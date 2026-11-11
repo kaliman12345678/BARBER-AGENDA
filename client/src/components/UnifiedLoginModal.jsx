@@ -76,11 +76,6 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
     setPin('');
   }
 
-  function handleQuickLogin(pinCode) {
-    setPin(pinCode);
-    ejecutarLogin({ pin: pinCode });
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 max-w-sm w-full text-center shadow-2xl relative animate-slideUp my-auto">
@@ -103,31 +98,11 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
         </div>
 
         <h3 className="text-lg font-black text-slate-900 leading-tight">
-          Iniciar Sesión
+          Acceso de Operadores
         </h3>
-        <p className="text-slate-500 text-xs mt-1 mb-4">
-          Acceso para dueños de local, colaboradores y administración.
+        <p className="text-slate-500 text-xs mt-1 mb-5">
+          Ingresa tu PIN o credenciales autorizadas.
         </p>
-
-        {/* Atajos Rápidos */}
-        <div className="flex gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => handleQuickLogin('1234')}
-            className="flex-1 py-1.5 px-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] font-bold text-blue-700 flex items-center justify-center gap-1 transition-all"
-          >
-            <Scissors className="w-3.5 h-3.5 text-blue-600" />
-            <span>Dueño: 1234</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleQuickLogin('9999')}
-            className="flex-1 py-1.5 px-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-[11px] font-bold text-purple-700 flex items-center justify-center gap-1 transition-all"
-          >
-            <Crown className="w-3.5 h-3.5 text-purple-600" />
-            <span>SuperAdmin: 9999</span>
-          </button>
-        </div>
 
         {/* Pestañas modo PIN / Correo */}
         <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">

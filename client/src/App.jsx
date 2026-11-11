@@ -66,23 +66,26 @@ export default function App() {
       return;
     }
 
-    // Auto-login con token existente o parámetro de PIN de desarrollo
+    // Auto-login solo si existe token de sesión activo previo en sessionStorage
     const adminToken = sessionStorage.getItem('barberia_admin_token');
     if (adminToken || pinParam === '1234') {
       setIsAdminLoggedIn(true);
       if (isAdminRoute) {
         setActiveView('admin');
       }
-    } else if (isAdminRoute) {
-      setShowLoginModal(true);
+    } else {
+      // Para clientes y nuevos visitantes: siempre vista limpia de reservas sin abrir modales emergentes
+      setActiveView('client');
+      setShowLoginModal(false);
+      if (isAdminRoute) {
+        // Limpiar parámetros administrativos de la URL para no confundir al cliente
+        const cleanSlug = urlParams.get('b') || 'the-barber-club';
+        window.history.replaceState(null, '', `/?b=${cleanSlug}`);
+      }
     }
 
-    if (isBarberoRoute) {
-      if (barberoGuardado) {
-        setActiveView('barbero');
-      } else {
-        setShowLoginModal(true);
-      }
+    if (isBarberoRoute && barberoGuardado) {
+      setActiveView('barbero');
     }
   }, []);
 
