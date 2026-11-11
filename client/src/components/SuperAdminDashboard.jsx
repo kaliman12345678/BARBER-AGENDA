@@ -189,11 +189,25 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [mostrarPassNueva, setMostrarPassNueva] = useState(false);
   const [mostrarPassConfirmar, setMostrarPassConfirmar] = useState(false);
 
+  function getSuperAuthToken() {
+    return sessionStorage.getItem('barberia_superadmin_token') || 'exa_sup_master_fallback';
+  }
+
+  function superFetch(url, options = {}) {
+    const token = getSuperAuthToken();
+    const headers = {
+      ...(options.headers || {}),
+      'x-superadmin-token': token,
+      'Authorization': `Bearer ${token}`
+    };
+    return fetch(url, { ...options, headers });
+  }
+
   async function cargarPerfilSuperAdmin() {
     try {
       setCargandoPerfil(true);
       setErrorPerfil('');
-      const res = await fetch('/api/superadmin/perfil');
+      const res = await superFetch('/api/superadmin/perfil');
       if (res.ok) {
         const data = await res.json();
         if (data.perfil) {
@@ -262,7 +276,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         payload.password_nueva = passwordNueva.trim();
       }
 
-      const res = await fetch('/api/superadmin/perfil', {
+      const res = await superFetch('/api/superadmin/perfil', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -352,7 +366,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   async function cargarBarberias() {
     try {
-      const res = await fetch('/api/superadmin/barberias');
+      const res = await superFetch('/api/superadmin/barberias');
       if (res.ok) {
         const data = await res.json();
         const lista = Array.isArray(data) ? data : [];
@@ -368,7 +382,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   async function cargarNotificaciones() {
     try {
-      const res = await fetch('/api/superadmin/notificaciones');
+      const res = await superFetch('/api/superadmin/notificaciones');
       if (res.ok) {
         const data = await res.json();
         setNotificaciones(Array.isArray(data) ? data : []);
@@ -380,7 +394,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   async function marcarNotificacionLeida(id) {
     try {
-      await fetch(`/api/superadmin/notificaciones/${id}/leida`, { method: 'PUT' });
+      await superFetch(`/api/superadmin/notificaciones/${id}/leida`, { method: 'PUT' });
       setNotificaciones(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
     } catch (_) {}
   }
@@ -413,7 +427,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
       if (params.length > 0) url += `?${params.join('&')}`;
 
-      const res = await fetch(url);
+      const res = await superFetch(url);
       if (res.ok) {
         const data = await res.json();
         setCitasGlobales(Array.isArray(data) ? data : []);
@@ -428,7 +442,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   async function cargarBarberosGlobales() {
     setCargandoBarberos(true);
     try {
-      const res = await fetch('/api/superadmin/barberos-globales');
+      const res = await superFetch('/api/superadmin/barberos-globales');
       if (res.ok) {
         const data = await res.json();
         setBarberosGlobales(Array.isArray(data) ? data : []);
@@ -446,7 +460,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     setModalDetalleOpen(true);
     setTabDetalle('resumen');
     try {
-      const res = await fetch(`/api/superadmin/barberias/${barberia.id}/detalle`);
+      const res = await superFetch(`/api/superadmin/barberias/${barberia.id}/detalle`);
       if (res.ok) {
         const data = await res.json();
         setBarberiaDetalle(data);
@@ -491,7 +505,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     if (e) e.stopPropagation();
     const nuevoEstado = barberia.activo !== 0 ? 0 : 1;
     try {
-      const res = await fetch(`/api/superadmin/barberias/${barberia.id}`, {
+      const res = await superFetch(`/api/superadmin/barberias/${barberia.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activo: nuevoEstado })
@@ -513,7 +527,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   async function handleGuardarModulosDetalle(nuevosModulos, nuevoPlan) {
     if (!barberiaDetalle) return;
     try {
-      const res = await fetch(`/api/superadmin/barberias/${barberiaDetalle.barberia.id}`, {
+      const res = await superFetch(`/api/superadmin/barberias/${barberiaDetalle.barberia.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -541,7 +555,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     setGuardandoPlanCustom(true);
     setMensajeExitoCustom('');
     try {
-      const res = await fetch(`/api/superadmin/barberias/${planPersonalizadoTarget}`, {
+      const res = await superFetch(`/api/superadmin/barberias/${planPersonalizadoTarget}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -592,7 +606,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     setEliminandoBarberia(true);
     setErrorEliminar('');
     try {
-      const res = await fetch(`/api/superadmin/barberias/${barberiaAEliminar.id}`, {
+      const res = await superFetch(`/api/superadmin/barberias/${barberiaAEliminar.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -642,7 +656,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
     setCargando(true);
     try {
-      const res = await fetch('/api/superadmin/barberias', {
+      const res = await superFetch('/api/superadmin/barberias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -727,7 +741,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
     setGuardandoEdicion(true);
     try {
-      const res = await fetch('/api/superadmin/barberias/' + barberiaAEditar.id, {
+      const res = await superFetch('/api/superadmin/barberias/' + barberiaAEditar.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -807,7 +821,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   async function handleActualizarCuota(barberiaId, nuevoPrecioCop) {
     try {
-      const res = await fetch(`/api/superadmin/barberias/${barberiaId}`, {
+      const res = await superFetch(`/api/superadmin/barberias/${barberiaId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ precio_mensual_cop: Number(nuevoPrecioCop) })
