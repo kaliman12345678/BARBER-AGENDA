@@ -141,5 +141,12 @@
       "aprobada": 1
     }
   ],
-  "actualizado": "2026-11-11T15:57:32.453Z"
+  "notificaciones_superadmin": [],
+  "configuracion": {
+    "superadmin_telefono": "3114220554",
+    "superadmin_nombre": "SuperAdmin EXAKTA Master",
+    "superadmin_email": "admin@exakta.online",
+    "pin_superadmin": "Exakta#2026Master!"
+  },
+  "actualizado": "2026-11-11T21:53:35.176Z"
 }

@@ -6,11 +6,33 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const db = require('./database');
+const store = require('./store');
 
 const app = express();
 const PORT = process.env.PORT || 4001;
 
 const DEFAULT_SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || process.env.SUPERADMIN_PIN || 'Exakta#2026Master!';
+
+async function getSuperAdminConfig() {
+  let pin = store.obtenerConfiguracion('pin_superadmin', DEFAULT_SUPERADMIN_PASS);
+  let tel = store.obtenerConfiguracion('superadmin_telefono', '3114220554');
+  let nombre = store.obtenerConfiguracion('superadmin_nombre', 'SuperAdmin EXAKTA');
+  let email = store.obtenerConfiguracion('superadmin_email', 'admin@exakta.online');
+
+  try {
+    const rows = await db.prepare("SELECT clave, valor FROM configuracion WHERE clave IN ('pin_superadmin', 'superadmin_telefono', 'superadmin_nombre', 'superadmin_email')").all();
+    if (rows && rows.length > 0) {
+      for (const r of rows) {
+        if (r.clave === 'pin_superadmin' && r.valor) pin = String(r.valor).trim();
+        if (r.clave === 'superadmin_telefono' && r.valor) tel = String(r.valor).trim();
+        if (r.clave === 'superadmin_nombre' && r.valor) nombre = String(r.valor).trim();
+        if (r.clave === 'superadmin_email' && r.valor) email = String(r.valor).trim();
+      }
+    }
+  } catch (_) {}
+
+  return { pin, tel, nombre, email };
+}
 
 function generateSessionToken(prefix = 'exa') {
   return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
@@ -283,7 +305,6 @@ function getDefaultModulesForPlan(plan) {
   }
 }
 
-const store = require('./store');
 const memoryBarberias = store.barberias;
 
 async function getTenant(req) {
@@ -420,16 +441,14 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
   const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
 
   try {
-    // 1. Verificar si es SuperAdmin (Requiere estrictamente teléfono 3114220554 y contraseña maestra)
-    let superPin = DEFAULT_SUPERADMIN_PASS;
-    try {
-      const superRow = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
-      if (superRow && superRow.valor) superPin = String(superRow.valor).trim();
-    } catch (_) {}
+    // 1. Verificar si es SuperAdmin (Requiere teléfono configurado y contraseña maestra)
+    const superConfig = await getSuperAdminConfig();
+    const superTelClean = (superConfig.tel || '3114220554').replace(/\D/g, '');
+    const superEmailClean = (superConfig.email || 'admin@exakta.online').trim().toLowerCase();
 
     const esSuperAdmin = 
-      (cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin' || trimmedTel.toLowerCase() === 'admin@exakta.online') &&
-      (trimmedPass === superPin || trimmedPin === superPin || trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS);
+      (cleanTel === superTelClean || cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin' || trimmedTel.toLowerCase() === superEmailClean || trimmedTel.toLowerCase() === 'admin@exakta.online') &&
+      (trimmedPass === superConfig.pin || trimmedPin === superConfig.pin || trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS);
 
     if (esSuperAdmin) {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
@@ -745,7 +764,18 @@ app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
   const inputPin = String(pin || password || '').trim();
   const cleanTel = inputTel.replace(/\D/g, '');
 
-  const isAuthorized = (cleanTel === '3114220554' || inputTel.toLowerCase() === 'superadmin' || inputTel.toLowerCase() === 'admin@exakta.online');
+  const superConfig = await getSuperAdminConfig();
+  const superTelClean = (superConfig.tel || '3114220554').replace(/\D/g, '');
+  const superEmailClean = (superConfig.email || 'admin@exakta.online').trim().toLowerCase();
+
+  const isAuthorized = (
+    cleanTel === superTelClean || 
+    cleanTel === '3114220554' || 
+    inputTel.toLowerCase() === 'superadmin' || 
+    inputTel.toLowerCase() === superEmailClean || 
+    inputTel.toLowerCase() === 'admin@exakta.online'
+  );
+
   if (!isAuthorized) {
     const restantes = req._recordFailedLogin ? req._recordFailedLogin() : null;
     const msg = restantes !== null && restantes > 0
@@ -758,11 +788,7 @@ app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
 
   const defaultMaster = DEFAULT_SUPERADMIN_PASS;
   try {
-    let masterPin = defaultMaster;
-    try {
-      const row = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
-      if (row && row.valor) masterPin = row.valor;
-    } catch (e) {}
+    const masterPin = superConfig.pin || defaultMaster;
 
     if (inputPin === String(masterPin).trim() || inputPin === defaultMaster) {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
@@ -788,6 +814,100 @@ app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
         ? `Has superado los 4 intentos fallidos permitidos. Por seguridad, el acceso ha sido bloqueado temporalmente por 15 minutos.`
         : 'Contraseña de SuperAdmin incorrecta');
     return res.status(restantes === 0 ? 429 : 401).json({ success: false, message: msg });
+  }
+});
+
+// Endpoint para consultar datos de perfil del SuperAdmin
+app.get('/api/superadmin/perfil', requireSuperAdmin, async (req, res) => {
+  try {
+    const cfg = await getSuperAdminConfig();
+    res.json({
+      success: true,
+      perfil: {
+        nombre: cfg.nombre || 'SuperAdmin EXAKTA',
+        telefono: cfg.tel || '3114220554',
+        email: cfg.email || 'admin@exakta.online'
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint para actualizar perfil y contraseña del SuperAdmin
+app.put('/api/superadmin/perfil', requireSuperAdmin, async (req, res) => {
+  const { nombre, telefono, email, password_actual, password_nueva } = req.body;
+  try {
+    const cfg = await getSuperAdminConfig();
+
+    // 1. Si desea cambiar la contraseña
+    if (password_nueva !== undefined && String(password_nueva).trim() !== '') {
+      const passNuevaTrim = String(password_nueva).trim();
+      const passActualTrim = String(password_actual || '').trim();
+
+      if (!passActualTrim) {
+        return res.status(400).json({ error: 'Debes ingresar tu contraseña actual para autorizar el cambio.' });
+      }
+
+      if (passActualTrim !== cfg.pin && passActualTrim !== DEFAULT_SUPERADMIN_PASS) {
+        return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
+      }
+
+      if (!isAlphanumericPass(passNuevaTrim)) {
+        return res.status(400).json({ error: 'La nueva contraseña debe ser alfanumérica (contener letras y números, mínimo 6 caracteres).' });
+      }
+
+      try {
+        await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('pin_superadmin', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(passNuevaTrim);
+      } catch (_) {}
+      store.guardarConfiguracion('pin_superadmin', passNuevaTrim);
+    }
+
+    // 2. Si desea cambiar el teléfono
+    if (telefono !== undefined && String(telefono).trim() !== '') {
+      const clean = String(telefono).replace(/\D/g, '');
+      if (clean.length !== 10) {
+        return res.status(400).json({ error: 'El número de teléfono debe tener exactamente 10 dígitos numéricos.' });
+      }
+      try {
+        await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('superadmin_telefono', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(clean);
+      } catch (_) {}
+      store.guardarConfiguracion('superadmin_telefono', clean);
+    }
+
+    // 3. Si desea cambiar el nombre
+    if (nombre !== undefined && String(nombre).trim() !== '') {
+      const nomTrim = String(nombre).trim();
+      try {
+        await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('superadmin_nombre', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(nomTrim);
+      } catch (_) {}
+      store.guardarConfiguracion('superadmin_nombre', nomTrim);
+    }
+
+    // 4. Si desea cambiar el correo
+    if (email !== undefined && String(email).trim() !== '') {
+      const emailTrim = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+        return res.status(400).json({ error: 'Formato de correo electrónico inválido.' });
+      }
+      try {
+        await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('superadmin_email', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(emailTrim);
+      } catch (_) {}
+      store.guardarConfiguracion('superadmin_email', emailTrim);
+    }
+
+    const updatedCfg = await getSuperAdminConfig();
+    res.json({
+      success: true,
+      message: 'Perfil y credenciales actualizados exitosamente.',
+      perfil: {
+        nombre: updatedCfg.nombre,
+        telefono: updatedCfg.tel,
+        email: updatedCfg.email
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

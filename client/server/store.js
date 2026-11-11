@@ -135,6 +135,7 @@ class StoreManager {
     this.bloqueos = [];
     this.resenas = [...DEFAULT_RESENAS];
     this.notificaciones_superadmin = [];
+    this.configuracion = {};
     this.cargarDesdeDisco();
   }
 
@@ -164,6 +165,9 @@ class StoreManager {
         if (Array.isArray(parsed.notificaciones_superadmin)) {
           this.notificaciones_superadmin = parsed.notificaciones_superadmin;
         }
+        if (parsed.configuracion && typeof parsed.configuracion === 'object') {
+          this.configuracion = parsed.configuracion;
+        }
       }
     } catch (err) {
       console.warn('Advertencia cargando store:', err.message);
@@ -180,6 +184,7 @@ class StoreManager {
         bloqueos: this.bloqueos,
         resenas: this.resenas,
         notificaciones_superadmin: this.notificaciones_superadmin,
+        configuracion: this.configuracion,
         actualizado: new Date().toISOString()
       };
       fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -368,6 +373,17 @@ class StoreManager {
       return notif;
     }
     return null;
+  }
+
+  obtenerConfiguracion(clave, fallback = null) {
+    if (!this.configuracion) this.configuracion = {};
+    return this.configuracion[clave] !== undefined ? this.configuracion[clave] : fallback;
+  }
+
+  guardarConfiguracion(clave, valor) {
+    if (!this.configuracion) this.configuracion = {};
+    this.configuracion[clave] = valor;
+    this.guardarEnDisco();
   }
 }
 

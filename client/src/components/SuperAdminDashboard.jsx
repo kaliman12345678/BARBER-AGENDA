@@ -48,7 +48,8 @@ import {
   Bell,
   Mail,
   RotateCw,
-  ArrowLeft
+  ArrowLeft,
+  UserCog
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
@@ -163,12 +164,129 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [guardandoPlanCustom, setGuardandoPlanCustom] = useState(false);
   const [mensajeExitoCustom, setMensajeExitoCustom] = useState('');
 
+  // Estados para Mi Perfil & Configuración SuperAdmin
+  const [perfilSuper, setPerfilSuper] = useState({
+    nombre: 'SuperAdmin EXAKTA',
+    telefono: '3114220554',
+    email: 'admin@exakta.online'
+  });
+  const [cargandoPerfil, setCargandoPerfil] = useState(false);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [mensajeExitoPerfil, setMensajeExitoPerfil] = useState('');
+  const [errorPerfil, setErrorPerfil] = useState('');
+
+  // Formulario cambio de contraseña SuperAdmin
+  const [passwordActual, setPasswordActual] = useState('');
+  const [passwordNueva, setPasswordNueva] = useState('');
+  const [confirmarPasswordNueva, setConfirmarPasswordNueva] = useState('');
+  const [mostrarPassActual, setMostrarPassActual] = useState(false);
+  const [mostrarPassNueva, setMostrarPassNueva] = useState(false);
+  const [mostrarPassConfirmar, setMostrarPassConfirmar] = useState(false);
+
+  async function cargarPerfilSuperAdmin() {
+    try {
+      setCargandoPerfil(true);
+      setErrorPerfil('');
+      const res = await fetch('/api/superadmin/perfil');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.perfil) {
+          setPerfilSuper({
+            nombre: data.perfil.nombre || 'SuperAdmin EXAKTA',
+            telefono: data.perfil.telefono || '3114220554',
+            email: data.perfil.email || 'admin@exakta.online'
+          });
+          setSuperTelefono(data.perfil.telefono || '3114220554');
+        }
+      }
+    } catch (err) {
+      console.warn('Error cargando perfil superadmin:', err.message);
+    } finally {
+      setCargandoPerfil(false);
+    }
+  }
+
+  async function handleGuardarPerfilSuperAdmin(e) {
+    if (e) e.preventDefault();
+    setErrorPerfil('');
+    setMensajeExitoPerfil('');
+
+    if (passwordNueva) {
+      if (!passwordActual) {
+        setErrorPerfil('Debes ingresar tu contraseña actual para confirmar el cambio.');
+        return;
+      }
+      if (passwordNueva.length < 6) {
+        setErrorPerfil('La nueva contraseña debe tener mínimo 6 caracteres.');
+        return;
+      }
+      const hasLetters = /[a-zA-Z]/.test(passwordNueva);
+      const hasNumbers = /[0-9]/.test(passwordNueva);
+      if (!hasLetters || !hasNumbers) {
+        setErrorPerfil('La nueva contraseña debe ser alfanumérica (contener letras y números).');
+        return;
+      }
+      if (passwordNueva !== confirmarPasswordNueva) {
+        setErrorPerfil('La confirmación de la nueva contraseña no coincide.');
+        return;
+      }
+    }
+
+    const telClean = perfilSuper.telefono.replace(/\D/g, '');
+    if (telClean.length !== 10) {
+      setErrorPerfil('El teléfono de acceso debe tener exactamente 10 dígitos numéricos.');
+      return;
+    }
+
+    const emailClean = perfilSuper.email.trim();
+    if (emailClean && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
+      setErrorPerfil('El formato del correo electrónico no es válido.');
+      return;
+    }
+
+    try {
+      setGuardandoPerfil(true);
+      const payload = {
+        nombre: perfilSuper.nombre.trim(),
+        telefono: telClean,
+        email: emailClean
+      };
+      if (passwordNueva) {
+        payload.password_actual = passwordActual.trim();
+        payload.password_nueva = passwordNueva.trim();
+      }
+
+      const res = await fetch('/api/superadmin/perfil', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setErrorPerfil(data.error || 'Error al actualizar el perfil.');
+        return;
+      }
+
+      setMensajeExitoPerfil('¡Perfil y credenciales actualizados exitosamente! Los cambios ya están activos sin tocar el código.');
+      setPasswordActual('');
+      setPasswordNueva('');
+      setConfirmarPasswordNueva('');
+      setSuperTelefono(telClean);
+      cargarPerfilSuperAdmin();
+    } catch (err) {
+      setErrorPerfil('Error de conexión al guardar: ' + err.message);
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  }
+
   useEffect(() => {
     const token = sessionStorage.getItem('barberia_superadmin_token');
     if (token) {
       setIsSuperLoggedIn(true);
       cargarBarberias();
       cargarNotificaciones();
+      cargarPerfilSuperAdmin();
     }
   }, []);
 
@@ -178,6 +296,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         cargarCitasGlobales();
       } else if (seccionActiva === 'barberos') {
         cargarBarberosGlobales();
+      } else if (seccionActiva === 'perfil') {
+        cargarPerfilSuperAdmin();
       }
     }
   }, [seccionActiva, isSuperLoggedIn, filtroTiempoCitas, fechaDesdeCitas, fechaHastaCitas, filtroBarberiaEnCitas]);
@@ -968,6 +1088,18 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             <ShieldCheck className="w-4 h-4 text-slate-500" />
             <span>Auditoría & Logs</span>
           </button>
+
+          <button
+            onClick={() => { setSeccionActiva('perfil'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'perfil'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <UserCog className="w-4 h-4 text-blue-600" />
+            <span>Mi Perfil & Contraseña</span>
+          </button>
         </div>
 
       </div>
@@ -985,21 +1117,29 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           <ExternalLink className="w-3 h-3 text-slate-400" />
         </button>
 
-        <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-xs flex items-center justify-center">
+        <div 
+          onClick={() => { setSeccionActiva('perfil'); setSidebarMovilAbierto(false); }}
+          className="p-2.5 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between shadow-xs hover:border-blue-300 transition-all cursor-pointer group"
+          title="Ver y editar mi perfil de SuperAdmin"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               E
             </div>
-            <div className="leading-tight">
-              <span className="block text-xs font-bold text-slate-900">EXAKTA Root</span>
-              <span className="text-[10px] text-slate-400 font-medium">Master Admin</span>
+            <div className="leading-tight truncate">
+              <span className="block text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                {perfilSuper.nombre || 'EXAKTA Root'}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium truncate block">
+                {perfilSuper.telefono || 'Master Admin'}
+              </span>
             </div>
           </div>
 
           <button
-            onClick={handleLogoutSuper}
+            onClick={(e) => { e.stopPropagation(); handleLogoutSuper(); }}
             title="Cerrar sesión SuperAdmin"
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -1138,6 +1278,21 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </div>
               )}
             </div>
+
+            {/* Acceso directo a Mi Perfil SuperAdmin */}
+            <button
+              type="button"
+              onClick={() => setSeccionActiva('perfil')}
+              title="Mi Perfil y Contraseña SuperAdmin"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border ${
+                seccionActiva === 'perfil'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <UserCog className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Mi Perfil</span>
+            </button>
 
             {/* Selector de temas personalizable exclusivo SuperAdmin */}
             <ThemeSelector 
@@ -2006,6 +2161,303 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN 8: MI PERFIL & CONFIGURACIÓN SUPERADMIN */}
+          {/* ======================================================== */}
+          {seccionActiva === 'perfil' && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Encabezado */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <UserCog className="w-5 h-5 text-blue-600" />
+                    <span>Mi Perfil & Configuración Maestro</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Edita tu número de teléfono de ingreso, correo de contacto y cambia tu contraseña maestra sin tocar el código.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSeccionActiva('inicio')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all self-start sm:self-auto cursor-pointer border border-slate-200"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Volver a Inicio</span>
+                </button>
+              </div>
+
+              {/* Alerta de Mensaje de Éxito */}
+              {mensajeExitoPerfil && (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{mensajeExitoPerfil}</span>
+                </div>
+              )}
+
+              {/* Alerta de Error */}
+              {errorPerfil && (
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{errorPerfil}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleGuardarPerfilSuperAdmin} className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* BLOQUE 1: DATOS DE PERFIL Y ACCESO */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-extrabold text-slate-900">Datos de Contacto e Identidad</h3>
+                        <p className="text-[11px] text-slate-400">Información de acceso como Super Administrador</p>
+                      </div>
+                    </div>
+
+                    {/* Nombre del Super Administrador */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Nombre del Administrador Maestro
+                      </label>
+                      <input
+                        type="text"
+                        value={perfilSuper.nombre}
+                        onChange={(e) => setPerfilSuper({ ...perfilSuper, nombre: e.target.value })}
+                        placeholder="Ej. SuperAdmin EXAKTA"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                      />
+                    </div>
+
+                    {/* Teléfono de Acceso (Solo 10 dígitos) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span>Teléfono Móvil de Ingreso (10 Dígitos)</span>
+                        <span className="text-[10px] text-blue-600 font-mono font-bold">
+                          {perfilSuper.telefono?.replace(/\D/g, '').length}/10 dígitos
+                        </span>
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                        <input
+                          type="text"
+                          maxLength={10}
+                          value={perfilSuper.telefono}
+                          onChange={(e) => {
+                            const numsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setPerfilSuper({ ...perfilSuper, telefono: numsOnly });
+                          }}
+                          placeholder="3114220554"
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Este es el número telefónico exclusivo con el que puedes iniciar sesión en el panel maestro.
+                      </p>
+                    </div>
+
+                    {/* Correo Electrónico */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Correo Electrónico de Soporte / Master
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                        <input
+                          type="email"
+                          value={perfilSuper.email}
+                          onChange={(e) => setPerfilSuper({ ...perfilSuper, email: e.target.value })}
+                          placeholder="admin@exakta.online"
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Badge de Nivel de Permisos */}
+                    <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/60 flex items-start gap-2.5 text-xs text-amber-900">
+                      <Crown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-extrabold block text-amber-950">Privilegios Root / SuperAdmin</span>
+                        <span className="text-[11px] text-amber-800">
+                          Tienes acceso global irrestricto sobre todas las barberías, citas, planes y reportes financieros del SaaS.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BLOQUE 2: CAMBIAR CONTRASEÑA */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-extrabold text-slate-900">Cambiar Contraseña Maestra</h3>
+                          <p className="text-[11px] text-slate-400">Actualiza tu clave de acceso sin tocar el código</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sugerida = generarClaveAlfanumerica('Exakta') + '*';
+                          setPasswordNueva(sugerida);
+                          setConfirmarPasswordNueva(sugerida);
+                        }}
+                        className="text-[10px] font-extrabold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                        title="Genera una contraseña sugerida con letras y números"
+                      >
+                        Sugerir Clave Segura
+                      </button>
+                    </div>
+
+                    {/* Contraseña Actual */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Contraseña Actual
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={mostrarPassActual ? 'text' : 'password'}
+                          value={passwordActual}
+                          onChange={(e) => setPasswordActual(e.target.value)}
+                          placeholder="Ingresa tu contraseña actual"
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarPassActual(!mostrarPassActual)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {mostrarPassActual ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        Requerida únicamente si vas a cambiar tu contraseña.
+                      </span>
+                    </div>
+
+                    {/* Nueva Contraseña */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Nueva Contraseña (Alfanumérica)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={mostrarPassNueva ? 'text' : 'password'}
+                          value={passwordNueva}
+                          onChange={(e) => setPasswordNueva(e.target.value)}
+                          placeholder="Ej. Exakta2026Master"
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarPassNueva(!mostrarPassNueva)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {mostrarPassNueva ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirmar Nueva Contraseña */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Confirmar Nueva Contraseña
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={mostrarPassConfirmar ? 'text' : 'password'}
+                          value={confirmarPasswordNueva}
+                          onChange={(e) => setConfirmarPasswordNueva(e.target.value)}
+                          placeholder="Repite la nueva contraseña"
+                          className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all text-slate-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarPassConfirmar(!mostrarPassConfirmar)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {mostrarPassConfirmar ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Lista de Requisitos de la Contraseña */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5 text-[11px]">
+                      <span className="font-bold text-slate-600 block">Requisitos de seguridad obligatorios:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-black ${
+                          passwordNueva.length >= 6 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                        }`}>
+                          ✓
+                        </span>
+                        <span className={passwordNueva.length >= 6 ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                          Mínimo 6 caracteres
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-black ${
+                          (/[a-zA-Z]/.test(passwordNueva) && /[0-9]/.test(passwordNueva)) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                        }`}>
+                          ✓
+                        </span>
+                        <span className={(/[a-zA-Z]/.test(passwordNueva) && /[0-9]/.test(passwordNueva)) ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                          Alfanumérica (contiene letras y números)
+                        </span>
+                      </div>
+                      {passwordNueva && (
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-black ${
+                            (passwordNueva === confirmarPasswordNueva && confirmarPasswordNueva !== '') ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                          }`}>
+                            {passwordNueva === confirmarPasswordNueva && confirmarPasswordNueva !== '' ? '✓' : '✕'}
+                          </span>
+                          <span className={(passwordNueva === confirmarPasswordNueva && confirmarPasswordNueva !== '') ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                            {passwordNueva === confirmarPasswordNueva && confirmarPasswordNueva !== '' ? 'Las contraseñas coinciden' : 'Las contraseñas no coinciden'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* BOTÓN GUARDAR CAMBIOS */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasswordActual('');
+                      setPasswordNueva('');
+                      setConfirmarPasswordNueva('');
+                      setErrorPerfil('');
+                      setMensajeExitoPerfil('');
+                      cargarPerfilSuperAdmin();
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  >
+                    Cancelar / Restaurar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={guardandoPerfil}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-black transition-all shadow-md shadow-blue-500/20 disabled:opacity-60 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{guardandoPerfil ? 'Guardando Cambios...' : 'Guardar Cambios de Perfil'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
