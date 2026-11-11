@@ -74,14 +74,15 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
 
   async function cargarCatalogos() {
     try {
+      const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
       const [resB, resS] = await Promise.all([
-        fetch('/api/barberos?todos=true'),
-        fetch('/api/servicios?todos=true')
+        fetch(`/api/barberos?todos=true&b=${encodeURIComponent(slug)}`),
+        fetch(`/api/servicios?todos=true&b=${encodeURIComponent(slug)}`)
       ]);
       const dataB = await resB.json();
       const dataS = await resS.json();
-      setBarberos(dataB);
-      setServicios(dataS);
+      setBarberos(Array.isArray(dataB) ? dataB : []);
+      setServicios(Array.isArray(dataS) ? dataS : []);
     } catch (err) {
       console.error(err);
     }
@@ -129,35 +130,45 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
     <div className={`max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-4 min-h-screen transition-colors duration-300 ${temaObj.containerClass}`}>
       
       {/* Barra superior de estado & Notificaciones en tiempo real */}
-      <div className={`border rounded-2xl px-4 py-3 flex items-center justify-between shadow-xs transition-colors duration-300 ${temaObj.headerClass}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
-            <ActiveIcon className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
+      <div className={`border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between shadow-xs transition-colors duration-300 ${temaObj.headerClass}`}>
+        
+        {/* Lado izquierdo: Botón Menú Módulos en móvil, Título en escritorio */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Botón Móvil: Menú de Módulos (Ubicado arriba para máxima comodidad) */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="md:hidden flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
+            title="Abrir menú de módulos"
+          >
+            <Menu className="w-4 h-4 text-white" />
+            <span>Menú de Módulos ({tabs.length})</span>
+          </button>
+
+          {/* En escritorio: Título del módulo activo */}
+          <div className="hidden md:flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
+              <ActiveIcon className="w-4 h-4" />
+            </div>
+            <div>
               <h2 className="text-sm font-extrabold font-sans leading-tight">
                 {activeTabObj.label}
               </h2>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold flex items-center gap-1 ${planColorClass}`}>
-                <Crown className="w-2.5 h-2.5" />
-                <span>Plan {planName}</span>
-              </span>
+              <p className="text-[11px] opacity-70">
+                {shopConfig?.nombre_barberia || 'The Barber Club'} • Panel de Administración
+              </p>
             </div>
-            <p className="text-[11px] opacity-70">
-              {shopConfig?.nombre_barberia || 'The Barber Club'} • Panel de Administración
-            </p>
           </div>
         </div>
 
-        {/* Notificaciones & Selector de Tema exclusivo */}
+        {/* Lado derecho: Link Clientes + Selector de Tema + Notificaciones */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Botón para que el dueño copie su enlace de clientes */}
           <button
             type="button"
             onClick={handleCopiarLinkClientes}
             title="Copiar enlace web para compartir con tus clientes"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
           >
             {linkCopiado ? (
               <>
@@ -186,22 +197,6 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
           <AdminNotifications 
             onVerCitaEnAgenda={() => setActiveTab('agenda')} 
           />
-        </div>
-      </div>
-
-      {/* Botón flotante / barra móvil para abrir el menú desplegable en pantallas pequeñas */}
-      <div className="md:hidden bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between shadow-xs">
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          className="flex items-center gap-2.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors"
-        >
-          <Menu className="w-4 h-4 text-blue-600" />
-          <span>Menú de Módulos ({tabs.length})</span>
-        </button>
-
-        <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
-          <ActiveIcon className="w-4 h-4" />
-          <span>{activeTabObj.label}</span>
         </div>
       </div>
 
@@ -262,8 +257,17 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               })}
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 text-[11px] text-slate-400 text-center font-medium">
-              {shopConfig?.nombre_barberia || 'The Barber Club'} • v2.0
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs">
+              <div className="min-w-0 pr-2">
+                <span className="font-extrabold text-slate-800 block text-xs truncate">
+                  {shopConfig?.nombre_barberia || 'The Barber Club'}
+                </span>
+                <span className="text-[10px] text-slate-400">Panel de Administración</span>
+              </div>
+              <span className={`text-[10px] px-2.5 py-1 rounded-full border font-black flex items-center gap-1 shrink-0 ${planColorClass}`}>
+                <Crown className="w-3 h-3" />
+                <span>Plan {planName}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -342,9 +346,14 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
 
           {/* Pie del Sidebar */}
           {sidebarExpanded && (
-            <div className="mt-6 pt-3 border-t border-slate-100 px-2 text-[11px] text-slate-400 flex items-center justify-between font-medium">
-              <span className="truncate">{shopConfig?.nombre_barberia || 'The Barber Club'}</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <div className="mt-6 pt-3 border-t border-slate-100 px-2 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-600 truncate max-w-[110px]">
+                {shopConfig?.nombre_barberia || 'The Barber Club'}
+              </span>
+              <span className={`text-[9px] px-2 py-0.5 rounded-full border font-black flex items-center gap-1 ${planColorClass}`}>
+                <Crown className="w-2.5 h-2.5" />
+                <span>{planName}</span>
+              </span>
             </div>
           )}
         </aside>

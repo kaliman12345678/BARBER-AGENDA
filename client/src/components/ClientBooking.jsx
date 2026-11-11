@@ -122,14 +122,15 @@ export default function ClientBooking({ shopConfig }) {
     async function cargarDatos() {
       try {
         setLoadingInitial(true);
+        const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
         const [resB, resS] = await Promise.all([
-          fetch('/api/barberos'),
-          fetch('/api/servicios')
+          fetch(`/api/barberos?b=${encodeURIComponent(slug)}`),
+          fetch(`/api/servicios?b=${encodeURIComponent(slug)}`)
         ]);
         const dataB = await resB.json();
         const dataS = await resS.json();
-        setBarberos(dataB);
-        setServicios(dataS);
+        setBarberos(Array.isArray(dataB) ? dataB : []);
+        setServicios(Array.isArray(dataS) ? dataS : []);
       } catch (err) {
         console.error('Error cargando catálogo:', err);
       } finally {
@@ -137,7 +138,7 @@ export default function ClientBooking({ shopConfig }) {
       }
     }
     cargarDatos();
-  }, []);
+  }, [shopConfig?.slug]);
 
   // Consultar disponibilidad cuando cambia barbero, fecha o servicio
   useEffect(() => {

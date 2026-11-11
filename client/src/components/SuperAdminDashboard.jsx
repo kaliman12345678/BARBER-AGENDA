@@ -42,7 +42,8 @@ import {
   Filter,
   Award,
   Sliders,
-  Save
+  Save,
+  Edit3
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
@@ -84,6 +85,9 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   
   // Modales
   const [modalCrearOpen, setModalCrearOpen] = useState(false);
+  const [modalEditarOpen, setModalEditarOpen] = useState(false);
+  const [barberiaAEditar, setBarberiaAEditar] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [slugCopiado, setSlugCopiado] = useState(null);
 
   // Formulario Crear Barbería
@@ -447,6 +451,61 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       alert('Error de conexión');
     } finally {
       setCargando(false);
+    }
+  }
+
+  function handleAbrirModalEditar(barberia, e) {
+    if (e) e.stopPropagation();
+    setBarberiaAEditar({
+      id: barberia.id,
+      nombre: barberia.nombre || '',
+      slug: barberia.slug || '',
+      plan: barberia.plan || 'pro',
+      color_primario: barberia.color_primario || '#2563eb',
+      color_secundario: barberia.color_secundario || '#1e293b',
+      pin_admin: barberia.pin_admin || '1234',
+      telefono: barberia.telefono || '',
+      direccion: barberia.direccion || '',
+      eslogan: barberia.eslogan || 'Tu estilo en las mejores manos',
+      activo: barberia.activo !== 0,
+      modulos_activos: barberia.modulos_activos || {}
+    });
+    setModalEditarOpen(true);
+  }
+
+  async function handleGuardarEdicionBarberia(e) {
+    if (e) e.preventDefault();
+    if (!barberiaAEditar || !barberiaAEditar.id) return;
+    if (!barberiaAEditar.nombre.trim()) {
+      alert('El nombre comercial es obligatorio');
+      return;
+    }
+
+    setGuardandoEdicion(true);
+    try {
+      const res = await fetch('/api/superadmin/barberias/' + barberiaAEditar.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(barberiaAEditar)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setModalEditarOpen(false);
+        await cargarBarberias();
+        if (barberiaDetalle && barberiaDetalle.barberia && String(barberiaDetalle.barberia.id) === String(barberiaAEditar.id)) {
+          setBarberiaDetalle(prev => ({
+            ...prev,
+            barberia: { ...prev.barberia, ...data.barberia }
+          }));
+        }
+        alert('¡Datos de la barbería actualizados exitosamente!');
+      } else {
+        alert(data.error || 'Error al actualizar barbería');
+      }
+    } catch (err) {
+      alert('Error de conexión al actualizar la barbería');
+    } finally {
+      setGuardandoEdicion(false);
     }
   }
 
@@ -1680,6 +1739,16 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
+                  onClick={() => handleAbrirModalEditar(barberiaDetalle.barberia)}
+                  className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors"
+                  title="Editar datos de esta barbería"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden sm:inline">Editar Datos</span>
+                  <span className="sm:hidden">Editar</span>
+                </button>
+
+                <button
                   onClick={() => handleEntrarComoDueno(barberiaDetalle.barberia)}
                   className="py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-colors"
                 >
@@ -1937,8 +2006,17 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       </button>
                     </div>
 
-                    {barberiaDetalle.barberia.id !== 1 && (
-                      <div className="pt-2">
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirModalEditar(barberiaDetalle.barberia)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        <span>Editar Todos los Datos (Nombre, Slug, PIN, Plan)</span>
+                      </button>
+
+                      {barberiaDetalle.barberia.id !== 1 && (
                         <button
                           onClick={(e) => handleEliminarBarberia(barberiaDetalle.barberia.id, barberiaDetalle.barberia.nombre, e)}
                           className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 border border-rose-200 transition-colors"
@@ -1946,8 +2024,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Eliminar Barbería</span>
                         </button>
-                      </div>
                     )}
+                  </div>
                   </div>
                 </div>
               )}
@@ -2091,6 +2169,190 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-sm"
                 >
                   {cargando ? 'Creando...' : 'Crear Barbería'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
+      {/* ======================================================== */}
+      {/* MODAL: EDITAR BARBERÍA EXISTENTE (SUPERADMIN) */}
+      {/* ======================================================== */}
+      {modalEditarOpen && barberiaAEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 animate-slideIn space-y-4 my-auto max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Editar Datos de Barbería</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">ID: {barberiaAEditar.id} • Modifica nombre, slug, PIN y plan</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setModalEditarOpen(false)} 
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarEdicionBarberia} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nombre Comercial de la Barbería *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Golden Scissors Barber Club"
+                  value={barberiaAEditar.nombre}
+                  onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, nombre: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Slug URL (Enlace web)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ej: golden-scissors"
+                    value={barberiaAEditar.slug}
+                    onChange={(e) => setBarberiaAEditar({ 
+                      ...barberiaAEditar, 
+                      slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') 
+                    })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold"
+                  />
+                  <span className="text-[10px] text-blue-600 mt-1 block font-mono truncate">
+                    exakta.online/?b={barberiaAEditar.slug}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Plan Asignado</label>
+                  <select
+                    value={barberiaAEditar.plan}
+                    onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, plan: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="basico">Básico ($20 USD)</option>
+                    <option value="pro">Profesional ($45 USD)</option>
+                    <option value="vip">VIP ($80 USD)</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">PIN de Acceso Dueño</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="1234"
+                    value={barberiaAEditar.pin_admin}
+                    onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, pin_admin: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-900"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Clave con la que entra el dueño</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">WhatsApp / Teléfono</label>
+                  <input
+                    type="tel"
+                    placeholder="3001234567"
+                    value={barberiaAEditar.telefono}
+                    onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, telefono: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Eslogan Comercial</label>
+                <input
+                  type="text"
+                  placeholder="Tu estilo en las mejores manos"
+                  value={barberiaAEditar.eslogan}
+                  onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, eslogan: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Dirección Física</label>
+                <input
+                  type="text"
+                  placeholder="Calle 10 # 20 - 30, Ciudad"
+                  value={barberiaAEditar.direccion}
+                  onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, direccion: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Color de Marca</label>
+                  <div className="flex items-center gap-2">
+                    {COLOR_PRESETS.map(c => (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        onClick={() => setBarberiaAEditar({ ...barberiaAEditar, color_primario: c.hex })}
+                        className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                          barberiaAEditar.color_primario === c.hex ? 'scale-110 border-slate-900 shadow-xs' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Estado de la Cuenta</label>
+                  <button
+                    type="button"
+                    onClick={() => setBarberiaAEditar({ ...barberiaAEditar, activo: !barberiaAEditar.activo })}
+                    className={`w-full py-1.5 px-3 rounded-xl font-bold text-xs transition-colors border ${
+                      barberiaAEditar.activo
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                    }`}
+                  >
+                    {barberiaAEditar.activo ? '● Cuenta Activa' : '● Cuenta Suspendida'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalEditarOpen(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoEdicion}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold transition-all shadow-md shadow-blue-600/20 text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {guardandoEdicion ? (
+                    <span>Guardando...</span>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Guardar Cambios</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

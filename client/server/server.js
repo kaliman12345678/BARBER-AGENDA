@@ -149,55 +149,42 @@ function getDefaultModulesForPlan(plan) {
   }
 }
 
-const memoryBarberias = [
-  {
-    id: 1,
-    slug: 'the-barber-club',
-    nombre: 'The Barber Club',
-    eslogan: 'Cortes clásicos y modernos con estilo profesional',
-    logo_url: '',
-    color_primario: '#2563eb',
-    color_secundario: '#1e293b',
-    telefono: '3001234567',
-    direccion: 'Calle 100 # 15-20, Bogotá',
-    plan: 'vip',
-    modulos_activos: getDefaultModulesForPlan('vip'),
-    pin_admin: '1234',
-    activo: 1,
-    total_barberos: 3,
-    total_citas: 0
-  }
-];
+const store = require('./store');
+const memoryBarberias = store.barberias;
 
 async function getTenant(req) {
-  const slug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug;
-  const id = req.headers['x-barberia-id'] || req.query.barberia_id;
+  const rawSlug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug || '';
+  const slug = String(rawSlug).trim().toLowerCase();
+  const rawId = req.headers['x-barberia-id'] || req.query.barberia_id || '';
+  const id = String(rawId).trim();
 
-  try {
-    if (id) {
+  // 1. Si se envía ID específico
+  if (id) {
+    try {
       const b = await db.prepare('SELECT * FROM barberias WHERE id = ?').get(id);
       if (b) return b;
-    }
-    if (slug) {
-      const b = await db.prepare('SELECT * FROM barberias WHERE slug = ?').get(slug);
+    } catch (_) {}
+    const storeId = store.obtenerBarberiaPorId(id);
+    if (storeId) return storeId;
+  }
+
+  // 2. Si se envía SLUG específico (ej: 'eliconcito')
+  if (slug) {
+    try {
+      const b = await db.prepare('SELECT * FROM barberias WHERE LOWER(slug) = ?').get(slug);
       if (b) return b;
-    }
+    } catch (_) {}
+    const storeSlug = store.obtenerBarberiaPorSlug(slug);
+    if (storeSlug) return storeSlug;
+  }
+
+  // 3. Fallback solo si no se pasó ni slug ni id, o si no se encontró
+  try {
     const def = (await db.prepare('SELECT * FROM barberias WHERE id = 1').get()) || (await db.prepare('SELECT * FROM barberias ORDER BY id ASC LIMIT 1').get());
     if (def) return def;
-  } catch (err) {
-    console.warn('⚠️ getTenant fallback:', err.message);
-  }
+  } catch (_) {}
 
-  if (slug) {
-    const memSlug = memoryBarberias.find(b => b.slug === slug);
-    if (memSlug) return memSlug;
-  }
-  if (id) {
-    const memId = memoryBarberias.find(b => String(b.id) === String(id));
-    if (memId) return memId;
-  }
-
-  return memoryBarberias[0];
+  return store.barberias[0];
 }
 
 async function getTenantId(req) {
@@ -777,7 +764,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       total_citas: 0
     };
 
-    memoryBarberias.unshift(barberiaFinal);
+    store.agregarBarberia(barberiaFinal);
 
     res.json({
       success: true,
@@ -885,10 +872,7 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
       total_citas: updated?.total_citas || actual?.total_citas || 0
     };
 
-    const idxMem = memoryBarberias.findIndex(b => Number(b.id) === Number(id));
-    if (idxMem !== -1) {
-      memoryBarberias[idxMem] = { ...memoryBarberias[idxMem], ...barberiaActualizada };
-    }
+    store.actualizarBarberia(id, barberiaActualizada);
 
     res.json({
       success: true,
@@ -917,10 +901,7 @@ app.delete('/api/superadmin/barberias/:id', async (req, res) => {
       console.warn('DB delete warning:', e.message);
     }
 
-    const idxMem = memoryBarberias.findIndex(b => Number(b.id) === Number(id));
-    if (idxMem !== -1) {
-      memoryBarberias.splice(idxMem, 1);
-    }
+    store.eliminarBarberia(id);
 
     res.json({ success: true, message: 'Barbería eliminada correctamente' });
   } catch (error) {
@@ -1046,22 +1027,39 @@ app.get('/api/barberos', async (req, res) => {
   try {
     const tenantId = await getTenantId(req);
     const todos = req.query.todos === 'true';
-    const query = todos 
-      ? 'SELECT * FROM barberos WHERE barberia_id = ? ORDER BY nombre ASC'
-      : 'SELECT * FROM barberos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
-    const barberos = await db.prepare(query).all(tenantId);
-    res.json(barberos && barberos.length > 0 ? barberos : [
-      { id: 1, barberia_id: tenantId, nombre: 'Carlos "El Patrón"', especialidad: 'Degradados & Barbas', activo: 1, foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300' },
-      { id: 2, barberia_id: tenantId, nombre: 'Mateo Fade', especialidad: 'Cortes Clásicos & Diseños', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300' },
-      { id: 3, barberia_id: tenantId, nombre: 'Andrés Tijeras', especialidad: 'Tratamientos Capilares & Barba VIP', activo: 1, foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300' }
+    let barberos = [];
+    try {
+      const query = todos 
+        ? 'SELECT * FROM barberos WHERE barberia_id = ? ORDER BY nombre ASC'
+        : 'SELECT * FROM barberos WHERE barberia_id = ? AND activo = 1 ORDER BY nombre ASC';
+      barberos = await db.prepare(query).all(tenantId);
+    } catch (_) {}
+
+    if (barberos && barberos.length > 0) {
+      return res.json(barberos);
+    }
+
+    const storeBarberos = store.obtenerBarberos(tenantId, !todos);
+    if (storeBarberos && storeBarberos.length > 0) {
+      return res.json(storeBarberos);
+    }
+
+    // Si es la barbería 1, devolver catálogo demo
+    if (Number(tenantId) === 1) {
+      return res.json([
+        { id: 1, barberia_id: 1, nombre: 'Carlos "El Patrón"', especialidad: 'Degradados & Barbas', activo: 1, foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300' },
+        { id: 2, barberia_id: 1, nombre: 'Mateo Fade', especialidad: 'Cortes Clásicos & Diseños', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300' },
+        { id: 3, barberia_id: 1, nombre: 'Andrés Tijeras', especialidad: 'Tratamientos Capilares & Barba VIP', activo: 1, foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300' }
+      ]);
+    }
+
+    // Para cualquier otra barbería sin barberos, barbero principal
+    res.json([
+      { id: Date.now(), barberia_id: tenantId, nombre: 'Barbero Principal', especialidad: 'Estilos Generales & Barba', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300' }
     ]);
   } catch (error) {
     console.warn('Fallback barberos:', error.message);
-    res.json([
-      { id: 1, barberia_id: 1, nombre: 'Carlos "El Patrón"', especialidad: 'Degradados & Barbas', activo: 1, foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300' },
-      { id: 2, barberia_id: 1, nombre: 'Mateo Fade', especialidad: 'Cortes Clásicos & Diseños', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300' },
-      { id: 3, barberia_id: 1, nombre: 'Andrés Tijeras', especialidad: 'Tratamientos Capilares & Barba VIP', activo: 1, foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300' }
-    ]);
+    res.json([]);
   }
 });
 
@@ -1436,22 +1434,40 @@ app.get('/api/servicios', async (req, res) => {
   try {
     const tenantId = await getTenantId(req);
     const todos = req.query.todos === 'true';
-    const query = todos 
-      ? 'SELECT * FROM servicios WHERE barberia_id = ? ORDER BY precio_cop ASC'
-      : 'SELECT * FROM servicios WHERE barberia_id = ? AND activo = 1 ORDER BY precio_cop ASC';
-    const servicios = await db.prepare(query).all(tenantId);
-    res.json(servicios && servicios.length > 0 ? servicios : [
-      { id: 1, barberia_id: tenantId, nombre: 'Corte Clásico / Fade', precio_cop: 25000, duracion_minutos: 30, activo: 1, descripcion: 'Corte con degradado, perfilado de patillas y lavado exprés' },
-      { id: 2, barberia_id: tenantId, nombre: 'Arreglo de Barba & Toalla Caliente', precio_cop: 18000, duracion_minutos: 20, activo: 1, descripcion: 'Perfilado con navaja, toalla caliente y aceites hidratantes' },
-      { id: 3, barberia_id: tenantId, nombre: 'Combo VIP: Corte + Barba + Mascarilla', precio_cop: 40000, duracion_minutos: 50, activo: 1, descripcion: 'Servicio completo con exfoliación y masaje capilar' }
+    let servicios = [];
+    try {
+      const query = todos 
+        ? 'SELECT * FROM servicios WHERE barberia_id = ? ORDER BY precio_cop ASC'
+        : 'SELECT * FROM servicios WHERE barberia_id = ? AND activo = 1 ORDER BY precio_cop ASC';
+      servicios = await db.prepare(query).all(tenantId);
+    } catch (_) {}
+
+    if (servicios && servicios.length > 0) {
+      return res.json(servicios);
+    }
+
+    const storeServicios = store.obtenerServicios(tenantId, !todos);
+    if (storeServicios && storeServicios.length > 0) {
+      return res.json(storeServicios);
+    }
+
+    // Si es la barbería 1, catálogo demo
+    if (Number(tenantId) === 1) {
+      return res.json([
+        { id: 1, barberia_id: 1, nombre: 'Corte Clásico / Fade', precio_cop: 25000, duracion_minutos: 30, activo: 1, descripcion: 'Corte con degradado, perfilado de patillas y lavado exprés' },
+        { id: 2, barberia_id: 1, nombre: 'Arreglo de Barba & Toalla Caliente', precio_cop: 18000, duracion_minutos: 20, activo: 1, descripcion: 'Perfilado con navaja, toalla caliente y aceites hidratantes' },
+        { id: 3, barberia_id: 1, nombre: 'Combo VIP: Corte + Barba + Mascarilla', precio_cop: 40000, duracion_minutos: 50, activo: 1, descripcion: 'Servicio completo con exfoliación y masaje capilar' }
+      ]);
+    }
+
+    // Para cualquier otra barbería sin servicios personalizados aún
+    res.json([
+      { id: Date.now(), barberia_id: tenantId, nombre: 'Corte Tradicional', precio_cop: 25000, duracion_minutos: 35, activo: 1, descripcion: 'Corte a máquina y tijera con peinado' },
+      { id: Date.now() + 1, barberia_id: tenantId, nombre: 'Arreglo de Barba', precio_cop: 18000, duracion_minutos: 25, activo: 1, descripcion: 'Perfilado de barba con toalla caliente' }
     ]);
   } catch (error) {
     console.warn('Fallback servicios:', error.message);
-    res.json([
-      { id: 1, barberia_id: 1, nombre: 'Corte Clásico / Fade', precio_cop: 25000, duracion_minutos: 30, activo: 1, descripcion: 'Corte con degradado, perfilado de patillas y lavado exprés' },
-      { id: 2, barberia_id: 1, nombre: 'Arreglo de Barba & Toalla Caliente', precio_cop: 18000, duracion_minutos: 20, activo: 1, descripcion: 'Perfilado con navaja, toalla caliente y aceites hidratantes' },
-      { id: 3, barberia_id: 1, nombre: 'Combo VIP: Corte + Barba + Mascarilla', precio_cop: 40000, duracion_minutos: 50, activo: 1, descripcion: 'Servicio completo con exfoliación y masaje capilar' }
-    ]);
+    res.json([]);
   }
 });
 
