@@ -17,7 +17,8 @@ import {
   Eye,
   EyeOff,
   UserCheck,
-  ExternalLink
+  ExternalLink,
+  Ban
 } from 'lucide-react';
 import { formatTime12 } from '../utils/helpers';
 import BarberoRecordModal from './BarberoRecordModal';
@@ -32,7 +33,7 @@ const DIAS_SEMANA = [
   { id: 7, nombre: 'Dom' }
 ];
 
-export default function AdminBarberos({ barberos, onRecargar }) {
+export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [barberoEditando, setBarberoEditando] = useState(null);
   const [barberoRecordId, setBarberoRecordId] = useState(null);
@@ -434,6 +435,17 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                 >
                   <Edit2 className="w-3.5 h-3.5 text-amber-400" />
                   <span>Editar Datos & Perfil</span>
+                </button>
+
+                {/* Botón: Bloquear Días / Horas a placer */}
+                <button
+                  type="button"
+                  onClick={() => onIrABloqueos && onIrABloqueos(b.id)}
+                  className="w-full mt-2 py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center justify-center gap-1.5 border border-amber-200 transition-colors"
+                  title="Bloquear días u horarios puntuales para este barbero"
+                >
+                  <Ban className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Bloquear Horarios / Días</span>
                 </button>
               </div>
 

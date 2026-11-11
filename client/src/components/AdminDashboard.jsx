@@ -413,6 +413,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               <AdminBarberos 
                 barberos={barberos} 
                 onRecargar={cargarCatalogos} 
+                onIrABloqueos={() => setActiveTab('bloqueos')}
               />
             )}
 

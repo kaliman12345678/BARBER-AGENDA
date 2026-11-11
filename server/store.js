@@ -17,6 +17,7 @@ const DEFAULT_BARBERIAS = [
     telefono: '3001234567',
     direccion: 'Calle 100 # 15-20, Bogotá',
     plan: 'vip',
+    precio_mensual_cop: 320000,
     modulos_activos: {
       agenda: true,
       max_barberos: 999,
@@ -38,9 +39,51 @@ const DEFAULT_BARBERIAS = [
 ];
 
 const DEFAULT_BARBEROS = [
-  { id: 1, barberia_id: 1, nombre: 'Carlos "El Patrón"', especialidad: 'Degradados & Barbas', telefono: '3001112233', email: 'carlos@thebarberclub.com', password: '123', activo: 1, foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300', porcentaje_comision: 50 },
-  { id: 2, barberia_id: 1, nombre: 'Mateo Fade', especialidad: 'Cortes Clásicos & Diseños', telefono: '3002223344', email: 'mateo@thebarberclub.com', password: '123', activo: 1, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300', porcentaje_comision: 50 },
-  { id: 3, barberia_id: 1, nombre: 'Andrés Tijeras', especialidad: 'Tratamientos Capilares & Barba VIP', telefono: '3003334455', email: 'andres@thebarberclub.com', password: '123', activo: 1, foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300', porcentaje_comision: 50 }
+  { 
+    id: 1, 
+    barberia_id: 1, 
+    nombre: 'Carlos "El Patrón"', 
+    especialidad: 'Degradados & Barbas', 
+    telefono: '3001112233', 
+    email: 'carlos@thebarberclub.com', 
+    password: '123', 
+    activo: 1, 
+    foto_url: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300', 
+    porcentaje_comision: 50,
+    horario_inicio: '09:00',
+    horario_fin: '20:00',
+    dias_laborales: '1,2,3,4,5,6'
+  },
+  { 
+    id: 2, 
+    barberia_id: 1, 
+    nombre: 'Mateo Fade', 
+    especialidad: 'Cortes Clásicos & Diseños', 
+    telefono: '3002223344', 
+    email: 'mateo@thebarberclub.com', 
+    password: '123', 
+    activo: 1, 
+    foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300', 
+    porcentaje_comision: 50,
+    horario_inicio: '10:00',
+    horario_fin: '19:00',
+    dias_laborales: '1,2,3,4,5,6'
+  },
+  { 
+    id: 3, 
+    barberia_id: 1, 
+    nombre: 'Andrés Tijeras', 
+    especialidad: 'Tratamientos Capilares & Barba VIP', 
+    telefono: '3003334455', 
+    email: 'andres@thebarberclub.com', 
+    password: '123', 
+    activo: 1, 
+    foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300', 
+    porcentaje_comision: 50,
+    horario_inicio: '09:00',
+    horario_fin: '20:00',
+    dias_laborales: '1,2,3,4,5,6,7'
+  }
 ];
 
 const DEFAULT_SERVICIOS = [
@@ -49,12 +92,47 @@ const DEFAULT_SERVICIOS = [
   { id: 3, barberia_id: 1, nombre: 'Combo VIP: Corte + Barba + Mascarilla', precio_cop: 40000, duracion_minutos: 50, activo: 1, descripcion: 'Servicio completo con exfoliación y masaje capilar' }
 ];
 
+const DEFAULT_RESENAS = [
+  {
+    id: 101,
+    barberia_id: 1,
+    cliente_nombre: 'Alejandro Giraldo',
+    calificacion: 5,
+    comentario: '¡Excelente servicio! Carlos me hizo el mejor degradado que he tenido, y la atención con bebida y música es de 10 estrellas.',
+    servicio_nombre: 'Corte Clásico / Fade',
+    fecha: '2026-11-08',
+    aprobada: 1
+  },
+  {
+    id: 102,
+    barberia_id: 1,
+    cliente_nombre: 'David Morales',
+    calificacion: 5,
+    comentario: 'Puntuales, pulcros y el arreglo de barba con navaja caliente es una experiencia premium. Muy recomendado.',
+    servicio_nombre: 'Arreglo de Barba VIP',
+    fecha: '2026-11-05',
+    aprobada: 1
+  },
+  {
+    id: 103,
+    barberia_id: 1,
+    cliente_nombre: 'Camilo Torres',
+    calificacion: 4,
+    comentario: 'Gran ambiente y barberos muy capacitados. La reserva por la app fue súper rápida y sin filas.',
+    servicio_nombre: 'Combo Corte + Barba',
+    fecha: '2026-11-04',
+    aprobada: 1
+  }
+];
+
 class StoreManager {
   constructor() {
     this.barberias = [...DEFAULT_BARBERIAS];
     this.barberos = [...DEFAULT_BARBEROS];
     this.servicios = [...DEFAULT_SERVICIOS];
     this.citas = [];
+    this.bloqueos = [];
+    this.resenas = [...DEFAULT_RESENAS];
     this.cargarDesdeDisco();
   }
 
@@ -75,6 +153,12 @@ class StoreManager {
         if (Array.isArray(parsed.citas)) {
           this.citas = parsed.citas;
         }
+        if (Array.isArray(parsed.bloqueos)) {
+          this.bloqueos = parsed.bloqueos;
+        }
+        if (Array.isArray(parsed.resenas)) {
+          this.resenas = parsed.resenas;
+        }
       }
     } catch (err) {
       console.warn('Advertencia cargando store:', err.message);
@@ -88,6 +172,8 @@ class StoreManager {
         barberos: this.barberos,
         servicios: this.servicios,
         citas: this.citas,
+        bloqueos: this.bloqueos,
+        resenas: this.resenas,
         actualizado: new Date().toISOString()
       };
       fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -108,7 +194,6 @@ class StoreManager {
   }
 
   agregarBarberia(nuevaBarberia) {
-    // Si ya existe por slug, actualizarla
     const idx = this.barberias.findIndex(b => b.slug === nuevaBarberia.slug);
     if (idx >= 0) {
       this.barberias[idx] = { ...this.barberias[idx], ...nuevaBarberia };
@@ -129,7 +214,10 @@ class StoreManager {
         password: '123',
         activo: 1,
         foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300',
-        porcentaje_comision: 50
+        porcentaje_comision: 50,
+        horario_inicio: '09:00',
+        horario_fin: '20:00',
+        dias_laborales: '1,2,3,4,5,6'
       });
     }
 
@@ -162,6 +250,8 @@ class StoreManager {
       const eliminada = this.barberias.splice(idx, 1)[0];
       this.barberos = this.barberos.filter(b => String(b.barberia_id) !== String(id));
       this.servicios = this.servicios.filter(s => String(s.barberia_id) !== String(id));
+      this.bloqueos = this.bloqueos.filter(b => String(b.barberia_id) !== String(id));
+      this.resenas = this.resenas.filter(r => String(r.barberia_id) !== String(id));
       this.guardarEnDisco();
       return eliminada;
     }
@@ -180,6 +270,69 @@ class StoreManager {
       const match = String(s.barberia_id) === String(barberiaId);
       return soloActivos ? (match && s.activo === 1) : match;
     });
+  }
+
+  obtenerBloqueos(barberiaId, fecha, barberoId) {
+    return this.bloqueos.filter(b => {
+      if (String(b.barberia_id) !== String(barberiaId)) return false;
+      if (fecha && b.fecha !== fecha) return false;
+      if (barberoId && b.barbero_id && String(b.barbero_id) !== String(barberoId)) return false;
+      return true;
+    });
+  }
+
+  agregarBloqueo(bloqueo) {
+    const nuevo = { id: Date.now(), ...bloqueo };
+    this.bloqueos.unshift(nuevo);
+    this.guardarEnDisco();
+    return nuevo;
+  }
+
+  eliminarBloqueo(id, barberiaId) {
+    const idx = this.bloqueos.findIndex(b => String(b.id) === String(id) && String(b.barberia_id) === String(barberiaId));
+    if (idx !== -1) {
+      const el = this.bloqueos.splice(idx, 1)[0];
+      this.guardarEnDisco();
+      return el;
+    }
+    return null;
+  }
+
+  obtenerResenas(barberiaId, todas = false) {
+    return this.resenas.filter(r => {
+      if (String(r.barberia_id) !== String(barberiaId)) return false;
+      if (!todas) {
+        return r.aprobada === 1 || r.aprobada === true;
+      }
+      return true;
+    });
+  }
+
+  agregarResena(resena) {
+    const nueva = { id: Date.now(), fecha: new Date().toISOString().split('T')[0], aprobada: 0, ...resena };
+    this.resenas.unshift(nueva);
+    this.guardarEnDisco();
+    return nueva;
+  }
+
+  actualizarResena(id, barberiaId, datos) {
+    const r = this.resenas.find(item => String(item.id) === String(id) && String(item.barberia_id) === String(barberiaId));
+    if (r) {
+      Object.assign(r, datos);
+      this.guardarEnDisco();
+      return r;
+    }
+    return null;
+  }
+
+  eliminarResena(id, barberiaId) {
+    const idx = this.resenas.findIndex(r => String(r.id) === String(id) && String(r.barberia_id) === String(barberiaId));
+    if (idx !== -1) {
+      const el = this.resenas.splice(idx, 1)[0];
+      this.guardarEnDisco();
+      return el;
+    }
+    return null;
   }
 }
 

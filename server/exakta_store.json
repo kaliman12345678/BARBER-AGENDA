@@ -1,0 +1,145 @@
+{
+  "barberias": [
+    {
+      "id": 1,
+      "slug": "the-barber-club",
+      "nombre": "The Barber Club",
+      "eslogan": "Cortes clásicos y modernos con estilo profesional",
+      "logo_url": "",
+      "color_primario": "#2563eb",
+      "color_secundario": "#1e293b",
+      "telefono": "3001234567",
+      "direccion": "Calle 100 # 15-20, Bogotá",
+      "plan": "vip",
+      "precio_mensual_cop": 320000,
+      "modulos_activos": {
+        "agenda": true,
+        "max_barberos": 999,
+        "portal_barberos": true,
+        "liquidaciones": true,
+        "costos": true,
+        "notificaciones_audio": true,
+        "productos": true,
+        "rentabilidad": true,
+        "galeria": true,
+        "auditoria": true,
+        "fidelizacion_clientes": true
+      },
+      "pin_admin": "1234",
+      "activo": 1,
+      "total_barberos": 3,
+      "total_citas": 0
+    }
+  ],
+  "barberos": [
+    {
+      "id": 1,
+      "barberia_id": 1,
+      "nombre": "Carlos \"El Patrón\"",
+      "especialidad": "Degradados & Barbas",
+      "telefono": "3001112233",
+      "email": "carlos@thebarberclub.com",
+      "password": "123",
+      "activo": 1,
+      "foto_url": "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=300",
+      "porcentaje_comision": 50,
+      "horario_inicio": "09:00",
+      "horario_fin": "20:00",
+      "dias_laborales": "1,2,3,4,5,6"
+    },
+    {
+      "id": 2,
+      "barberia_id": 1,
+      "nombre": "Mateo Fade",
+      "especialidad": "Cortes Clásicos & Diseños",
+      "telefono": "3002223344",
+      "email": "mateo@thebarberclub.com",
+      "password": "123",
+      "activo": 1,
+      "foto_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
+      "porcentaje_comision": 50,
+      "horario_inicio": "10:00",
+      "horario_fin": "19:00",
+      "dias_laborales": "1,2,3,4,5,6"
+    },
+    {
+      "id": 3,
+      "barberia_id": 1,
+      "nombre": "Andrés Tijeras",
+      "especialidad": "Tratamientos Capilares & Barba VIP",
+      "telefono": "3003334455",
+      "email": "andres@thebarberclub.com",
+      "password": "123",
+      "activo": 1,
+      "foto_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
+      "porcentaje_comision": 50,
+      "horario_inicio": "09:00",
+      "horario_fin": "20:00",
+      "dias_laborales": "1,2,3,4,5,6,7"
+    }
+  ],
+  "servicios": [
+    {
+      "id": 1,
+      "barberia_id": 1,
+      "nombre": "Corte Clásico / Fade",
+      "precio_cop": 25000,
+      "duracion_minutos": 30,
+      "activo": 1,
+      "descripcion": "Corte con degradado, perfilado de patillas y lavado exprés"
+    },
+    {
+      "id": 2,
+      "barberia_id": 1,
+      "nombre": "Arreglo de Barba & Toalla Caliente",
+      "precio_cop": 18000,
+      "duracion_minutos": 20,
+      "activo": 1,
+      "descripcion": "Perfilado con navaja, toalla caliente y aceites hidratantes"
+    },
+    {
+      "id": 3,
+      "barberia_id": 1,
+      "nombre": "Combo VIP: Corte + Barba + Mascarilla",
+      "precio_cop": 40000,
+      "duracion_minutos": 50,
+      "activo": 1,
+      "descripcion": "Servicio completo con exfoliación y masaje capilar"
+    }
+  ],
+  "citas": [],
+  "bloqueos": [],
+  "resenas": [
+    {
+      "id": 101,
+      "barberia_id": 1,
+      "cliente_nombre": "Alejandro Giraldo",
+      "calificacion": 5,
+      "comentario": "¡Excelente servicio! Carlos me hizo el mejor degradado que he tenido, y la atención con bebida y música es de 10 estrellas.",
+      "servicio_nombre": "Corte Clásico / Fade",
+      "fecha": "2026-11-08",
+      "aprobada": 1
+    },
+    {
+      "id": 102,
+      "barberia_id": 1,
+      "cliente_nombre": "David Morales",
+      "calificacion": 5,
+      "comentario": "Puntuales, pulcros y el arreglo de barba con navaja caliente es una experiencia premium. Muy recomendado.",
+      "servicio_nombre": "Arreglo de Barba VIP",
+      "fecha": "2026-11-05",
+      "aprobada": 1
+    },
+    {
+      "id": 103,
+      "barberia_id": 1,
+      "cliente_nombre": "Camilo Torres",
+      "calificacion": 4,
+      "comentario": "Gran ambiente y barberos muy capacitados. La reserva por la app fue súper rápida y sin filas.",
+      "servicio_nombre": "Combo Corte + Barba",
+      "fecha": "2026-11-04",
+      "aprobada": 1
+    }
+  ],
+  "actualizado": "2026-11-11T15:57:32.453Z"
+}
