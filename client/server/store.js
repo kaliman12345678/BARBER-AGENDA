@@ -317,6 +317,17 @@ class StoreManager {
     return null;
   }
 
+  agregarBarbero(nuevoBarbero) {
+    if (!this.barberos) this.barberos = [];
+    const idx = this.barberos.findIndex(b => String(b.id) === String(nuevoBarbero.id));
+    if (idx >= 0) {
+      this.barberos[idx] = { ...this.barberos[idx], ...nuevoBarbero };
+    } else {
+      this.barberos.push(nuevoBarbero);
+    }
+    this.guardarEnDisco();
+  }
+
   obtenerBarberos(barberiaId, soloActivos = true) {
     return this.barberos.filter(b => {
       const match = String(b.barberia_id) === String(barberiaId);

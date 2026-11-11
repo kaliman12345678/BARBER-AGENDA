@@ -74,6 +74,65 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
   const [guardandoPasswordId, setGuardandoPasswordId] = useState(null);
   const [mostrarPasswords, setMostrarPasswords] = useState({});
 
+  // Eliminación con verificación de contraseña del dueño
+  const [modalEliminarOpen, setModalEliminarOpen] = useState(false);
+  const [barberoAEliminar, setBarberoAEliminar] = useState(null);
+  const [passwordAdminEliminar, setPasswordAdminEliminar] = useState('');
+  const [mostrarPassAdmin, setMostrarPassAdmin] = useState(false);
+  const [errorEliminar, setErrorEliminar] = useState('');
+  const [eliminandoBarbero, setEliminandoBarbero] = useState(false);
+
+  function handleAbrirModalEliminar(barbero) {
+    setBarberoAEliminar(barbero);
+    setPasswordAdminEliminar('');
+    setErrorEliminar('');
+    setModalEliminarOpen(true);
+  }
+
+  async function handleConfirmarEliminarBarbero(e) {
+    if (e) e.preventDefault();
+    if (!barberoAEliminar) return;
+
+    if (!passwordAdminEliminar.trim()) {
+      setErrorEliminar('Debes ingresar tu contraseña de Dueño para confirmar la eliminación.');
+      return;
+    }
+
+    setEliminandoBarbero(true);
+    setErrorEliminar('');
+
+    try {
+      const slug = (typeof window !== 'undefined' && window.__BARBERIA_SLUG) || sessionStorage.getItem('current_barberia_slug') || new URLSearchParams(window.location.search).get('b') || '';
+      const token = sessionStorage.getItem('barberia_admin_token') || sessionStorage.getItem('barberia_superadmin_token') || '';
+
+      const res = await fetch(`/api/barberos/${barberoAEliminar.id}?b=${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': token,
+          'x-barberia-slug': slug,
+          'x-admin-password': passwordAdminEliminar.trim()
+        },
+        body: JSON.stringify({ password_admin: passwordAdminEliminar.trim() })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setErrorEliminar(data.error || 'Contraseña incorrecta o error al eliminar el barbero.');
+        return;
+      }
+
+      setModalEliminarOpen(false);
+      setBarberoAEliminar(null);
+      setPasswordAdminEliminar('');
+      if (onRecargar) onRecargar();
+    } catch (err) {
+      setErrorEliminar('Error de conexión: ' + err.message);
+    } finally {
+      setEliminandoBarbero(false);
+    }
+  }
+
   async function handleGuardarComisionRapida(barberoId, nuevoPorcentaje) {
     const val = Number(nuevoPorcentaje);
     if (isNaN(val) || val < 0 || val > 100) return;
@@ -491,28 +550,40 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
               </div>
 
               {/* Botones de acción inferiores */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleToggleActivo(b)}
                   className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-colors ${
                     b.activo
-                      ? 'text-slate-600 hover:text-rose-600 hover:bg-rose-50'
+                      ? 'text-slate-600 hover:text-amber-600 hover:bg-amber-50'
                       : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                   }`}
                 >
-                  {b.activo ? 'Desactivar Barbero' : 'Activar Barbero'}
+                  {b.activo ? 'Desactivar' : 'Activar'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => abrirModalEditar(b)}
-                  className="px-2.5 py-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                  title="Editar datos del barbero"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Editar</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => abrirModalEditar(b)}
+                    className="px-2.5 py-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors border border-slate-200"
+                    title="Editar datos del barbero"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirModalEliminar(b)}
+                    className="px-2.5 py-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors border border-rose-200"
+                    title="Eliminar este barbero definitivamente del equipo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -758,6 +829,95 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
           esBarbero={false}
           onClose={() => setBarberoRecordId(null)}
         />
+      )}
+
+      {/* Modal de Confirmación de Eliminación de Barbero con Contraseña de Dueño */}
+      {modalEliminarOpen && barberoAEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-rose-200 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 font-sans">
+                  Eliminar Barbero
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Verificación de seguridad requerida
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50/60 rounded-2xl border border-rose-100 flex items-center gap-3">
+              <img
+                src={barberoAEliminar.foto_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&h=150&fit=crop&crop=faces'}
+                alt={barberoAEliminar.nombre}
+                className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-900 truncate">{barberoAEliminar.nombre}</p>
+                <p className="text-[11px] text-slate-500 truncate">{barberoAEliminar.especialidad || 'Barbero'}</p>
+                <p className="text-[10px] text-rose-600 font-medium">Esta acción eliminará al barbero del equipo</p>
+              </div>
+            </div>
+
+            {errorEliminar && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorEliminar}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmarEliminarBarbero} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Contraseña de Dueño de Barbería</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={mostrarPassAdmin ? 'text' : 'password'}
+                    required
+                    placeholder="Ingresa tu contraseña de dueño"
+                    value={passwordAdminEliminar}
+                    onChange={(e) => setPasswordAdminEliminar(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm font-mono pr-10"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPassAdmin(!mostrarPassAdmin)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {mostrarPassAdmin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Por seguridad, ingresa la clave con la que inicias sesión como dueño.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setModalEliminarOpen(false); setBarberoAEliminar(null); }}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={eliminandoBarbero}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/20 disabled:opacity-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{eliminandoBarbero ? 'Eliminando...' : 'Eliminar Barbero'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

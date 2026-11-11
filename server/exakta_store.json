@@ -210,7 +210,12 @@
     "superadmin_telefono": "3114220554",
     "superadmin_nombre": "SuperAdmin EXAKTA Master",
     "superadmin_email": "admin@exakta.online",
-    "pin_superadmin": "Exakta#2026Master!"
+    "pin_superadmin": "Exakta#2026Master!",
+    "precios_planes": {
+      "basico": 90000,
+      "pro": 190000,
+      "vip": 350000
+    }
   },
-  "actualizado": "2026-11-11T22:58:22.317Z"
+  "actualizado": "2026-11-11T23:13:15.712Z"
 }

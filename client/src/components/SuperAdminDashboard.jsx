@@ -170,6 +170,21 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [guardandoPlanCustom, setGuardandoPlanCustom] = useState(false);
   const [mensajeExitoCustom, setMensajeExitoCustom] = useState('');
 
+  // Tarifas globales de planes modificables a placer
+  const [preciosPlanes, setPreciosPlanes] = useState({
+    basico: 80000,
+    pro: 180000,
+    vip: 320000
+  });
+  const [editandoPreciosPlanes, setEditandoPreciosPlanes] = useState(false);
+  const [formPreciosPlanes, setFormPreciosPlanes] = useState({
+    basico: 80000,
+    pro: 180000,
+    vip: 320000
+  });
+  const [guardandoPreciosPlanes, setGuardandoPreciosPlanes] = useState(false);
+  const [mensajeExitoPlanes, setMensajeExitoPlanes] = useState('');
+
   // Estados para Mi Perfil & Configuración SuperAdmin
   const [perfilSuper, setPerfilSuper] = useState({
     nombre: 'SuperAdmin EXAKTA',
@@ -223,6 +238,47 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       console.warn('Error cargando perfil superadmin:', err.message);
     } finally {
       setCargandoPerfil(false);
+    }
+  }
+
+  async function cargarConfiguracionPlanes() {
+    try {
+      const res = await superFetch('/api/superadmin/configuracion-planes');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.precios) {
+          setPreciosPlanes(data.precios);
+          setFormPreciosPlanes(data.precios);
+        }
+      }
+    } catch (err) {
+      console.warn('Error cargando tarifas de planes:', err.message);
+    }
+  }
+
+  async function handleGuardarPreciosPlanes(e) {
+    if (e) e.preventDefault();
+    setGuardandoPreciosPlanes(true);
+    setMensajeExitoPlanes('');
+    try {
+      const res = await superFetch('/api/superadmin/configuracion-planes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ precios: formPreciosPlanes })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPreciosPlanes(data.precios);
+        setEditandoPreciosPlanes(false);
+        setMensajeExitoPlanes('¡Tarifas de planes actualizadas correctamente en todo el sistema!');
+        setTimeout(() => setMensajeExitoPlanes(''), 4000);
+      } else {
+        alert(data.error || 'Error al guardar tarifas');
+      }
+    } catch (err) {
+      alert('Error de conexión al guardar tarifas: ' + err.message);
+    } finally {
+      setGuardandoPreciosPlanes(false);
     }
   }
 
@@ -307,6 +363,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       cargarBarberias();
       cargarNotificaciones();
       cargarPerfilSuperAdmin();
+      cargarConfiguracionPlanes();
     }
   }, []);
 
@@ -318,6 +375,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
         cargarBarberosGlobales();
       } else if (seccionActiva === 'perfil') {
         cargarPerfilSuperAdmin();
+      } else if (seccionActiva === 'planes') {
+        cargarConfiguracionPlanes();
       }
     }
   }, [seccionActiva, isSuperLoggedIn, filtroTiempoCitas, fechaDesdeCitas, fechaHastaCitas, filtroBarberiaEnCitas]);
@@ -1727,14 +1786,130 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           {/* ======================================================== */}
           {seccionActiva === 'planes' && (
             <div className="space-y-6 animate-fadeIn">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                  Gestión de Planes & Beneficios SaaS
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Configura planes estándar y diseña <strong>Planes Personalizados</strong> para clientes específicos con precios y módulos a medida.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                    Gestión de Planes & Beneficios SaaS
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configura las tarifas estándar de la plataforma o diseña <strong>Planes Personalizados</strong> para clientes con precios a convenir.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditandoPreciosPlanes(!editandoPreciosPlanes)}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all ${
+                    editandoPreciosPlanes
+                      ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'
+                  }`}
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>{editandoPreciosPlanes ? 'Cerrar Edición de Tarifas' : 'Modificar Tarifas de Planes a Placer'}</span>
+                </button>
               </div>
+
+              {mensajeExitoPlanes && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{mensajeExitoPlanes}</span>
+                </div>
+              )}
+
+              {/* PANEL MODIFICADOR DE TARIFAS GLOBALES DE PLANES A PLACER */}
+              {editandoPreciosPlanes && (
+                <div className="bg-gradient-to-br from-blue-50/70 via-white to-slate-50 border-2 border-blue-300 rounded-3xl p-5 sm:p-6 shadow-md space-y-4 animate-fadeIn">
+                  <div className="flex items-center gap-3 pb-3 border-b border-blue-100">
+                    <div className="p-2 rounded-xl bg-blue-600 text-white shadow-xs">
+                      <DollarSign className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">
+                        Modificar Tarifas Mensuales de los Planes Estándar
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Ajusta a placer el precio en pesos colombianos ($ COP) para cada nivel de suscripción.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleGuardarPreciosPlanes} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* Plan Básico */}
+                      <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-700 uppercase">Plan Básico</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">2 Barberos</span>
+                        </div>
+                        <label className="text-[11px] text-slate-400 block font-medium">Cuota Mensual ($ COP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5000"
+                          required
+                          value={formPreciosPlanes.basico}
+                          onChange={(e) => setFormPreciosPlanes({ ...formPreciosPlanes, basico: Number(e.target.value) })}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                        />
+                      </div>
+
+                      {/* Plan Profesional */}
+                      <div className="p-4 bg-white rounded-2xl border border-blue-200 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-blue-700 uppercase">Plan Pro</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">5 Barberos</span>
+                        </div>
+                        <label className="text-[11px] text-slate-400 block font-medium">Cuota Mensual ($ COP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5000"
+                          required
+                          value={formPreciosPlanes.pro}
+                          onChange={(e) => setFormPreciosPlanes({ ...formPreciosPlanes, pro: Number(e.target.value) })}
+                          className="w-full px-3 py-2 rounded-xl border border-blue-300 font-mono font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                        />
+                      </div>
+
+                      {/* Plan VIP */}
+                      <div className="p-4 bg-white rounded-2xl border border-amber-200 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-amber-700 uppercase">Plan VIP</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Ilimitado</span>
+                        </div>
+                        <label className="text-[11px] text-slate-400 block font-medium">Cuota Mensual ($ COP)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5000"
+                          required
+                          value={formPreciosPlanes.vip}
+                          onChange={(e) => setFormPreciosPlanes({ ...formPreciosPlanes, vip: Number(e.target.value) })}
+                          className="w-full px-3 py-2 rounded-xl border border-amber-300 font-mono font-bold text-amber-900 focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-blue-100">
+                      <button
+                        type="button"
+                        onClick={() => { setFormPreciosPlanes(preciosPlanes); setEditandoPreciosPlanes(false); }}
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={guardandoPreciosPlanes}
+                        className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{guardandoPreciosPlanes ? 'Guardando Tarifas...' : 'Guardar Nuevas Tarifas Globales'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
 
               {/* TARJETAS DE PLANES DISPONIBLES */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -1742,8 +1917,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   {
                     id: 'basico',
                     nombre: 'Plan Básico',
-                    precio: '$80.000 COP / mes',
-                    precioCop: '~$80.000 COP',
+                    precio: `$${Number(preciosPlanes.basico || 80000).toLocaleString('es-CO')} COP / mes`,
+                    precioCop: `Cuota estándar`,
                     barberos: 'Hasta 2 Barberos',
                     color: 'border-slate-300 bg-white',
                     badge: 'bg-slate-100 text-slate-800',
@@ -1752,8 +1927,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   {
                     id: 'pro',
                     nombre: 'Plan Profesional',
-                    precio: '$180.000 COP / mes',
-                    precioCop: '~$180.000 COP',
+                    precio: `$${Number(preciosPlanes.pro || 180000).toLocaleString('es-CO')} COP / mes`,
+                    precioCop: `Cuota estándar`,
                     barberos: 'Hasta 5 Barberos',
                     color: 'border-blue-300 bg-blue-50/20',
                     badge: 'bg-blue-100 text-blue-800',
@@ -1762,8 +1937,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   {
                     id: 'vip',
                     nombre: 'Plan VIP / Ilimitado',
-                    precio: '$320.000 COP / mes',
-                    precioCop: '~$320.000 COP',
+                    precio: `$${Number(preciosPlanes.vip || 320000).toLocaleString('es-CO')} COP / mes`,
+                    precioCop: `Cuota estándar`,
                     barberos: 'Barberos Ilimitados',
                     color: 'border-amber-300 bg-amber-50/20',
                     badge: 'bg-amber-100 text-amber-900',
@@ -3032,14 +3207,14 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     value={nuevaBarberia.plan}
                     onChange={(e) => {
                       const nuevoPlan = e.target.value;
-                      const cuota = nuevoPlan === 'vip' ? 320000 : (nuevoPlan === 'pro' ? 180000 : (nuevoPlan === 'basico' ? 80000 : nuevaBarberia.precio_mensual_cop));
+                      const cuota = nuevoPlan === 'vip' ? (preciosPlanes.vip || 320000) : (nuevoPlan === 'pro' ? (preciosPlanes.pro || 180000) : (nuevoPlan === 'basico' ? (preciosPlanes.basico || 80000) : nuevaBarberia.precio_mensual_cop));
                       setNuevaBarberia({ ...nuevaBarberia, plan: nuevoPlan, precio_mensual_cop: cuota });
                     }}
                     className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    <option value="basico">Básico ($80.000 COP)</option>
-                    <option value="pro">Profesional ($180.000 COP)</option>
-                    <option value="vip">VIP ($320.000 COP)</option>
+                    <option value="basico">Básico (${Number(preciosPlanes.basico || 80000).toLocaleString('es-CO')} COP)</option>
+                    <option value="pro">Profesional (${Number(preciosPlanes.pro || 180000).toLocaleString('es-CO')} COP)</option>
+                    <option value="vip">VIP (${Number(preciosPlanes.vip || 320000).toLocaleString('es-CO')} COP)</option>
                     <option value="personalizado">Personalizado (Precio libre)</option>
                   </select>
                 </div>
@@ -3211,14 +3386,14 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                     value={barberiaAEditar.plan}
                     onChange={(e) => {
                       const nuevoPlan = e.target.value;
-                      const cuota = nuevoPlan === 'vip' ? 320000 : (nuevoPlan === 'pro' ? 180000 : (nuevoPlan === 'basico' ? 80000 : barberiaAEditar.precio_mensual_cop));
+                      const cuota = nuevoPlan === 'vip' ? (preciosPlanes.vip || 320000) : (nuevoPlan === 'pro' ? (preciosPlanes.pro || 180000) : (nuevoPlan === 'basico' ? (preciosPlanes.basico || 80000) : barberiaAEditar.precio_mensual_cop));
                       setBarberiaAEditar({ ...barberiaAEditar, plan: nuevoPlan, precio_mensual_cop: cuota });
                     }}
                     className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    <option value="basico">Básico ($80.000 COP)</option>
-                    <option value="pro">Profesional ($180.000 COP)</option>
-                    <option value="vip">VIP ($320.000 COP)</option>
+                    <option value="basico">Básico (${Number(preciosPlanes.basico || 80000).toLocaleString('es-CO')} COP)</option>
+                    <option value="pro">Profesional (${Number(preciosPlanes.pro || 180000).toLocaleString('es-CO')} COP)</option>
+                    <option value="vip">VIP (${Number(preciosPlanes.vip || 320000).toLocaleString('es-CO')} COP)</option>
                     <option value="personalizado">Personalizado (Precio libre)</option>
                   </select>
                 </div>
