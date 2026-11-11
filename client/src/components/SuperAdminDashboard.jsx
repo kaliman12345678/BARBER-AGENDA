@@ -49,7 +49,10 @@ import {
   Mail,
   RotateCw,
   ArrowLeft,
-  UserCog
+  UserCog,
+  LayoutGrid,
+  List,
+  Table
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
@@ -99,6 +102,21 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   // Datos
   const [barberias, setBarberias] = useState([]);
+  const [vistaBarberias, setVistaBarberias] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('exakta_superadmin_vista') || 'lista';
+    }
+    return 'lista';
+  });
+
+  const cambiarVista = (nuevaVista) => {
+    setVistaBarberias(nuevaVista);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('exakta_superadmin_vista', nuevaVista);
+    }
+  };
+
+  const [filtroEstadoBarberias, setFiltroEstadoBarberias] = useState('todas'); // 'todas' | 'activas' | 'pausadas' | 'por_vencer'
   const [barberiaDetalle, setBarberiaDetalle] = useState(null);
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
   const [tabDetalle, setTabDetalle] = useState('resumen'); // 'resumen' | 'barberos' | 'modulos' | 'ajustes'
@@ -961,11 +979,17 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     hour12: true
   });
 
-  // Filtrado de barberías por texto
+  // Filtrado de barberías por texto y estado
   const barberiasFiltradas = barberias.filter(b => {
-    if (!busquedaBarberias.trim()) return true;
-    const q = busquedaBarberias.toLowerCase();
-    return b.nombre?.toLowerCase().includes(q) || b.slug?.toLowerCase().includes(q) || b.telefono?.includes(q);
+    if (busquedaBarberias.trim()) {
+      const q = busquedaBarberias.toLowerCase();
+      const matchText = b.nombre?.toLowerCase().includes(q) || b.slug?.toLowerCase().includes(q) || b.telefono?.includes(q) || b.email?.toLowerCase().includes(q);
+      if (!matchText) return false;
+    }
+    if (filtroEstadoBarberias === 'activas') return b.activo !== 0;
+    if (filtroEstadoBarberias === 'pausadas') return b.activo === 0;
+    if (filtroEstadoBarberias === 'por_vencer') return calcularDiasVencer(b) <= 5;
+    return true;
   });
 
   // PANTALLA DE LOGIN CON PIN MAESTRO
@@ -1468,114 +1492,90 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </button>
               </div>
 
-              {/* 4 TARJETAS PASTEL (KPIs) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="bg-[#fefce8] border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-                      <AlertTriangle className="w-4 h-4" />
+              {/* RESUMEN EJECUTIVO COMPACTO (KPI STRIP ALTA DENSIDAD) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+                {/* 1. Finanzas / MRR */}
+                <div 
+                  onClick={() => setSeccionActiva('metricas')}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">MRR Mensual</span>
+                    <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+                      <DollarSign className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-700 px-2 py-0.5 bg-amber-100/60 rounded-full">
-                      Atención
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900 tracking-tight block truncate">
+                      ${mrrTotalCOP.toLocaleString('es-CO')}
+                    </span>
+                    <span className="text-[10px] text-purple-700 font-semibold block mt-0.5 truncate">
+                      Facturación recurrente
                     </span>
                   </div>
-                  <div>
-                    <span className="text-2xl sm:text-3xl font-black text-amber-950 block leading-tight">
-                      {cuentasPorVencer}
-                    </span>
-                    <span className="text-xs font-bold text-amber-900 block mt-1">Por vencer / Inactivas</span>
-                    <p className="text-[11px] text-amber-700/90 leading-tight mt-1">
-                      Cuentas con suscripción por vencer en &lt; 5 días.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSeccionActiva('barberias')}
-                    className="text-[11px] font-extrabold text-amber-800 hover:text-amber-950 flex items-center gap-1 pt-1"
-                  >
-                    <span>Revisar cuentas</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
-                <div className="bg-[#f5f3ff] border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4" />
+                {/* 2. Locales / Barberías */}
+                <div 
+                  onClick={() => setSeccionActiva('barberias')}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-emerald-300 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Barberías</span>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Store className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-purple-700 px-2 py-0.5 bg-purple-100/60 rounded-full">
-                      Finanzas
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900 tracking-tight block">
+                      {barberiasActivas} <span className="text-xs font-bold text-slate-400">/ {totalBarberias}</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5 truncate">
+                      Locales activos
                     </span>
                   </div>
-                  <div>
-                    <span className="text-2xl sm:text-3xl font-black text-purple-950 block leading-tight">
-                      ${mrrTotalCOP.toLocaleString('es-CO')} COP
-                    </span>
-                    <span className="text-xs font-bold text-purple-900 block mt-1">MRR Mensual Estimado</span>
-                    <p className="text-[11px] text-purple-700/90 leading-tight mt-1">
-                      Facturación recurrente mensual en la red.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSeccionActiva('metricas')}
-                    className="text-[11px] font-extrabold text-purple-800 hover:text-purple-950 flex items-center gap-1 pt-1"
-                  >
-                    <span>Ver métricas</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
-                <div className="bg-[#f0f9ff] border border-sky-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
-                      <Scissors className="w-4 h-4" />
+                {/* 3. Equipo / Barberos */}
+                <div 
+                  onClick={() => setSeccionActiva('barberos')}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-sky-300 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Barberos</span>
+                    <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
+                      <Scissors className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-sky-700 px-2 py-0.5 bg-sky-100/60 rounded-full">
-                      Equipo
-                    </span>
                   </div>
-                  <div>
-                    <span className="text-2xl sm:text-3xl font-black text-sky-950 block leading-tight">
+                  <div className="mt-2">
+                    <span className="text-base sm:text-2xl font-black text-slate-900 tracking-tight block">
                       {totalBarberosRed}
                     </span>
-                    <span className="text-xs font-bold text-sky-900 block mt-1">Barberos en Red</span>
-                    <p className="text-[11px] text-sky-700/90 leading-tight mt-1">
-                      Profesionales activos en todos los locales.
-                    </p>
+                    <span className="text-[10px] text-sky-700 font-semibold block mt-0.5 truncate">
+                      Profesionales en red
+                    </span>
                   </div>
-                  <button
-                    onClick={() => setSeccionActiva('barberos')}
-                    className="text-[11px] font-extrabold text-sky-800 hover:text-sky-950 flex items-center gap-1 pt-1"
-                  >
-                    <span>Ver equipo en red</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
-                <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                      <Store className="w-4 h-4" />
+                {/* 4. Por Vencer / Atención */}
+                <div 
+                  onClick={() => { setFiltroEstadoBarberias('por_vencer'); setSeccionActiva('barberias'); }}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-amber-300 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Por Vencer</span>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cuentasPorVencer > 0 ? 'bg-amber-100 text-amber-800 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                      <AlertTriangle className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-700 px-2 py-0.5 bg-emerald-100/60 rounded-full">
-                      Locales
+                  </div>
+                  <div className="mt-2">
+                    <span className={`text-base sm:text-2xl font-black tracking-tight block ${cuentasPorVencer > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                      {cuentasPorVencer}
+                    </span>
+                    <span className="text-[10px] text-amber-700 font-semibold block mt-0.5 truncate">
+                      {cuentasPorVencer > 0 ? 'Revisar cuentas' : 'Todo al día'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-2xl sm:text-3xl font-black text-emerald-950 block leading-tight">
-                      {barberiasActivas} / {totalBarberias}
-                    </span>
-                    <span className="text-xs font-bold text-emerald-900 block mt-1">Barberías Activas</span>
-                    <p className="text-[11px] text-emerald-700/90 leading-tight mt-1">
-                      Clientes operando con agendamiento en vivo.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSeccionActiva('barberias')}
-                    className="text-[11px] font-extrabold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 pt-1"
-                  >
-                    <span>Ver lista completa</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
 
@@ -1645,139 +1645,485 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </button>
               </div>
 
-              {/* BUSCADOR DE BARBERÍAS */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
-                <Search className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
-                <input
-                  type="text"
-                  placeholder="Buscar barbería por nombre, slug o teléfono..."
-                  value={busquedaBarberias}
-                  onChange={(e) => setBusquedaBarberias(e.target.value)}
-                  className="w-full bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
-                />
-                {busquedaBarberias && (
-                  <button onClick={() => setBusquedaBarberias('')} className="p-1 text-slate-400 hover:text-slate-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              {/* BARRA DE CONTROL DE VISTAS, BUSCADOR Y FILTROS */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  {/* Buscador de Barberías */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, slug, teléfono o correo..."
+                      value={busquedaBarberias}
+                      onChange={(e) => setBusquedaBarberias(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                    {busquedaBarberias && (
+                      <button onClick={() => setBusquedaBarberias('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Selector de Vistas: Lista | Tabla | Cuadrícula */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => cambiarVista('lista')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        vistaBarberias === 'lista'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Vista Lista Ejecutiva Compacta"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      <span>Lista</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => cambiarVista('tabla')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        vistaBarberias === 'tabla'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Vista Tabla Detallada"
+                    >
+                      <Table className="w-3.5 h-3.5" />
+                      <span>Tabla</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => cambiarVista('cuadricula')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        vistaBarberias === 'cuadricula'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Vista Tarjetas Cuadrícula"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>Tarjetas</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filtros Rápidos de Estado en Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs pt-1 border-t border-slate-100 scrollbar-none">
+                  <span className="text-[11px] font-bold text-slate-400 mr-1 shrink-0 flex items-center gap-1">
+                    <Filter className="w-3 h-3" />
+                    Estado:
+                  </span>
+                  {[
+                    { id: 'todas', label: 'Todas', count: barberias.length },
+                    { id: 'activas', label: 'Activas', count: barberiasActivas },
+                    { id: 'por_vencer', label: 'Por Vencer (<5d)', count: cuentasPorVencer },
+                    { id: 'pausadas', label: 'Pausadas', count: totalBarberias - barberiasActivas },
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFiltroEstadoBarberias(f.id)}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 transition-all ${
+                        filtroEstadoBarberias === f.id
+                          ? 'bg-slate-900 text-white shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.label} ({f.count})
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* GRILLA DE TARJETAS DE BARBERÍA */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                {barberiasFiltradas.map((barberia) => {
-                  const diasRestantes = calcularDiasVencer(barberia);
-                  const estaActiva = barberia.activo !== 0;
+              {/* ---------------------------------------------------- */}
+              {/* VISTA 1: LISTA EJECUTIVA COMPACTA (RECOMENDADA)      */}
+              {/* ---------------------------------------------------- */}
+              {vistaBarberias === 'lista' && (
+                <div className="space-y-2.5 animate-fadeIn">
+                  {barberiasFiltradas.length === 0 ? (
+                    <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 text-xs">
+                      No se encontraron barberías con los filtros aplicados.
+                    </div>
+                  ) : (
+                    barberiasFiltradas.map((barberia) => {
+                      const diasRestantes = calcularDiasVencer(barberia);
+                      const estaActiva = barberia.activo !== 0;
+                      const cuotaCalculada = barberia.precio_mensual_cop || (barberia.plan === 'vip' ? (preciosPlanes.vip || 320000) : (barberia.plan === 'pro' ? (preciosPlanes.pro || 180000) : (preciosPlanes.basico || 80000)));
 
-                  return (
-                    <div
-                      key={barberia.id}
-                      onClick={() => handleAbrirDetalle(barberia)}
-                      className="p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative flex flex-col justify-between space-y-3 sm:space-y-4"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0"
-                            style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
-                          >
-                            {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                      return (
+                        <div
+                          key={barberia.id}
+                          onClick={() => handleAbrirDetalle(barberia)}
+                          className="p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-xs transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 group"
+                        >
+                          {/* Izquierda: Avatar + Nombre + Slug + Plan */}
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-10 h-10 rounded-xl text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs"
+                              style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
+                            >
+                              {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                                  {barberia.nombre}
+                                </h4>
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                  barberia.plan === 'vip' ? 'bg-amber-100 text-amber-900 border border-amber-200' :
+                                  barberia.plan === 'pro' ? 'bg-blue-100 text-blue-900 border border-blue-200' :
+                                  barberia.plan === 'personalizado' ? 'bg-purple-100 text-purple-900 border border-purple-200' :
+                                  'bg-slate-100 text-slate-700 border border-slate-200'
+                                }`}>
+                                  {barberia.plan}
+                                </span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  estaActiva ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}>
+                                  {estaActiva ? 'Activa' : 'Pausada'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
+                                <span className="truncate">/{barberia.slug}</span>
+                                {barberia.telefono && <span className="text-slate-500 font-sans">• {barberia.telefono}</span>}
+                              </div>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                              {barberia.nombre}
-                            </h4>
-                            <span className="text-[11px] text-slate-400 font-mono block truncate">
-                              /?b={barberia.slug}
-                            </span>
+
+                          {/* Derecha: Métricas en línea + Botones rápidos */}
+                          <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                            <div className="flex items-center gap-3 text-xs">
+                              <div className="text-right hidden lg:block">
+                                <span className="text-[10px] text-slate-400 block font-medium">Cuota Mensual</span>
+                                <span className="font-bold text-slate-900 font-mono">
+                                  ${Number(cuotaCalculada).toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block font-medium">Días ciclo</span>
+                                <span className={`font-bold font-mono ${diasRestantes <= 5 ? 'text-rose-600 font-black' : 'text-slate-800'}`}>
+                                  {diasRestantes}d
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block font-medium">Barberos</span>
+                                <span className="font-bold text-slate-800 font-mono">{barberia.total_barberos || 1}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              {barberia.telefono && (
+                                <a
+                                  href={getWhatsAppUrl(barberia.telefono, barberia.nombre)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Escribir por WhatsApp"
+                                  className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              <button
+                                onClick={(e) => handleCopiarEnlace(barberia.slug, e)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                title="Copiar enlace cliente"
+                              >
+                                {slugCopiado === barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={(e) => handleEntrarComoDueno(barberia, e)}
+                                className="py-1 px-2.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                                title="Entrar como Dueño"
+                              >
+                                <Lock className="w-3 h-3 text-amber-400" />
+                                <span>Entrar</span>
+                              </button>
+                              {Number(barberia.id) !== 1 && (
+                                <button
+                                  onClick={(e) => handleAbrirModalEliminar(barberia, e)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                  title="Eliminar barbería (requiere contraseña SuperAdmin)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
 
-                        <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
-                          barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                          barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                          barberia.plan === 'personalizado' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
-                          'bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}>
-                          PLAN {barberia.plan?.toUpperCase()}
-                        </span>
-                      </div>
+              {/* ---------------------------------------------------- */}
+              {/* VISTA 2: TABLA DETALLADA ESTILO SAAS PRO             */}
+              {/* ---------------------------------------------------- */}
+              {vistaBarberias === 'tabla' && (
+                <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden animate-fadeIn">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/90 border-b border-slate-200/90 text-slate-500 uppercase text-[10px] font-black tracking-wider">
+                          <th className="py-3 px-4">Barbería</th>
+                          <th className="py-3 px-3">Enlace (Slug)</th>
+                          <th className="py-3 px-3">Plan</th>
+                          <th className="py-3 px-3">Cuota Mensual</th>
+                          <th className="py-3 px-3 text-center">Barberos</th>
+                          <th className="py-3 px-3 text-center">Citas</th>
+                          <th className="py-3 px-3">Días Restantes</th>
+                          <th className="py-3 px-3">Estado</th>
+                          <th className="py-3 px-4 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {barberiasFiltradas.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-8 text-center text-slate-400 text-xs">
+                              No se encontraron barberías con los filtros aplicados.
+                            </td>
+                          </tr>
+                        ) : (
+                          barberiasFiltradas.map((barberia) => {
+                            const diasRestantes = calcularDiasVencer(barberia);
+                            const estaActiva = barberia.activo !== 0;
+                            const cuotaCalculada = barberia.precio_mensual_cop || (barberia.plan === 'vip' ? (preciosPlanes.vip || 320000) : (barberia.plan === 'pro' ? (preciosPlanes.pro || 180000) : (preciosPlanes.basico || 80000)));
 
-                      <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                        <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Días restantes</span>
-                          <span className={`text-xs font-black ${diasRestantes <= 5 ? 'text-rose-600' : 'text-slate-900'}`}>
-                            {diasRestantes} días
+                            return (
+                              <tr
+                                key={barberia.id}
+                                onClick={() => handleAbrirDetalle(barberia)}
+                                className="hover:bg-blue-50/20 transition-colors cursor-pointer group"
+                              >
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div
+                                      className="w-8 h-8 rounded-lg text-white font-black text-xs flex items-center justify-center shrink-0"
+                                      style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
+                                    >
+                                      {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <span className="font-extrabold text-slate-900 group-hover:text-blue-600 block truncate">
+                                        {barberia.nombre}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block truncate">
+                                        {barberia.telefono || 'Sin teléfono'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 font-mono text-[11px] text-slate-600">
+                                  /{barberia.slug}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                    barberia.plan === 'vip' ? 'bg-amber-100 text-amber-900' :
+                                    barberia.plan === 'pro' ? 'bg-blue-100 text-blue-900' :
+                                    barberia.plan === 'personalizado' ? 'bg-purple-100 text-purple-900' :
+                                    'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {barberia.plan}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                                  ${Number(cuotaCalculada).toLocaleString('es-CO')}
+                                </td>
+                                <td className="py-3 px-3 text-center font-mono font-bold text-slate-700">
+                                  {barberia.total_barberos || 1}
+                                </td>
+                                <td className="py-3 px-3 text-center font-mono font-bold text-slate-700">
+                                  {barberia.total_citas || 0}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`font-mono font-bold text-xs ${diasRestantes <= 5 ? 'text-rose-600 font-black' : 'text-slate-800'}`}>
+                                    {diasRestantes} días
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleToggleActivo(barberia, e)}
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                      estaActiva ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700' : 'bg-rose-50 text-rose-700 hover:bg-emerald-50 hover:text-emerald-700'
+                                    }`}
+                                  >
+                                    {estaActiva ? '● Activa' : '● Pausada'}
+                                  </button>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                    {barberia.telefono && (
+                                      <a
+                                        href={getWhatsAppUrl(barberia.telefono, barberia.nombre)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                        title="WhatsApp"
+                                      >
+                                        <MessageCircle className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                    <button
+                                      onClick={(e) => handleCopiarEnlace(barberia.slug, e)}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                      title="Copiar enlace"
+                                    >
+                                      {slugCopiado === barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      onClick={(e) => handleEntrarComoDueno(barberia, e)}
+                                      className="px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[10px] font-bold"
+                                      title="Entrar como dueño"
+                                    >
+                                      Entrar
+                                    </button>
+                                    {Number(barberia.id) !== 1 && (
+                                      <button
+                                        onClick={(e) => handleAbrirModalEliminar(barberia, e)}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                        title="Eliminar barbería"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* VISTA 3: TARJETAS EN CUADRÍCULA COMPACTA             */}
+              {/* ---------------------------------------------------- */}
+              {vistaBarberias === 'cuadricula' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 animate-fadeIn">
+                  {barberiasFiltradas.map((barberia) => {
+                    const diasRestantes = calcularDiasVencer(barberia);
+                    const estaActiva = barberia.activo !== 0;
+
+                    return (
+                      <div
+                        key={barberia.id}
+                        onClick={() => handleAbrirDetalle(barberia)}
+                        className="p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:shadow-xs transition-all cursor-pointer group relative flex flex-col justify-between space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-xs shrink-0"
+                              style={{ backgroundColor: barberia.color_primario || '#2563eb' }}
+                            >
+                              {barberia.nombre?.slice(0, 2).toUpperCase() || 'BB'}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                                {barberia.nombre}
+                              </h4>
+                              <span className="text-[11px] text-slate-400 font-mono block truncate">
+                                /{barberia.slug}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                            barberia.plan === 'vip' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                            barberia.plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                            barberia.plan === 'personalizado' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                            'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}>
+                            {barberia.plan}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Barberos</span>
-                          <span className="text-xs font-black text-slate-900">{barberia.total_barberos || 1}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Citas</span>
-                          <span className="text-xs font-black text-slate-900">{barberia.total_citas || 0}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center justify-between pt-1 gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={(e) => handleToggleActivo(barberia, e)}
-                            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg transition-colors ${
-                              estaActiva
-                                ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700'
-                                : 'bg-rose-50 text-rose-700 hover:bg-emerald-50 hover:text-emerald-700'
-                            }`}
-                          >
-                            {estaActiva ? '● Activa' : '● Pausada'}
-                          </button>
-                          
-                          {barberia.telefono && (
-                            <a
-                              href={getWhatsAppUrl(barberia.telefono, barberia.nombre)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Escribir por WhatsApp"
-                              className="p-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                            </a>
-                          )}
+                        <div className="grid grid-cols-3 gap-2 py-1.5 px-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Días ciclo</span>
+                            <span className={`text-xs font-black ${diasRestantes <= 5 ? 'text-rose-600' : 'text-slate-900'}`}>
+                              {diasRestantes}d
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Barberos</span>
+                            <span className="text-xs font-black text-slate-900">{barberia.total_barberos || 1}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Citas</span>
+                            <span className="text-xs font-black text-slate-900">{barberia.total_citas || 0}</span>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={(e) => handleCopiarEnlace(barberia.slug, e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            title="Copiar link público"
-                          >
-                            {slugCopiado === barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-
-                          <button
-                            onClick={(e) => handleEntrarComoDueno(barberia, e)}
-                            className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center gap-1 transition-colors"
-                          >
-                            <Lock className="w-3 h-3" />
-                            <span>Entrar</span>
-                          </button>
-
-                          {Number(barberia.id) !== 1 && (
+                        <div className="flex items-center justify-between pt-1 gap-2">
+                          <div className="flex items-center gap-1.5">
                             <button
-                              onClick={(e) => handleAbrirModalEliminar(barberia, e)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                              title="Eliminar barbería (requiere contraseña SuperAdmin)"
+                              onClick={(e) => handleToggleActivo(barberia, e)}
+                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md transition-colors ${
+                                estaActiva
+                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700'
+                                  : 'bg-rose-50 text-rose-700 hover:bg-emerald-50 hover:text-emerald-700'
+                              }`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {estaActiva ? '● Activa' : '● Pausada'}
                             </button>
-                          )}
+                            
+                            {barberia.telefono && (
+                              <a
+                                href={getWhatsAppUrl(barberia.telefono, barberia.nombre)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Escribir por WhatsApp"
+                                className="p-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => handleCopiarEnlace(barberia.slug, e)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                              title="Copiar link público"
+                            >
+                              {slugCopiado === barberia.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+
+                            <button
+                              onClick={(e) => handleEntrarComoDueno(barberia, e)}
+                              className="py-1 px-2.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold flex items-center gap-1 transition-colors"
+                            >
+                              <Lock className="w-3 h-3 text-amber-400" />
+                              <span>Entrar</span>
+                            </button>
+
+                            {Number(barberia.id) !== 1 && (
+                              <button
+                                onClick={(e) => handleAbrirModalEliminar(barberia, e)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Eliminar barbería (requiere contraseña SuperAdmin)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
