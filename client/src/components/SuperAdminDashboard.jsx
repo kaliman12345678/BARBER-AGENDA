@@ -66,6 +66,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [isSuperLoggedIn, setIsSuperLoggedIn] = useState(false);
   const [superTelefono, setSuperTelefono] = useState('3114220554');
   const [superPin, setSuperPin] = useState('');
+  const [mostrarSuperPass, setMostrarSuperPass] = useState(false);
   const [pinError, setPinError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -108,7 +109,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     plan: 'pro',
     precio_mensual_cop: 180000,
     color_primario: '#2563eb',
-    pin_admin: '1234',
+    pin_admin: 'BarberClub2026*',
     telefono: '',
     direccion: '',
     eslogan: 'Tu estilo en las mejores manos'
@@ -196,8 +197,8 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       }
     } catch (err) {
       const cleanTel = superTelefono.replace(/\D/g, '');
-      if ((cleanTel === '3114220554' || superTelefono.trim().toLowerCase() === 'superadmin') && superPin.trim() === '9999') {
-        sessionStorage.setItem('barberia_superadmin_token', 'superadmin-master-session-token');
+      if ((cleanTel === '3114220554' || superTelefono.trim().toLowerCase() === 'superadmin') && (superPin.trim() === 'Exakta#2026Master!' || superPin.trim() === '9999')) {
+        sessionStorage.setItem('barberia_superadmin_token', 'exa_sup_master_fallback');
         setIsSuperLoggedIn(true);
         cargarBarberias();
       } else {
@@ -489,7 +490,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           email: '',
           plan: 'pro',
           color_primario: '#2563eb',
-          pin_admin: '1234',
+          pin_admin: 'BarberClub2026*',
           telefono: '',
           direccion: '',
           eslogan: 'Tu estilo en las mejores manos'
@@ -518,7 +519,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       plan: barberia.plan || 'pro',
       color_primario: barberia.color_primario || '#2563eb',
       color_secundario: barberia.color_secundario || '#1e293b',
-      pin_admin: barberia.pin_admin || '1234',
+      pin_admin: barberia.pin_admin || 'BarberClub2026*',
       telefono: barberia.telefono ? barberia.telefono.replace(/\D/g, '').slice(0, 10) : '',
       direccion: barberia.direccion || '',
       eslogan: barberia.eslogan || 'Tu estilo en las mejores manos',
@@ -613,7 +614,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   function handleCompartirWhatsAppDueno(barberia, e) {
     if (e) e.stopPropagation();
     const url = `${getBaseAppUrl()}/?b=${barberia.slug}&admin=1`;
-    const pin = barberia.pin_admin || '1234';
+    const pin = barberia.pin_admin || 'BarberClub2026*';
     const texto = `¡Hola! Aquí tienes el acceso a tu plataforma EXAKTA para administrar ${barberia.nombre}:\n\n🔗 Enlace de Dueño: ${url}\n🔑 PIN de Acceso: ${pin}\n\nDesde allí puedes gestionar tus citas, barberos, servicios y reportes.`;
     const cleanTel = (barberia.telefono || '').replace(/[^0-9]/g, '');
     const waUrl = cleanTel ? `https://api.whatsapp.com/send?phone=57${cleanTel}&text=${encodeURIComponent(texto)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
@@ -751,15 +752,26 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
             </div>
 
             <div className="text-left space-y-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">PIN / Contraseña Maestra</label>
-              <input
-                type="password"
-                placeholder="PIN Maestro (ej: 9999)"
-                value={superPin}
-                onChange={(e) => setSuperPin(e.target.value)}
-                className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-lg font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                autoFocus
-              />
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Contraseña Maestra</label>
+              <div className="relative">
+                <input
+                  type={mostrarSuperPass ? "text" : "password"}
+                  placeholder="Contraseña Maestra (ej: Exakta#2026Master!)"
+                  value={superPin}
+                  onChange={(e) => setSuperPin(e.target.value)}
+                  className="w-full p-3 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono text-base font-bold tracking-wider focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  tabIndex="-1"
+                  onClick={() => setMostrarSuperPass(!mostrarSuperPass)}
+                  title={mostrarSuperPass ? "Ocultar" : "Mostrar"}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  {mostrarSuperPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -2190,7 +2202,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                             PIN de Acceso Dueño:
                           </span>
                           <span className="text-xs font-mono font-black text-amber-950 px-2 py-0.5 bg-white border border-amber-300 rounded-md">
-                            {barberiaDetalle.barberia.pin_admin || '1234'}
+                            {barberiaDetalle.barberia.pin_admin || 'BarberClub2026*'}
                           </span>
                         </div>
                       </div>
@@ -2348,7 +2360,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                       <span className="text-xs text-amber-700/80">Clave para que el dueño ingrese al local</span>
                     </div>
                     <span className="text-lg font-black font-mono tracking-widest text-amber-950 px-3 py-1 bg-white border border-amber-300 rounded-xl">
-                      {barberiaDetalle.barberia.pin_admin || '1234'}
+                      {barberiaDetalle.barberia.pin_admin || 'BarberClub2026*'}
                     </span>
                   </div>
 
@@ -2536,11 +2548,11 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <label className="block font-bold text-slate-700 mb-1">Contraseña / PIN Dueño</label>
                   <input
                     type="text"
-                    maxLength={10}
-                    placeholder="1234"
+                    maxLength={30}
+                    placeholder="Ej: BarberClub2026*"
                     value={nuevaBarberia.pin_admin}
                     onChange={(e) => setNuevaBarberia({ ...nuevaBarberia, pin_admin: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-wider focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">Clave asignada</span>
                 </div>
@@ -2715,11 +2727,11 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   <label className="block font-bold text-slate-700 mb-1">Contraseña / PIN Dueño</label>
                   <input
                     type="text"
-                    maxLength={10}
-                    placeholder="1234"
+                    maxLength={30}
+                    placeholder="Ej: BarberClub2026*"
                     value={barberiaAEditar.pin_admin}
                     onChange={(e) => setBarberiaAEditar({ ...barberiaAEditar, pin_admin: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-900"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center font-bold tracking-wider focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-900"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">Clave con la que entra el dueño</span>
                 </div>

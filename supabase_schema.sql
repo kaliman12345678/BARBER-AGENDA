@@ -189,12 +189,12 @@ CREATE TABLE IF NOT EXISTS galeria_multimedia (
 
 -- Barbería #1 Inicial (The Barber Club)
 INSERT INTO barberias (id, slug, nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo) VALUES
-  (1, 'the-barber-club', 'The Barber Club', 'Estilo clásico con técnica moderna', '', '#2563eb', '#1e293b', '+57 300 123 4567', 'Calle Principal # 10 - 20', 'vip', '{"agenda":true,"max_barberos":999,"portal_barberos":true,"liquidaciones":true,"costos":true,"notificaciones_audio":true,"productos":true,"rentabilidad":true,"galeria":true,"auditoria":true}'::jsonb, '1234', 1)
+  (1, 'the-barber-club', 'The Barber Club', 'Estilo clásico con técnica moderna', '', '#2563eb', '#1e293b', '+57 300 123 4567', 'Calle Principal # 10 - 20', 'vip', '{"agenda":true,"max_barberos":999,"portal_barberos":true,"liquidaciones":true,"costos":true,"notificaciones_audio":true,"productos":true,"rentabilidad":true,"galeria":true,"auditoria":true}'::jsonb, 'BarberClub2026*', 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- Configuración global
 INSERT INTO configuracion (clave, valor) VALUES
-  ('pin_superadmin', '9999'),
+  ('pin_superadmin', 'Exakta#2026Master!'),
   ('intervalo_minutos', '30'),
   ('hora_apertura', '08:00'),
   ('hora_cierre', '20:00')

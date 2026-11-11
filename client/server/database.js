@@ -4,8 +4,7 @@ const fs = require('fs');
 
 let dbAdapter;
 
-const SUPABASE_DEFAULT_URL = 'postgresql://postgres:misservicioS%231@db.hxkyinybjephrgcunxom.supabase.co:5432/postgres';
-const effectiveDbUrl = process.env.DATABASE_URL || (process.env.VERCEL ? SUPABASE_DEFAULT_URL : null);
+const effectiveDbUrl = process.env.DATABASE_URL || (process.env.VERCEL ? (process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL) : null);
 
 if (effectiveDbUrl) {
   // ----------------------------------------------------

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -8,6 +9,12 @@ const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 4001;
+
+const DEFAULT_SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || process.env.SUPERADMIN_PIN || 'Exakta#2026Master!';
+
+function generateSessionToken(prefix = 'exa') {
+  return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
+}
 
 app.use(cors());
 app.use(express.json());
@@ -286,8 +293,8 @@ app.post('/api/auth/unified-login', async (req, res) => {
   const cleanTel = trimmedTel.replace(/[^0-9]/g, '');
 
   try {
-    // 1. Verificar si es SuperAdmin (Requiere estrictamente teléfono 3114220554 y contraseña/PIN 9999)
-    let superPin = '9999';
+    // 1. Verificar si es SuperAdmin (Requiere estrictamente teléfono 3114220554 y contraseña maestra)
+    let superPin = DEFAULT_SUPERADMIN_PASS;
     try {
       const superRow = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
       if (superRow && superRow.valor) superPin = String(superRow.valor).trim();
@@ -295,13 +302,13 @@ app.post('/api/auth/unified-login', async (req, res) => {
 
     const esSuperAdmin = 
       (cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin' || trimmedTel.toLowerCase() === 'admin@exakta.online') &&
-      (trimmedPass === superPin || trimmedPass === '9999' || trimmedPin === superPin || trimmedPin === '9999');
+      (trimmedPass === superPin || trimmedPin === superPin || trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS);
 
     if (esSuperAdmin) {
       return res.json({
         success: true,
         role: 'superadmin',
-        token: 'superadmin-master-session-token',
+        token: generateSessionToken('exa_sup'),
         message: 'Acceso SuperAdmin concedido'
       });
     }
@@ -309,12 +316,12 @@ app.post('/api/auth/unified-login', async (req, res) => {
     // 2. Verificar si es Dueño / Administrador de la barbería
     let barberiaDueño = null;
 
-    // A. Buscar en barberías del store por email o teléfono y contraseña
+    // A. Buscar en barberías del store por email o teléfono y contraseña real
     if (trimmedPass || trimmedPin) {
       const passBuscado = trimmedPass || trimmedPin;
       for (const b of (store.barberias || [])) {
-        const bPin = String(b.pin_admin || '1234').trim();
-        const coincidePass = (passBuscado === bPin || passBuscado === '1234');
+        const bPin = String(b.pin_admin || '').trim();
+        const coincidePass = bPin && (passBuscado === bPin);
         const coincideEmail = trimmedTel && b.email && b.email.toLowerCase() === trimmedTel.toLowerCase();
         const coincideTel = cleanTel && b.telefono && b.telefono.replace(/[^0-9]/g, '') === cleanTel;
 
@@ -325,15 +332,17 @@ app.post('/api/auth/unified-login', async (req, res) => {
       }
     }
 
-    // B. Si está en el tenant actual y usa el PIN o 'admin'
-    if (!barberiaDueño) {
-      const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : '1234';
-      const esAdminTenant = 
-        (trimmedPin && (trimmedPin === tenantPin || trimmedPin === '1234')) ||
-        (trimmedPass && (trimmedPass === tenantPin || trimmedPass === '1234')) ||
-        (trimmedTel.toLowerCase() === 'admin' && (trimmedPass === tenantPin || trimmedPass === '1234' || !trimmedPass));
+    // B. Si está en el tenant actual y usa la contraseña del tenant
+    if (!barberiaDueño && (trimmedPass || trimmedPin)) {
+      const passBuscado = trimmedPass || trimmedPin;
+      const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : 'BarberClub2026*';
+      const coincideTenantPass = tenantPin && (passBuscado === tenantPin);
+      
+      const coincideTenantTel = cleanTel && tenant && tenant.telefono && tenant.telefono.replace(/[^0-9]/g, '') === cleanTel;
+      const coincideTenantEmail = trimmedTel && tenant && tenant.email && tenant.email.toLowerCase() === trimmedTel.toLowerCase();
+      const esAdminUser = trimmedTel.toLowerCase() === 'admin';
 
-      if (esAdminTenant) {
+      if (coincideTenantPass && (coincideTenantTel || coincideTenantEmail || esAdminUser)) {
         barberiaDueño = tenant || { id: tenantId, nombre: 'The Barber Club', slug: 'the-barber-club' };
       }
     }
@@ -342,7 +351,7 @@ app.post('/api/auth/unified-login', async (req, res) => {
       return res.json({
         success: true,
         role: 'admin',
-        token: 'auth-admin-session-token',
+        token: generateSessionToken('exa_adm'),
         barberia_id: barberiaDueño.id,
         barberia_slug: barberiaDueño.slug,
         barberia_nombre: barberiaDueño.nombre || 'The Barber Club',
@@ -350,29 +359,24 @@ app.post('/api/auth/unified-login', async (req, res) => {
       });
     }
 
-    // 3. Verificar si es un Barbero por PIN o por Teléfono/Correo + Contraseña
+    // 3. Verificar si es un Barbero por Teléfono/Correo + Contraseña
     let barbero = null;
-    const claveBuscada = trimmedPin || trimmedPass;
+    const claveBuscada = trimmedPass || trimmedPin;
 
     // Buscar en barberos del store por email o teléfono y contraseña
     if (claveBuscada && (cleanTel || trimmedTel)) {
       barbero = (store.barberos || []).find(b => {
-        const coincidePass = String(b.password || '123').trim() === claveBuscada || String(b.password || '123').trim() === trimmedPass;
+        const bPass = String(b.password || '').trim();
+        const coincidePass = bPass && (bPass === claveBuscada);
         const coincideEmail = trimmedTel && b.email && b.email.toLowerCase() === trimmedTel.toLowerCase();
         const coincideTel = cleanTel && b.telefono && b.telefono.replace(/[^0-9]/g, '') === cleanTel;
         return (coincideEmail || coincideTel) && coincidePass && b.activo === 1;
       });
     }
 
-    if (!barbero && claveBuscada) {
+    if (!barbero && claveBuscada && (cleanTel || trimmedTel)) {
       try {
-        barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (password = ? OR telefono = ?) AND activo = 1').get(tenantId, claveBuscada, claveBuscada);
-      } catch (_) {}
-    }
-
-    if (!barbero && (trimmedTel || trimmedPass)) {
-      try {
-        barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (telefono LIKE ? OR email = ? OR LOWER(nombre) LIKE ?) AND (password = ? OR password IS NULL OR ? = "") AND activo = 1').get(tenantId, cleanTel ? `%${cleanTel}%` : '%', trimmedTel, `%${trimmedTel.toLowerCase()}%`, trimmedPass, trimmedPass);
+        barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (telefono = ? OR email = ?) AND password = ? AND activo = 1').get(tenantId, cleanTel || trimmedTel, trimmedTel, claveBuscada);
       } catch (_) {}
     }
 
@@ -380,7 +384,7 @@ app.post('/api/auth/unified-login', async (req, res) => {
       return res.json({
         success: true,
         role: 'barbero',
-        token: 'auth-barbero-session-token',
+        token: generateSessionToken('exa_bar'),
         barberia_id: tenantId,
         barbero: {
           id: barbero.id,
@@ -398,14 +402,11 @@ app.post('/api/auth/unified-login', async (req, res) => {
 
     return res.status(401).json({
       success: false,
-      message: 'PIN o contraseña no reconocida. Verifica tus datos de acceso.'
+      message: 'Credenciales o contraseña incorrectas. Verifica tus datos de acceso.'
     });
   } catch (error) {
-    if ((cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin') && (trimmedPass === '9999' || trimmedPin === '9999')) {
-      return res.json({ success: true, role: 'superadmin', token: 'superadmin-master-session-token' });
-    }
-    if (trimmedPin === '1234' || trimmedPass === '1234') {
-      return res.json({ success: true, role: 'admin', token: 'auth-admin-session-token', barberia_id: tenantId || 1 });
+    if ((cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin') && (trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS)) {
+      return res.json({ success: true, role: 'superadmin', token: generateSessionToken('exa_sup') });
     }
     return res.status(401).json({ success: false, message: 'Credenciales o contraseña incorrecta.' });
   }
@@ -413,40 +414,30 @@ app.post('/api/auth/unified-login', async (req, res) => {
 
 app.post('/api/auth/verify-pin', async (req, res) => {
   const { pin } = req.body;
+  const inputPin = String(pin || '').trim();
   try {
     const tenant = await getTenant(req);
-    const tenantPin = tenant && tenant.pin_admin ? tenant.pin_admin : '1234';
+    const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : 'BarberClub2026*';
 
-    let superPin = '9999';
+    let superPin = DEFAULT_SUPERADMIN_PASS;
     try {
       const superRow = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
-      if (superRow && superRow.valor) superPin = superRow.valor;
-    } catch (e) {
-      // Usar '9999' por defecto si falla lectura
-    }
+      if (superRow && superRow.valor) superPin = String(superRow.valor).trim();
+    } catch (e) {}
 
-    if (String(pin).trim() === String(tenantPin).trim() || String(pin).trim() === String(superPin).trim()) {
+    if (inputPin && (inputPin === tenantPin || inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS)) {
       return res.json({
         success: true,
-        token: 'auth-admin-session-token',
+        token: generateSessionToken(inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS ? 'exa_sup' : 'exa_adm'),
         barberia_id: tenant ? tenant.id : 1,
         barberia_nombre: tenant ? tenant.nombre : 'The Barber Club',
-        is_superadmin: String(pin).trim() === String(superPin).trim()
+        is_superadmin: inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS
       });
     } else {
-      return res.status(401).json({ success: false, message: 'PIN incorrecto' });
+      return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
     }
   } catch (error) {
-    if (String(pin).trim() === '1234' || String(pin).trim() === '9999') {
-      return res.json({
-        success: true,
-        token: 'auth-admin-session-token',
-        barberia_id: 1,
-        barberia_nombre: 'The Barber Club',
-        is_superadmin: String(pin).trim() === '9999'
-      });
-    }
-    return res.status(401).json({ success: false, message: 'PIN incorrecto' });
+    return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
   }
 });
 
@@ -596,25 +587,24 @@ app.post('/api/superadmin/login', async (req, res) => {
     return res.status(401).json({ success: false, message: 'Teléfono o usuario no autorizado para SuperAdmin' });
   }
 
+  const defaultMaster = DEFAULT_SUPERADMIN_PASS;
   try {
-    let masterPin = '9999';
+    let masterPin = defaultMaster;
     try {
       const row = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'pin_superadmin'").get();
       if (row && row.valor) masterPin = row.valor;
-    } catch (e) {
-      // Usar '9999' de fábrica si falla lectura
-    }
+    } catch (e) {}
 
-    if (inputPin === String(masterPin).trim() || inputPin === '9999') {
-      return res.json({ success: true, token: 'superadmin-master-session-token' });
+    if (inputPin === String(masterPin).trim() || inputPin === defaultMaster) {
+      return res.json({ success: true, token: generateSessionToken('exa_sup') });
     } else {
-      return res.status(401).json({ success: false, message: 'PIN o Contraseña incorrecta' });
+      return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
     }
   } catch (error) {
-    if (inputPin === '9999') {
-      return res.json({ success: true, token: 'superadmin-master-session-token' });
+    if (inputPin === defaultMaster) {
+      return res.json({ success: true, token: generateSessionToken('exa_sup') });
     }
-    return res.status(401).json({ success: false, message: 'PIN o Contraseña incorrecta' });
+    return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
   }
 });
 
@@ -789,6 +779,9 @@ app.post('/api/superadmin/barberias', async (req, res) => {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `);
 
+      const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : ('Admin' + Math.floor(1000 + Math.random() * 9000) + '*');
+      const passBarberoInicial = 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*';
+
       const result = await stmt.run(
         finalSlug,
         nombre.trim(),
@@ -800,7 +793,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
         direccion || '',
         planElegido,
         modulosFinales,
-        pin_admin || '1234'
+        pinFinal
       );
       if (result && result.lastInsertRowid) {
         nuevaId = result.lastInsertRowid;
@@ -816,8 +809,9 @@ app.post('/api/superadmin/barberias', async (req, res) => {
     } catch (_) {}
 
     try {
+      const passBarberoInicial = 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*';
       const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-      await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, '123456', 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+      await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, passBarberoInicial, 50.0, '09:00', '20:00', '1,2,3,4,5,6');
     } catch (_) {}
 
     let nuevaBarberia = null;
@@ -836,6 +830,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       parsedModulos = getDefaultModulesForPlan(planElegido);
     }
 
+    const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : ('Admin' + Math.floor(1000 + Math.random() * 9000) + '*');
     const barberiaFinal = {
       id: nuevaBarberia?.id || nuevaId,
       slug: nuevaBarberia?.slug || finalSlug,
@@ -849,7 +844,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       plan: nuevaBarberia?.plan || planElegido,
       precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (planElegido === 'vip' ? 320000 : (planElegido === 'pro' ? 180000 : 80000)),
       modulos_activos: parsedModulos,
-      pin_admin: nuevaBarberia?.pin_admin || pin_admin || '1234',
+      pin_admin: nuevaBarberia?.pin_admin || pinFinal,
       activo: 1,
       total_barberos: 1,
       total_citas: 0
@@ -958,7 +953,7 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
       plan: updated?.plan || plan || actual?.plan || 'basico',
       precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (actual?.precio_mensual_cop ?? ((updated?.plan || plan || actual?.plan) === 'vip' ? 320000 : ((updated?.plan || plan || actual?.plan) === 'pro' ? 180000 : 80000))),
       modulos_activos: parsedUpdatedModulos,
-      pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || '1234',
+      pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || 'BarberClub2026*',
       activo: updated?.activo !== undefined ? updated.activo : (activo !== undefined ? (activo ? 1 : 0) : (actual?.activo ?? 1)),
       total_barberos: updated?.total_barberos || actual?.total_barberos || 1,
       total_citas: updated?.total_citas || actual?.total_citas || 0
@@ -1179,7 +1174,7 @@ app.post('/api/barberos', async (req, res) => {
 
     const nombreLimpio = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const emailFinal = email ? email.trim().toLowerCase() : `${nombreLimpio || 'barbero' + Date.now()}@barberia.com`;
-    const passwordFinal = password ? password.trim() : '123456';
+    const passwordFinal = password ? password.trim() : ('Barbero' + Math.floor(1000 + Math.random() * 9000) + '*');
 
     const stmt = db.prepare(`
       INSERT INTO barberos (barberia_id, nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)

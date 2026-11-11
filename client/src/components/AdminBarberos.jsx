@@ -151,7 +151,7 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
       especialidad: '',
       telefono: '',
       email: '',
-      password: '123456',
+      password: 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*',
       foto_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=300&h=300&fit=crop&crop=faces',
       porcentaje_comision: 50,
       horario_inicio: '09:00',
@@ -170,7 +170,7 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
       especialidad: b.especialidad || '',
       telefono: b.telefono || '',
       email: b.email || '',
-      password: b.password || '123456',
+      password: b.password || 'Barbero2026*',
       foto_url: b.foto_url || '',
       porcentaje_comision: b.porcentaje_comision || 50,
       horario_inicio: b.horario_inicio || '09:00',
@@ -291,7 +291,7 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
         {barberos.map((b) => {
           const dias = b.dias_laborales ? b.dias_laborales.split(',').map(Number) : [];
           const passVisible = mostrarPasswords[b.id];
-          const passActual = passwordsEditables[b.id] ?? (b.password || '123456');
+          const passActual = passwordsEditables[b.id] ?? (b.password || 'Barbero2026*');
 
           return (
             <div
@@ -572,7 +572,7 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
                   <input
                     type="text"
                     required
-                    placeholder="123456"
+                    placeholder="Ej: Barbero2026*"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="w-full bg-slate-50 border border-emerald-200 rounded-xl px-3 py-2 text-emerald-800 font-bold focus:outline-none focus:border-emerald-500 font-mono"

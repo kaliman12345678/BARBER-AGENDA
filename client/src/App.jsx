@@ -56,7 +56,6 @@ export default function App() {
     }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const pinParam = urlParams.get('pin');
     const isSuperRoute = window.location.pathname.includes('/superadmin') || urlParams.get('superadmin') !== null;
     const isAdminRoute = window.location.pathname.includes('/admin') || window.location.hash.includes('admin') || urlParams.get('admin') !== null;
     const isBarberoRoute = window.location.pathname.includes('/barbero') || window.location.hash.includes('barbero') || urlParams.get('barbero') !== null;
@@ -68,7 +67,7 @@ export default function App() {
 
     // Auto-login solo si existe token de sesión activo previo en sessionStorage
     const adminToken = sessionStorage.getItem('barberia_admin_token');
-    if (adminToken || pinParam === '1234') {
+    if (adminToken) {
       setIsAdminLoggedIn(true);
       if (isAdminRoute) {
         setActiveView('admin');

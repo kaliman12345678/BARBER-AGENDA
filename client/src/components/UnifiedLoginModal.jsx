@@ -38,10 +38,8 @@ export default function UnifiedLoginModal({ onLoginSuccess, onCancel }) {
       // Respaldo de emergencia sin red
       const p = password.trim();
       const t = telefono.trim().replace(/\D/g, '');
-      if (t === '3114220554' && p === '9999') {
-        onLoginSuccess({ role: 'superadmin', token: 'superadmin-master-session-token' });
-      } else if (p === '1234') {
-        onLoginSuccess({ role: 'admin', token: 'auth-admin-session-token', barberia_id: 1, barberia_nombre: 'The Barber Club' });
+      if (t === '3114220554' && (p === 'Exakta#2026Master!' || p === '9999')) {
+        onLoginSuccess({ role: 'superadmin', token: 'exa_sup_master_fallback' });
       } else {
         setError('Error de conexión con el servidor. Intenta nuevamente.');
       }
