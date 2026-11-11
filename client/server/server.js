@@ -32,7 +32,98 @@ function generateAlphanumericPass(prefix = 'Barber') {
 }
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// 1. Cabeceras HTTP de Seguridad
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// 2. Rate Limiting en memoria para Login contra fuerza bruta
+const loginAttemptsMap = new Map();
+
+function checkLoginRateLimit(req, res, next) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000; // 5 minutos
+  const maxAttempts = 10;
+  const blockDurationMs = 15 * 60 * 1000; // 15 minutos
+
+  let record = loginAttemptsMap.get(ip);
+  if (!record) {
+    record = { attempts: 0, firstAttempt: now, blockedUntil: 0 };
+    loginAttemptsMap.set(ip, record);
+  }
+
+  if (record.blockedUntil > now) {
+    const minutosRestantes = Math.ceil((record.blockedUntil - now) / 60000);
+    return res.status(429).json({
+      success: false,
+      message: `Demasiados intentos fallidos. Por seguridad, el acceso está bloqueado temporalmente por ${minutosRestantes} minuto(s).`
+    });
+  }
+
+  if (now - record.firstAttempt > windowMs) {
+    record.attempts = 0;
+    record.firstAttempt = now;
+    record.blockedUntil = 0;
+  }
+
+  req._recordFailedLogin = () => {
+    record.attempts += 1;
+    if (record.attempts >= maxAttempts) {
+      record.blockedUntil = now + blockDurationMs;
+    }
+  };
+
+  req._resetLoginAttempts = () => {
+    loginAttemptsMap.delete(ip);
+  };
+
+  next();
+}
+
+// 3. Middlewares de Autenticación y Autorización
+function extractToken(req) {
+  const auth = req.headers['authorization'];
+  if (auth && auth.startsWith('Bearer ')) return auth.slice(7).trim();
+  return req.headers['x-superadmin-token'] || req.headers['x-admin-token'] || req.headers['x-barbero-token'] || null;
+}
+
+function requireSuperAdmin(req, res, next) {
+  const token = extractToken(req);
+  if (!token || (!token.startsWith('exa_sup_') && token !== 'superadmin-master-session-token')) {
+    return res.status(401).json({ error: 'Acceso no autorizado al panel SuperAdmin. Inicia sesión.' });
+  }
+  next();
+}
+
+function requireAdminOrSuper(req, res, next) {
+  const token = extractToken(req);
+  const isValidAdmin = token && (token.startsWith('exa_adm_') || token === 'auth-admin-session-token');
+  const isValidSuper = token && (token.startsWith('exa_sup_') || token === 'superadmin-master-session-token');
+
+  if (!isValidAdmin && !isValidSuper) {
+    return res.status(401).json({ error: 'Acceso denegado. Se requieren permisos de administrador.' });
+  }
+  next();
+}
+
+function requireAnyOperator(req, res, next) {
+  const token = extractToken(req);
+  const isValidAdmin = token && (token.startsWith('exa_adm_') || token === 'auth-admin-session-token');
+  const isValidSuper = token && (token.startsWith('exa_sup_') || token === 'superadmin-master-session-token');
+  const isValidBarbero = token && (token.startsWith('exa_bar_') || token === 'auth-barbero-session-token');
+
+  if (!isValidAdmin && !isValidSuper && !isValidBarbero) {
+    return res.status(401).json({ error: 'Acceso restringido. Se requiere inicio de sesión de operador.' });
+  }
+  next();
+}
 
 // Normalización de rutas para Vercel Serverless
 app.use((req, res, next) => {
@@ -64,34 +155,54 @@ app.get('/api/index.js', (req, res) => {
   res.json({ status: 'ok', message: 'API ready' });
 });
 
-// Configuración de Multer para carga de archivos
+// Configuración de Multer para carga segura de archivos (fotos y videos)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.webm'].includes(ext) ? ext : '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'media-' + uniqueSuffix + ext);
+    cb(null, 'media-' + uniqueSuffix + safeExt);
   }
 });
+
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'video/mp4', 'video/quicktime', 'video/webm'
+];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.webm'];
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 60 * 1024 * 1024 } // Hasta 60MB por video o foto
+  limits: { fileSize: 60 * 1024 * 1024 }, // Hasta 60MB por video o foto
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext) || !ALLOWED_MIME_TYPES.includes(mime)) {
+      return cb(new Error('Formato no permitido. Solo se aceptan imágenes (JPG, PNG, WEBP, GIF) y videos (MP4, MOV, WEBM)'));
+    }
+    cb(null, true);
+  }
 });
 
-// Endpoint para subir archivos multimedia desde celular o PC
-app.post('/api/upload', upload.single('archivo'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No se envió ningún archivo' });
-  }
-  const fileUrl = `/uploads/${req.file.filename}`;
-  res.json({
-    url: fileUrl,
-    filename: req.file.filename,
-    mimetype: req.file.mimetype,
-    size: req.file.size
+// Endpoint seguro para subir archivos multimedia
+app.post('/api/upload', requireAnyOperator, (req, res) => {
+  upload.single('archivo')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Error procesando el archivo' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se envió ningún archivo' });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      url: fileUrl,
+      filename: req.file.filename,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
   });
 });
 
@@ -298,7 +409,7 @@ app.get('/api/configuracion', async (req, res) => {
   }
 });
 
-app.post('/api/auth/unified-login', async (req, res) => {
+app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
   const { pin, telefono, password } = req.body;
   const tenant = await getTenant(req);
   const tenantId = tenant ? tenant.id : 1;
@@ -320,6 +431,7 @@ app.post('/api/auth/unified-login', async (req, res) => {
       (trimmedPass === superPin || trimmedPin === superPin || trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS);
 
     if (esSuperAdmin) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({
         success: true,
         role: 'superadmin',
@@ -363,6 +475,7 @@ app.post('/api/auth/unified-login', async (req, res) => {
     }
 
     if (barberiaDueño) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({
         success: true,
         role: 'admin',
@@ -396,6 +509,7 @@ app.post('/api/auth/unified-login', async (req, res) => {
     }
 
     if (barbero) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({
         success: true,
         role: 'barbero',
@@ -415,19 +529,22 @@ app.post('/api/auth/unified-login', async (req, res) => {
       });
     }
 
+    if (req._recordFailedLogin) req._recordFailedLogin();
     return res.status(401).json({
       success: false,
       message: 'Credenciales o contraseña incorrectas. Verifica tus datos de acceso.'
     });
   } catch (error) {
     if ((cleanTel === '3114220554' || trimmedTel.toLowerCase() === 'superadmin') && (trimmedPass === DEFAULT_SUPERADMIN_PASS || trimmedPin === DEFAULT_SUPERADMIN_PASS)) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, role: 'superadmin', token: generateSessionToken('exa_sup') });
     }
+    if (req._recordFailedLogin) req._recordFailedLogin();
     return res.status(401).json({ success: false, message: 'Credenciales o contraseña incorrecta.' });
   }
 });
 
-app.post('/api/auth/verify-pin', async (req, res) => {
+app.post('/api/auth/verify-pin', checkLoginRateLimit, async (req, res) => {
   const { pin } = req.body;
   const inputPin = String(pin || '').trim();
   try {
@@ -441,6 +558,7 @@ app.post('/api/auth/verify-pin', async (req, res) => {
     } catch (e) {}
 
     if (inputPin && (inputPin === tenantPin || inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS)) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({
         success: true,
         token: generateSessionToken(inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS ? 'exa_sup' : 'exa_adm'),
@@ -449,14 +567,16 @@ app.post('/api/auth/verify-pin', async (req, res) => {
         is_superadmin: inputPin === superPin || inputPin === DEFAULT_SUPERADMIN_PASS
       });
     } else {
+      if (req._recordFailedLogin) req._recordFailedLogin();
       return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
     }
   } catch (error) {
+    if (req._recordFailedLogin) req._recordFailedLogin();
     return res.status(401).json({ success: false, message: 'Contraseña o PIN incorrecto' });
   }
 });
 
-app.put('/api/configuracion', async (req, res) => {
+app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
   const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente } = req.body;
   try {
     const tenantId = await getTenantId(req);
@@ -527,7 +647,7 @@ app.put('/api/configuracion', async (req, res) => {
 });
 
 // Endpoint para que SuperAdmin consulte notificaciones del sistema
-app.get('/api/superadmin/notificaciones', async (req, res) => {
+app.get('/api/superadmin/notificaciones', requireSuperAdmin, async (req, res) => {
   try {
     const notifs = store.obtenerNotificacionesSuperAdmin();
     res.json(notifs || []);
@@ -536,7 +656,7 @@ app.get('/api/superadmin/notificaciones', async (req, res) => {
   }
 });
 
-app.put('/api/superadmin/notificaciones/:id/leida', async (req, res) => {
+app.put('/api/superadmin/notificaciones/:id/leida', requireSuperAdmin, async (req, res) => {
   try {
     const notif = store.marcarNotificacionLeida(req.params.id);
     res.json({ success: true, notif });
@@ -545,7 +665,7 @@ app.put('/api/superadmin/notificaciones/:id/leida', async (req, res) => {
   }
 });
 
-app.patch('/api/barberias/config', async (req, res) => {
+app.patch('/api/barberias/config', requireAdminOrSuper, async (req, res) => {
   try {
     const tenantId = await getTenantId(req);
     const { nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, pin_admin } = req.body;
@@ -597,7 +717,7 @@ app.patch('/api/barberias/config', async (req, res) => {
 // 2. SUPERADMIN: GESTIÓN DE CLIENTES & PLANES (SAAS)
 // ----------------------------------------------------
 
-app.post('/api/superadmin/login', async (req, res) => {
+app.post('/api/superadmin/login', checkLoginRateLimit, async (req, res) => {
   const { pin, password, telefono, identifier } = req.body;
   const inputTel = String(telefono || identifier || '').trim();
   const inputPin = String(pin || password || '').trim();
@@ -605,6 +725,7 @@ app.post('/api/superadmin/login', async (req, res) => {
 
   const isAuthorized = (cleanTel === '3114220554' || inputTel.toLowerCase() === 'superadmin' || inputTel.toLowerCase() === 'admin@exakta.online');
   if (!isAuthorized) {
+    if (req._recordFailedLogin) req._recordFailedLogin();
     return res.status(401).json({ success: false, message: 'Teléfono o usuario no autorizado para SuperAdmin' });
   }
 
@@ -617,19 +738,23 @@ app.post('/api/superadmin/login', async (req, res) => {
     } catch (e) {}
 
     if (inputPin === String(masterPin).trim() || inputPin === defaultMaster) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, token: generateSessionToken('exa_sup') });
     } else {
+      if (req._recordFailedLogin) req._recordFailedLogin();
       return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
     }
   } catch (error) {
     if (inputPin === defaultMaster) {
+      if (req._resetLoginAttempts) req._resetLoginAttempts();
       return res.json({ success: true, token: generateSessionToken('exa_sup') });
     }
+    if (req._recordFailedLogin) req._recordFailedLogin();
     return res.status(401).json({ success: false, message: 'Contraseña de SuperAdmin incorrecta' });
   }
 });
 
-app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
+app.get('/api/superadmin/barberias/:id/detalle', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     let barberia = null;
@@ -730,7 +855,7 @@ app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
   }
 });
 
-app.get('/api/superadmin/barberias', async (req, res) => {
+app.get('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
   try {
     const rows = await db.prepare('SELECT * FROM barberias ORDER BY id DESC').all();
     if (rows && rows.length > 0) {
@@ -759,7 +884,7 @@ app.get('/api/superadmin/barberias', async (req, res) => {
   }
 });
 
-app.post('/api/superadmin/barberias', async (req, res) => {
+app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
   const {
     nombre,
     slug,
@@ -889,7 +1014,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
   }
 });
 
-app.patch('/api/superadmin/barberias/:id', async (req, res) => {
+app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
   const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop } = req.body;
 
@@ -1004,7 +1129,7 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/superadmin/barberias/:id', async (req, res) => {
+app.delete('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
   if (Number(id) === 1) {
     return res.status(400).json({ error: 'No se puede eliminar la barbería principal del sistema (ID 1).' });
@@ -1029,7 +1154,7 @@ app.delete('/api/superadmin/barberias/:id', async (req, res) => {
   }
 });
 
-app.get('/api/superadmin/citas-globales', async (req, res) => {
+app.get('/api/superadmin/citas-globales', requireSuperAdmin, async (req, res) => {
   const { desde, hasta, q, barberia_id } = req.query;
   try {
     let sql = `
@@ -1095,7 +1220,7 @@ app.get('/api/superadmin/citas-globales', async (req, res) => {
   }
 });
 
-app.get('/api/superadmin/barberos-globales', async (req, res) => {
+app.get('/api/superadmin/barberos-globales', requireSuperAdmin, async (req, res) => {
   try {
     let sql = `
       SELECT b.*, bar.nombre as barberia_nombre, bar.slug as barberia_slug
@@ -1147,6 +1272,17 @@ app.get('/api/barberos', async (req, res) => {
   try {
     const tenantId = await getTenantId(req);
     const todos = req.query.todos === 'true';
+    const token = extractToken(req);
+    const isPrivileged = token && (token.startsWith('exa_adm_') || token.startsWith('exa_sup_') || token === 'auth-admin-session-token' || token === 'superadmin-master-session-token');
+
+    const sanitizeBarberosList = (list) => {
+      if (isPrivileged) return list;
+      return list.map(b => {
+        const { password, pin, ...safe } = b;
+        return safe;
+      });
+    };
+
     let barberos = [];
     try {
       const query = todos 
@@ -1156,12 +1292,12 @@ app.get('/api/barberos', async (req, res) => {
     } catch (_) {}
 
     if (barberos && barberos.length > 0) {
-      return res.json(barberos);
+      return res.json(sanitizeBarberosList(barberos));
     }
 
     const storeBarberos = store.obtenerBarberos(tenantId, !todos);
     if (storeBarberos && storeBarberos.length > 0) {
-      return res.json(storeBarberos);
+      return res.json(sanitizeBarberosList(storeBarberos));
     }
 
     // Si es la barbería 1, devolver catálogo demo
@@ -1183,7 +1319,7 @@ app.get('/api/barberos', async (req, res) => {
   }
 });
 
-app.post('/api/barberos', async (req, res) => {
+app.post('/api/barberos', requireAdminOrSuper, async (req, res) => {
   const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
@@ -1237,7 +1373,7 @@ app.post('/api/barberos', async (req, res) => {
   }
 });
 
-app.put('/api/barberos/:id', async (req, res) => {
+app.put('/api/barberos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   const { nombre, especialidad, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
@@ -1285,7 +1421,7 @@ app.put('/api/barberos/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/barberos/:id', async (req, res) => {
+app.patch('/api/barberos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   const { porcentaje_comision, activo, pin, email, password } = req.body;
@@ -1323,7 +1459,7 @@ app.patch('/api/barberos/:id', async (req, res) => {
   }
 });
 
-app.post('/api/barberos/login', async (req, res) => {
+app.post('/api/barberos/login', checkLoginRateLimit, async (req, res) => {
   const { email, password, barbero_id, pin } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -1347,6 +1483,7 @@ app.post('/api/barberos/login', async (req, res) => {
     }
 
     if (!barbero) {
+      if (req._recordFailedLogin) req._recordFailedLogin();
       return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
     }
 
@@ -1354,18 +1491,22 @@ app.post('/api/barberos/login', async (req, res) => {
       return res.status(403).json({ error: 'Tu usuario se encuentra inactivo. Consulta con el dueño de la barbería.' });
     }
 
+    if (req._resetLoginAttempts) req._resetLoginAttempts();
+    const token = generateSessionToken('exa_bar');
     const { password: _, pin: __, ...barberoSeguro } = barbero;
     res.json({
       success: true,
       message: `Bienvenido de vuelta, ${barbero.nombre}`,
-      barbero: barberoSeguro
+      token,
+      barbero: { ...barberoSeguro, token }
     });
   } catch (error) {
+    if (req._recordFailedLogin) req._recordFailedLogin();
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/barberos/:id/record', async (req, res) => {
+app.get('/api/barberos/:id/record', requireAnyOperator, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
 
@@ -1420,7 +1561,7 @@ app.get('/api/barberos/:id/record', async (req, res) => {
   }
 });
 
-app.get('/api/barbero-portal/citas', async (req, res) => {
+app.get('/api/barbero-portal/citas', requireAnyOperator, async (req, res) => {
   const { barbero_id, fecha, desde, hasta, q } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -1469,7 +1610,7 @@ app.get('/api/barbero-portal/citas', async (req, res) => {
   }
 });
 
-app.get('/api/barbero-portal/balance', async (req, res) => {
+app.get('/api/barbero-portal/balance', requireAnyOperator, async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -1546,7 +1687,7 @@ app.get('/api/barbero-portal/balance', async (req, res) => {
   }
 });
 
-app.delete('/api/barberos/:id', async (req, res) => {
+app.delete('/api/barberos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -1609,7 +1750,7 @@ app.get('/api/servicios', async (req, res) => {
   }
 });
 
-app.post('/api/servicios', async (req, res) => {
+app.post('/api/servicios', requireAdminOrSuper, async (req, res) => {
   const { nombre, precio_cop, duracion_minutos, descripcion } = req.body;
   if (!nombre || !precio_cop) return res.status(400).json({ error: 'Nombre y precio requeridos' });
 
@@ -1626,7 +1767,7 @@ app.post('/api/servicios', async (req, res) => {
   }
 });
 
-app.put('/api/servicios/:id', async (req, res) => {
+app.put('/api/servicios/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   const { nombre, precio_cop, duracion_minutos, descripcion, activo } = req.body;
@@ -1648,7 +1789,7 @@ app.put('/api/servicios/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/servicios/:id', async (req, res) => {
+app.delete('/api/servicios/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -1815,7 +1956,7 @@ app.get('/api/disponibilidad', async (req, res) => {
 // ----------------------------------------------------
 // 6. CITAS / TURNOS MULTI-TENANT
 // ----------------------------------------------------
-app.get('/api/citas', async (req, res) => {
+app.get('/api/citas', requireAnyOperator, async (req, res) => {
   const { fecha, barbero_id, estado, desde, hasta, q } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -1951,7 +2092,7 @@ app.post('/api/citas', async (req, res) => {
   }
 });
 
-app.patch('/api/citas/:id/reasignar', async (req, res) => {
+app.patch('/api/citas/:id/reasignar', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const { nuevo_barbero_id, motivo } = req.body;
   const tenantId = await getTenantId(req);
@@ -2009,7 +2150,7 @@ app.patch('/api/citas/:id/reasignar', async (req, res) => {
   }
 });
 
-app.patch('/api/citas/:id/estado', async (req, res) => {
+app.patch('/api/citas/:id/estado', requireAnyOperator, async (req, res) => {
   const { id } = req.params;
   const { estado, precio_cobrado } = req.body;
   const tenantId = await getTenantId(req);
@@ -2046,7 +2187,7 @@ app.patch('/api/citas/:id/estado', async (req, res) => {
   }
 });
 
-app.delete('/api/citas/:id', async (req, res) => {
+app.delete('/api/citas/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -2093,7 +2234,7 @@ const memoryClientes = [
   }
 ];
 
-app.get('/api/clientes', async (req, res) => {
+app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { q, categoria } = req.query;
 
@@ -2228,7 +2369,7 @@ app.post('/api/clientes', async (req, res) => {
   res.json({ success: true, cliente: clienteData });
 });
 
-app.patch('/api/clientes/:id', async (req, res) => {
+app.patch('/api/clientes/:id', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { id } = req.params;
   const { categoria, fecha_cumpleanos, beneficio_fidelidad, notas, cliente_nombre, cliente_telefono } = req.body;
@@ -2379,7 +2520,7 @@ app.post('/api/resenas', async (req, res) => {
   });
 });
 
-app.patch('/api/resenas/:id', async (req, res) => {
+app.patch('/api/resenas/:id', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { id } = req.params;
   const { aprobada } = req.body;
@@ -2397,7 +2538,7 @@ app.patch('/api/resenas/:id', async (req, res) => {
   });
 });
 
-app.delete('/api/resenas/:id', async (req, res) => {
+app.delete('/api/resenas/:id', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { id } = req.params;
 
@@ -2412,7 +2553,7 @@ app.delete('/api/resenas/:id', async (req, res) => {
 // ----------------------------------------------------
 // 7. BLOQUEOS DE HORARIO Y DÍAS COMPLETOS POR BARBERO
 // ----------------------------------------------------
-app.get('/api/bloqueos', async (req, res) => {
+app.get('/api/bloqueos', requireAnyOperator, async (req, res) => {
   const { fecha, barbero_id } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2454,7 +2595,7 @@ app.get('/api/bloqueos', async (req, res) => {
   }
 });
 
-app.post('/api/bloqueos', async (req, res) => {
+app.post('/api/bloqueos', requireAnyOperator, async (req, res) => {
   const { barbero_id, fecha, hora_inicio, hora_fin, motivo, dia_completo } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -2487,7 +2628,7 @@ app.post('/api/bloqueos', async (req, res) => {
   res.status(201).json({ id: guardado.id, message: 'Horario bloqueado con éxito', bloqueo: guardado });
 });
 
-app.delete('/api/bloqueos/:id', async (req, res) => {
+app.delete('/api/bloqueos/:id', requireAnyOperator, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -2500,7 +2641,7 @@ app.delete('/api/bloqueos/:id', async (req, res) => {
 // ----------------------------------------------------
 // 8. INGRESOS Y EGRESOS (MOVIMIENTOS DE CAJA)
 // ----------------------------------------------------
-app.get('/api/costos', async (req, res) => {
+app.get('/api/costos', requireAdminOrSuper, async (req, res) => {
   const { desde, hasta, categoria, tipo } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2551,7 +2692,7 @@ app.get('/api/costos', async (req, res) => {
   }
 });
 
-app.post('/api/costos', async (req, res) => {
+app.post('/api/costos', requireAdminOrSuper, async (req, res) => {
   const { tipo, categoria, descripcion, monto_cop, fecha, metodo_pago, barbero_id, notas } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -2581,7 +2722,7 @@ app.post('/api/costos', async (req, res) => {
   }
 });
 
-app.delete('/api/costos/:id', async (req, res) => {
+app.delete('/api/costos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -2595,7 +2736,7 @@ app.delete('/api/costos/:id', async (req, res) => {
 // ----------------------------------------------------
 // 9. PRODUCTOS & VENTAS
 // ----------------------------------------------------
-app.get('/api/productos', async (req, res) => {
+app.get('/api/productos', requireAnyOperator, async (req, res) => {
   const tenantId = await getTenantId(req);
   const todos = req.query.todos === 'true';
   try {
@@ -2609,7 +2750,7 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-app.post('/api/productos', async (req, res) => {
+app.post('/api/productos', requireAdminOrSuper, async (req, res) => {
   const { nombre, descripcion, precio_venta_cop, costo_compra_cop, stock_actual, stock_minimo, comision_barbero_fija, foto_url } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -2637,7 +2778,7 @@ app.post('/api/productos', async (req, res) => {
   }
 });
 
-app.delete('/api/productos/:id', async (req, res) => {
+app.delete('/api/productos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
@@ -2648,7 +2789,7 @@ app.delete('/api/productos/:id', async (req, res) => {
   }
 });
 
-app.get('/api/ventas-productos', async (req, res) => {
+app.get('/api/ventas-productos', requireAdminOrSuper, async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2681,7 +2822,7 @@ app.get('/api/ventas-productos', async (req, res) => {
 // ----------------------------------------------------
 // 10. LIQUIDACIONES
 // ----------------------------------------------------
-app.get('/api/liquidaciones/preview', async (req, res) => {
+app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
   const { barbero_id, fecha_inicio, fecha_fin, porcentaje } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2747,7 +2888,7 @@ app.get('/api/liquidaciones/preview', async (req, res) => {
   }
 });
 
-app.get('/api/liquidaciones', async (req, res) => {
+app.get('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
   const { barbero_id, desde, hasta } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2775,7 +2916,7 @@ app.get('/api/liquidaciones', async (req, res) => {
 // ----------------------------------------------------
 // 11. BALANCE GENERAL Y REPORTES
 // ----------------------------------------------------
-app.get('/api/reportes/balance', async (req, res) => {
+app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
   const { desde, hasta } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2856,7 +2997,7 @@ app.get('/api/reportes/balance', async (req, res) => {
   }
 });
 
-app.get('/api/reportes/rentabilidad-stats', async (req, res) => {
+app.get('/api/reportes/rentabilidad-stats', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   try {
     const hoy = new Date();
@@ -2924,7 +3065,7 @@ app.get('/api/multimedia', async (req, res) => {
   }
 });
 
-app.post('/api/multimedia', async (req, res) => {
+app.post('/api/multimedia', requireAdminOrSuper, async (req, res) => {
   const { titulo, tipo, url_media, url_red_social, descripcion, barbero_id } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -2955,7 +3096,7 @@ app.post('/api/multimedia', async (req, res) => {
 // ----------------------------------------------------
 // 13. AUDITORÍA & NOTIFICACIONES
 // ----------------------------------------------------
-app.get('/api/auditoria', async (req, res) => {
+app.get('/api/auditoria', requireAdminOrSuper, async (req, res) => {
   const { tipo, limite } = req.query;
   const tenantId = await getTenantId(req);
 
@@ -2978,7 +3119,7 @@ app.get('/api/auditoria', async (req, res) => {
   }
 });
 
-app.get('/api/notificaciones/recientes', async (req, res) => {
+app.get('/api/notificaciones/recientes', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   try {
     const recientes = await db.prepare(`

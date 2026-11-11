@@ -52,6 +52,43 @@ window.fetch = async (input, init = {}) => {
     headersObj = { ...newInit.headers };
   }
   headersObj['x-barberia-slug'] = currentSlug;
+
+  // Inyectar cabeceras de autenticación automáticamente según la sesión activa
+  try {
+    const superToken = sessionStorage.getItem('barberia_superadmin_token');
+    const adminToken = sessionStorage.getItem('barberia_admin_token');
+    const barberoToken = sessionStorage.getItem('barberia_barbero_token');
+    const barberoSession = sessionStorage.getItem('barberia_barbero_session');
+
+    if (superToken) {
+      headersObj['x-superadmin-token'] = superToken;
+      if (!headersObj['authorization'] && !headersObj['Authorization']) {
+        headersObj['authorization'] = `Bearer ${superToken}`;
+      }
+    } else if (adminToken) {
+      headersObj['x-admin-token'] = adminToken;
+      if (!headersObj['authorization'] && !headersObj['Authorization']) {
+        headersObj['authorization'] = `Bearer ${adminToken}`;
+      }
+    } else if (barberoToken || barberoSession) {
+      let bTok = barberoToken;
+      if (!bTok && barberoSession) {
+        try {
+          const b = JSON.parse(barberoSession);
+          bTok = b?.token || 'auth-barbero-session-token';
+        } catch (_) {
+          bTok = 'auth-barbero-session-token';
+        }
+      }
+      if (bTok) {
+        headersObj['x-barbero-token'] = bTok;
+        if (!headersObj['authorization'] && !headersObj['Authorization']) {
+          headersObj['authorization'] = `Bearer ${bTok}`;
+        }
+      }
+    }
+  } catch (_) {}
+
   newInit.headers = headersObj;
 
   // Si la petición es a /api/ (excepto superadmin o login), inyectar ?b= en la URL como salvaguarda

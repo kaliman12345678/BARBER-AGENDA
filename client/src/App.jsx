@@ -157,6 +157,9 @@ export default function App() {
       window.history.pushState(null, '', `/?b=${tenantSlug}&admin=1`);
     } else if (data.role === 'barbero') {
       sessionStorage.setItem('barberia_barbero_session', JSON.stringify(data.barbero));
+      if (data.token) {
+        sessionStorage.setItem('barberia_barbero_token', data.token);
+      }
       setBarberoAutenticado(data.barbero);
       setActiveView('barbero');
       window.history.pushState(null, '', `/?b=${tenantSlug}&barbero=1`);
@@ -172,6 +175,7 @@ export default function App() {
 
   function handleLogoutBarbero() {
     sessionStorage.removeItem('barberia_barbero_session');
+    sessionStorage.removeItem('barberia_barbero_token');
     setBarberoAutenticado(null);
     setActiveView('client');
     window.history.pushState(null, '', `/?b=${tenantSlug}`);
