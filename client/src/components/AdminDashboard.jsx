@@ -19,7 +19,10 @@ import {
   History,
   Crown,
   Award,
-  Star
+  Star,
+  Share2,
+  Copy,
+  Check
 } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import AdminAgenda from './AdminAgenda';
@@ -46,6 +49,17 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [barberos, setBarberos] = useState([]);
   const [servicios, setServicios] = useState([]);
   const [temaActual, setTemaActual] = useState(() => localStorage.getItem('barberia_tema_admin') || 'claro');
+  const [linkCopiado, setLinkCopiado] = useState(false);
+
+  function handleCopiarLinkClientes() {
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
+    const url = `${window.location.origin}/?b=${slug}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+    }
+    setLinkCopiado(true);
+    setTimeout(() => setLinkCopiado(false), 2500);
+  }
 
   function handleCambiarTema(nuevoTema) {
     setTemaActual(nuevoTema);
@@ -137,7 +151,28 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
         </div>
 
         {/* Notificaciones & Selector de Tema exclusivo */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Botón para que el dueño copie su enlace de clientes */}
+          <button
+            type="button"
+            onClick={handleCopiarLinkClientes}
+            title="Copiar enlace web para compartir con tus clientes"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs shrink-0"
+          >
+            {linkCopiado ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-white" />
+                <span>¡Copiado!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-white" />
+                <span className="hidden sm:inline">Link Clientes</span>
+                <span className="sm:hidden">Link</span>
+              </>
+            )}
+          </button>
+
           <ThemeSelector 
             temaActual={temaActual} 
             onCambiarTema={handleCambiarTema} 

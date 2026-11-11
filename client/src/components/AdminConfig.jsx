@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink } from 'lucide-react';
 
 const CLIENT_THEME_OPTIONS = [
   { id: 'oscuro', nombre: 'Obsidian Dark (Oscuro)', icon: Moon, desc: 'Fondo negro premium con alto contraste y elegancia', bg: 'bg-slate-950 text-white border-slate-800' },
@@ -33,6 +33,18 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
   const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
+  const [copiadoSlug, setCopiadoSlug] = useState(false);
+
+  const slugActual = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
+  const urlPublica = `${window.location.origin}/?b=${slugActual}`;
+
+  function handleCopiarLink() {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(urlPublica);
+    }
+    setCopiadoSlug(true);
+    setTimeout(() => setCopiadoSlug(false), 2500);
+  }
 
   async function handleSubirLogo(e) {
     const file = e.target.files?.[0];
@@ -124,6 +136,58 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
       )}
 
       <form onSubmit={handleGuardar} className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xs space-y-5 text-xs">
+        
+        {/* ENLACE PÚBLICO DE RESERVAS PARA CLIENTES */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-blue-800 flex items-center gap-1.5">
+              <Share2 className="w-3.5 h-3.5 text-blue-600" />
+              <span>Enlace Web para tus Clientes</span>
+            </span>
+            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+              Directo & Sin Claves
+            </span>
+          </div>
+
+          <p className="text-[11px] text-blue-900/80">
+            Comparte este enlace con tus clientes por WhatsApp o Instagram para que agenden sus citas directamente con tu marca:
+          </p>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={urlPublica}
+              className="flex-1 p-2.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-bold text-slate-800 select-all shadow-inner"
+            />
+            <button
+              type="button"
+              onClick={handleCopiarLink}
+              className="py-2.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
+            >
+              {copiadoSlug ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>¡Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar Link</span>
+                </>
+              )}
+            </button>
+            <a
+              href={urlPublica}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
+              title="Abrir como cliente"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
         
         {/* SECCIÓN LOGO DE LA BARBERÍA */}
         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
