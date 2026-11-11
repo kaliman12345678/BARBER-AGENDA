@@ -18,7 +18,13 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  ExternalLink
+  ExternalLink,
+  Kanban,
+  List,
+  Columns,
+  LayoutGrid,
+  DollarSign,
+  Sparkles
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import DateRangeFilter from './DateRangeFilter';
@@ -32,6 +38,14 @@ export default function AdminAgenda({ barberos, servicios }) {
   const [barberoId, setBarberoId] = useState('');
   const [citas, setCitas] = useState([]);
   const [cargando, setCargando] = useState(false);
+
+  // Selector de Tipo de Vista: 'tablero' | 'lista' | 'barberos' | 'cuadricula'
+  const [tipoVista, setTipoVista] = useState(() => localStorage.getItem('barberia_agenda_vista') || 'tablero');
+
+  function handleCambiarVista(nuevaVista) {
+    setTipoVista(nuevaVista);
+    localStorage.setItem('barberia_agenda_vista', nuevaVista);
+  }
 
   // Modal para nueva cita presencial
   const [mostrarModalNueva, setMostrarModalNueva] = useState(false);
@@ -211,6 +225,13 @@ export default function AdminAgenda({ barberos, servicios }) {
     }
   }
 
+  // Agrupaciones para el Tablero Kanban
+  const citasPendientes = citas.filter(c => !['completada', 'cancelada', 'no_asistio'].includes(c.estado));
+  const citasCompletadas = citas.filter(c => c.estado === 'completada');
+  const citasCanceladas = citas.filter(c => ['cancelada', 'no_asistio'].includes(c.estado));
+
+  const totalRecaudadoCompletadas = citasCompletadas.reduce((acc, c) => acc + Number(c.precio_cobrado || 0), 0);
+
   return (
     <div className="space-y-4">
       
@@ -249,207 +270,609 @@ export default function AdminAgenda({ barberos, servicios }) {
             setNuevaCita(prev => ({
               ...prev,
               barbero_id: barberos[0]?.id || '',
-              servicio_id: servicios[0]?.id || '',
-              fecha: getTodayStr()
+              servicio_id: servicios[0]?.id || ''
             }));
             setMostrarModalNueva(true);
           }}
-          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Agendar Cita Presencial</span>
         </button>
       </div>
 
-      {/* Título de la agenda */}
-      <div className="flex items-center justify-between">
+      {/* ENCABEZADO DE AGENDA & SELECTOR DE VISTAS (TABLERO, LISTA, POR BARBERO, TARJETAS) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs">
         <div>
-          <h3 className="text-xl font-bold text-slate-900 capitalize font-sans">
-            Historial de Citas Agendadas
-          </h3>
-          <p className="text-xs text-slate-500">
-            Total de turnos visibles: <span className="text-blue-600 font-bold">{citas.length}</span>
-            <span className="text-slate-400 ml-1">(ordenadas cronológicamente por las más recientes)</span>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 font-sans leading-tight">
+              Historial & Agenda de Turnos
+            </h3>
+            <span className="text-[10px] bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full font-extrabold border border-blue-200">
+              {citas.length} turnos
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Elige el estilo de visualización que mejor se adapte a tu flujo de trabajo.
           </p>
         </div>
-        <button
-          onClick={cargarCitas}
-          className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1.5 p-2 rounded-lg hover:bg-slate-100 transition-colors font-medium"
-        >
-          <RotateCcw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin text-blue-600' : ''}`} />
-          <span>Actualizar</span>
-        </button>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {/* SELECTOR DE MODO DE VISTA */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200/80 shadow-inner">
+            
+            {/* 1. Modo Tablero Kanban */}
+            <button
+              type="button"
+              onClick={() => handleCambiarVista('tablero')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                tipoVista === 'tablero'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Vista Tablero Kanban por Estado"
+            >
+              <Kanban className="w-3.5 h-3.5" />
+              <span>Tablero</span>
+            </button>
+
+            {/* 2. Modo Lista / Tabla Detallada */}
+            <button
+              type="button"
+              onClick={() => handleCambiarVista('lista')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                tipoVista === 'lista'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Vista en Lista de Filas"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Lista</span>
+            </button>
+
+            {/* 3. Modo Columnas por Barbero */}
+            <button
+              type="button"
+              onClick={() => handleCambiarVista('barberos')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                tipoVista === 'barberos'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Vista de Horarios por Cada Barbero"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Por Barbero</span>
+            </button>
+
+            {/* 4. Modo Cuadrícula de Tarjetas */}
+            <button
+              type="button"
+              onClick={() => handleCambiarVista('cuadricula')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                tipoVista === 'cuadricula'
+                  ? 'bg-white text-blue-600 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Vista de Tarjetas Amplias"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Tarjetas</span>
+            </button>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={cargarCitas}
+            title="Recargar agenda"
+            className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-blue-600 shadow-xs transition-colors cursor-pointer"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+        </div>
       </div>
 
-      {/* Lista de citas */}
+      {/* CONTENIDO PRINCIPAL SEGÚN EL MODO DE VISTA SELECCIONADO */}
       {cargando ? (
         <div className="py-16 text-center text-slate-400">
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-xs font-medium">Cargando agenda...</p>
+          <p className="text-xs font-medium">Cargando agenda de turnos...</p>
         </div>
       ) : citas.length === 0 ? (
         <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl shadow-xs">
           <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h4 className="text-slate-800 font-bold text-base">No hay turnos para esta fecha</h4>
+          <h4 className="text-slate-800 font-bold text-base">No hay turnos para este criterio</h4>
           <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto">
-            Los clientes pueden agendar desde el portal o puedes registrar un cliente presencial con el botón "Agendar Presencial".
+            Prueba cambiando el filtro de fecha o registra un cliente presencial con el botón "Agendar Cita Presencial".
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {citas.map((cita) => {
-            const isCompletada = cita.estado === 'completada';
-            const isCancelada = cita.estado === 'cancelada';
-            const isNoAsistio = cita.estado === 'no_asistio';
-
-            return (
-              <div
-                key={cita.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                  isCompletada
-                    ? 'bg-emerald-50/40 border-emerald-200'
-                    : isCancelada
-                    ? 'bg-slate-50 border-slate-200 opacity-60'
-                    : isNoAsistio
-                    ? 'bg-rose-50/50 border-rose-200 opacity-75'
-                    : 'bg-white border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md'
-                }`}
-              >
-                <div>
-                  {/* Encabezado de la cita: Hora y Estado */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-mono">
-                      {formatTime12(cita.hora_inicio)} - {formatTime12(cita.hora_fin)}
-                    </span>
-                    <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      isCompletada 
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        : isCancelada 
-                        ? 'bg-slate-100 text-slate-600 line-through'
-                        : isNoAsistio 
-                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                        : 'bg-blue-100 text-blue-800 border border-blue-200'
-                    }`}>
-                      {cita.estado === 'completada' ? 'Completado' : cita.estado}
-                    </span>
+        <>
+          {/* ======================================================== */}
+          {/* VISTA 1: TABLERO KANBAN POR ESTADO (RECOMENDADA) */}
+          {/* ======================================================== */}
+          {tipoVista === 'tablero' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start animate-fadeIn">
+              
+              {/* COLUMNA 1: PENDIENTES / POR ATENDER */}
+              <div className="bg-slate-100/70 border border-slate-200 rounded-2xl p-3 sm:p-3.5 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700">
+                      Por Atender / Pendientes
+                    </h4>
                   </div>
+                  <span className="text-[11px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                    {citasPendientes.length}
+                  </span>
+                </div>
 
-                  {/* Datos del Cliente y Servicio */}
-                  <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    <span className="truncate">{cita.cliente_nombre}</span>
-                  </h4>
-
-                  <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
-                    <p className="flex items-center gap-2">
-                      <Scissors className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                      <span className="font-semibold text-slate-800">{cita.servicio_nombre}</span>
-                      <span className="text-emerald-700 font-extrabold ml-auto">{formatCOP(cita.precio_cobrado)}</span>
-                    </p>
-
-                    {/* Teléfono del cliente visible SOLO para el admin */}
-                    <p className="flex items-center gap-2 text-slate-500">
-                      <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                      <a href={`https://wa.me/${cita.cliente_telefono?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 underline font-medium">
-                        {cita.cliente_telefono}
-                      </a>
-                    </p>
-
-                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] flex items-center justify-between">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Barbero Asignado:</span>
-                        <span className="text-slate-900 font-bold">{cita.barbero_nombre}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Fecha:</span>
-                        <span className="text-slate-700 font-medium">{cita.fecha}</span>
-                      </div>
+                <div className="space-y-2.5">
+                  {citasPendientes.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-white/60 rounded-xl border border-dashed border-slate-200">
+                      No hay turnos pendientes en este filtro
                     </div>
-
-                    {cita.notas && (
-                      <p className="text-slate-600 text-[11px] italic bg-slate-50 p-2.5 rounded-lg mt-1 border border-slate-200">
-                        "{cita.notas}"
-                      </p>
-                    )}
-                  </div>
-
-                  {/* ACCIONES DE ASIGNACIÓN & ENVÍO SEGURO AL BARBERO */}
-                  {!isCancelada && (
-                    <div className="mt-3.5 pt-3 border-t border-dashed border-slate-200 grid grid-cols-2 gap-2">
-                      
-                      {/* Botón Reasignar Barbero */}
-                      <button
-                        type="button"
-                        onClick={() => {
+                  ) : (
+                    citasPendientes.map(cita => (
+                      <TarjetaKanbanCita 
+                        key={cita.id} 
+                        cita={cita}
+                        onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
+                        onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                        onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
+                        onReasignar={() => {
                           setCitaAReasignar(cita);
                           setNuevoBarberoId(String(cita.barbero_id));
-                          setErrorReasignacion('');
                         }}
-                        className="py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-blue-200 transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Reasignar</span>
-                      </button>
-
-                      {/* Botón Enviar al Barbero (Confidencial: Sin teléfono ni datos sensibles) */}
-                      <button
-                        type="button"
-                        onClick={() => setCitaAEnviar(cita)}
-                        className="py-1.5 px-2 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-emerald-200 transition-all flex items-center justify-center gap-1.5"
-                        title="Enviar resumen al barbero sin datos sensibles"
-                      >
-                        <Send className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Enviar al Barbero</span>
-                      </button>
-
-                    </div>
+                        onEnviar={() => setCitaAEnviar(cita)}
+                      />
+                    ))
                   )}
                 </div>
-
-                {/* Acciones de Estado de la Cita */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1 text-xs">
-                  {cita.estado !== 'completada' && (
-                    <button
-                      onClick={() => cambiarEstadoCita(cita.id, 'completada')}
-                      title="Marcar como atendido y cobrado"
-                      className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg font-bold border border-emerald-200 hover:border-emerald-600 transition-all flex items-center justify-center gap-1 shadow-xs"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Completar</span>
-                    </button>
-                  )}
-
-                  {cita.estado === 'confirmada' && (
-                    <>
-                      <button
-                        onClick={() => cambiarEstadoCita(cita.id, 'no_asistio')}
-                        title="Marcar como cliente no asistió"
-                        className="py-1.5 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-semibold"
-                      >
-                        No asistió
-                      </button>
-                      <button
-                        onClick={() => cambiarEstadoCita(cita.id, 'cancelada')}
-                        title="Cancelar cita y liberar horario"
-                        className="py-1.5 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-
-                  {cita.estado === 'completada' && (
-                    <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 ml-auto">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Listo para liquidación
-                    </span>
-                  )}
-                </div>
-
               </div>
-            );
-          })}
-        </div>
+
+              {/* COLUMNA 2: COMPLETADAS / COBRADAS */}
+              <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl p-3 sm:p-3.5 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider text-emerald-900">
+                      Completadas & Cobradas
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-emerald-700 hidden sm:inline">
+                      {formatCOP(totalRecaudadoCompletadas)}
+                    </span>
+                    <span className="text-[11px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      {citasCompletadas.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {citasCompletadas.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-white/60 rounded-xl border border-dashed border-emerald-200">
+                      Aún no hay turnos completados en este rango
+                    </div>
+                  ) : (
+                    citasCompletadas.map(cita => (
+                      <TarjetaKanbanCita 
+                        key={cita.id} 
+                        cita={cita}
+                        onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
+                        onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                        onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
+                        onReasignar={() => {
+                          setCitaAReasignar(cita);
+                          setNuevoBarberoId(String(cita.barbero_id));
+                        }}
+                        onEnviar={() => setCitaAEnviar(cita)}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* COLUMNA 3: CANCELADAS / NO ASISTIÓ */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-3.5 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-600">
+                      Canceladas / No Asistió
+                    </h4>
+                  </div>
+                  <span className="text-[11px] font-black bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
+                    {citasCanceladas.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {citasCanceladas.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-white/60 rounded-xl border border-dashed border-slate-200">
+                      Sin citas canceladas
+                    </div>
+                  ) : (
+                    citasCanceladas.map(cita => (
+                      <TarjetaKanbanCita 
+                        key={cita.id} 
+                        cita={cita}
+                        onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
+                        onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                        onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
+                        onReasignar={() => {
+                          setCitaAReasignar(cita);
+                          setNuevoBarberoId(String(cita.barbero_id));
+                        }}
+                        onEnviar={() => setCitaAEnviar(cita)}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VISTA 2: LISTA DETALLADA / TABLA DE ALTA DENSIDAD */}
+          {/* ======================================================== */}
+          {tipoVista === 'lista' && (
+            <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden animate-fadeIn">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-extrabold">
+                    <tr>
+                      <th className="py-3 px-4">Hora & Fecha</th>
+                      <th className="py-3 px-4">Cliente & Contacto</th>
+                      <th className="py-3 px-4">Servicio & Valor</th>
+                      <th className="py-3 px-4">Barbero Responsable</th>
+                      <th className="py-3 px-4">Estado</th>
+                      <th className="py-3 px-4 text-right">Acciones Rápidas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {citas.map(cita => {
+                      const isCompletada = cita.estado === 'completada';
+                      const isCancelada = cita.estado === 'cancelada';
+                      const isNoAsistio = cita.estado === 'no_asistio';
+
+                      return (
+                        <tr key={cita.id} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className="font-mono font-black text-slate-900 block text-xs">
+                              {formatTime12(cita.hora_inicio)} - {formatTime12(cita.hora_fin)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              {cita.fecha}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-slate-900 block truncate max-w-[150px]">
+                              {cita.cliente_nombre}
+                            </span>
+                            {cita.cliente_telefono && (
+                              <a
+                                href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-emerald-600 hover:text-emerald-700 font-mono flex items-center gap-1 mt-0.5"
+                              >
+                                <Phone className="w-3 h-3" />
+                                <span>{cita.cliente_telefono}</span>
+                              </a>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className="font-semibold text-slate-800 block">
+                              {cita.servicio_nombre}
+                            </span>
+                            <span className="font-extrabold text-emerald-700 text-xs">
+                              {formatCOP(cita.precio_cobrado)}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-blue-600" />
+                              <span>{cita.barbero_nombre}</span>
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full inline-block ${
+                              isCompletada
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : isCancelada
+                                ? 'bg-slate-100 text-slate-600 line-through'
+                                : isNoAsistio
+                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                : 'bg-blue-100 text-blue-800 border border-blue-200'
+                            }`}>
+                              {cita.estado === 'completada' ? 'Completado' : cita.estado}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!isCompletada && !isCancelada && (
+                                <button
+                                  onClick={() => cambiarEstadoCita(cita.id, 'completada')}
+                                  title="Marcar como atendida y cobrada"
+                                  className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white transition-colors"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {!isCancelada && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setCitaAReasignar(cita);
+                                      setNuevoBarberoId(String(cita.barbero_id));
+                                    }}
+                                    title="Reasignar a otro barbero"
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-colors"
+                                  >
+                                    <UserCheck className="w-4 h-4" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => setCitaAEnviar(cita)}
+                                    title="Enviar al WhatsApp del barbero sin datos del cliente"
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-colors"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+
+                              {!isCancelada && !isCompletada && (
+                                <button
+                                  onClick={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                                  title="Cancelar turno"
+                                  className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VISTA 3: COLUMNAS DE TURNOS POR BARBERO */}
+          {/* ======================================================== */}
+          {tipoVista === 'barberos' && (
+            <div className="flex gap-4 overflow-x-auto pb-4 items-start animate-fadeIn">
+              {barberos.map(barbero => {
+                const citasBarbero = citas.filter(c => String(c.barbero_id) === String(barbero.id));
+                const recaudadoBarbero = citasBarbero
+                  .filter(c => c.estado === 'completada')
+                  .reduce((acc, c) => acc + Number(c.precio_cobrado || 0), 0);
+
+                return (
+                  <div key={barbero.id} className="min-w-[280px] sm:min-w-[320px] max-w-[340px] flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-3 shrink-0 shadow-xs">
+                    {/* Encabezado del Barbero */}
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-200 bg-white p-3 rounded-xl shadow-xs">
+                      <img
+                        src={barbero.foto_url || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=120'}
+                        alt={barbero.nombre}
+                        className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-extrabold text-xs text-slate-900 block truncate">
+                          {barbero.nombre}
+                        </span>
+                        <span className="text-[10px] text-blue-600 block truncate font-medium">
+                          {barbero.especialidad || 'Barbero Oficial'}
+                        </span>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                          <span>{citasBarbero.length} turnos</span>
+                          <span className="font-extrabold text-emerald-700">{formatCOP(recaudadoBarbero)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Turnos de este barbero */}
+                    <div className="space-y-2.5">
+                      {citasBarbero.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs bg-white/70 rounded-xl border border-dashed border-slate-200">
+                          Sin turnos asignados en este rango
+                        </div>
+                      ) : (
+                        citasBarbero.map(cita => (
+                          <TarjetaKanbanCita 
+                            key={cita.id} 
+                            cita={cita}
+                            onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
+                            onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                            onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
+                            onReasignar={() => {
+                              setCitaAReasignar(cita);
+                              setNuevoBarberoId(String(cita.barbero_id));
+                            }}
+                            onEnviar={() => setCitaAEnviar(cita)}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VISTA 4: CUADRÍCULA DE TARJETAS (VISTA CLÁSICA) */}
+          {/* ======================================================== */}
+          {tipoVista === 'cuadricula' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
+              {citas.map((cita) => {
+                const isCompletada = cita.estado === 'completada';
+                const isCancelada = cita.estado === 'cancelada';
+                const isNoAsistio = cita.estado === 'no_asistio';
+
+                return (
+                  <div
+                    key={cita.id}
+                    className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
+                      isCompletada
+                        ? 'bg-emerald-50/40 border-emerald-200'
+                        : isCancelada
+                        ? 'bg-slate-50 border-slate-200 opacity-60'
+                        : isNoAsistio
+                        ? 'bg-rose-50/50 border-rose-200 opacity-75'
+                        : 'bg-white border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md'
+                    }`}
+                  >
+                    <div>
+                      {/* Encabezado de la cita: Hora y Estado */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-mono">
+                          {formatTime12(cita.hora_inicio)} - {formatTime12(cita.hora_fin)}
+                        </span>
+                        <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          isCompletada 
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : isCancelada 
+                            ? 'bg-slate-100 text-slate-600 line-through'
+                            : isNoAsistio 
+                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                            : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}>
+                          {cita.estado === 'completada' ? 'Completado' : cita.estado}
+                        </span>
+                      </div>
+
+                      {/* Datos del Cliente y Servicio */}
+                      <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{cita.cliente_nombre}</span>
+                      </h4>
+
+                      <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
+                        <p className="flex items-center gap-2">
+                          <Scissors className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                          <span className="font-semibold text-slate-800">{cita.servicio_nombre}</span>
+                          <span className="text-emerald-700 font-extrabold ml-auto">{formatCOP(cita.precio_cobrado)}</span>
+                        </p>
+
+                        {cita.cliente_telefono && (
+                          <p className="flex items-center gap-2 text-slate-500">
+                            <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                            <a href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 underline font-medium">
+                              {cita.cliente_telefono}
+                            </a>
+                          </p>
+                        )}
+
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] flex items-center justify-between">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Barbero Asignado:</span>
+                            <span className="text-slate-900 font-bold">{cita.barbero_nombre}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Fecha:</span>
+                            <span className="text-slate-700 font-medium">{cita.fecha}</span>
+                          </div>
+                        </div>
+
+                        {cita.notas && (
+                          <p className="text-slate-600 text-[11px] italic bg-slate-50 p-2.5 rounded-lg mt-1 border border-slate-200">
+                            "{cita.notas}"
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ACCIONES DE ASIGNACIÓN & ENVÍO SEGURO AL BARBERO */}
+                      {!isCancelada && (
+                        <div className="mt-3.5 pt-3 border-t border-dashed border-slate-200 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCitaAReasignar(cita);
+                              setNuevoBarberoId(String(cita.barbero_id));
+                              setErrorReasignacion('');
+                            }}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-blue-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Reasignar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setCitaAEnviar(cita)}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-bold border border-slate-200/80 hover:border-emerald-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Enviar resumen al barbero sin datos sensibles"
+                          >
+                            <Send className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Enviar Barbero</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Acciones de Estado de la Cita */}
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1 text-xs">
+                      {cita.estado !== 'completada' && (
+                        <button
+                          onClick={() => cambiarEstadoCita(cita.id, 'completada')}
+                          title="Marcar como atendido y cobrado"
+                          className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg font-bold border border-emerald-200 hover:border-emerald-600 transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Completar</span>
+                        </button>
+                      )}
+
+                      {cita.estado === 'confirmada' && (
+                        <>
+                          <button
+                            onClick={() => cambiarEstadoCita(cita.id, 'no_asistio')}
+                            title="Marcar como cliente no asistió"
+                            className="py-1.5 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-semibold cursor-pointer"
+                          >
+                            No asistió
+                          </button>
+                          <button
+                            onClick={() => cambiarEstadoCita(cita.id, 'cancelada')}
+                            title="Cancelar cita"
+                            className="py-1.5 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+
+                      {cita.estado === 'completada' && (
+                        <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 ml-auto">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Listo para liquidación
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* MODAL PARA REASIGNAR BARBERO A LA CITA */}
@@ -526,7 +949,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                 <button
                   type="submit"
                   disabled={guardandoReasignacion}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {guardandoReasignacion ? 'Reasignando...' : 'Confirmar Reasignación'}
                 </button>
@@ -536,7 +959,7 @@ export default function AdminAgenda({ barberos, servicios }) {
         </div>
       )}
 
-      {/* MODAL PARA ENVIAR CITA AL BARBERO (STRICT CONFIDENTIALITY: SIN TELÉFONO NI DATOS PERSONALES) */}
+      {/* MODAL PARA ENVIAR CITA AL BARBERO (CONFIDENCIAL) */}
       {citaAEnviar && (() => {
         const barberoAsignado = barberos.find(b => String(b.id) === String(citaAEnviar.barbero_id));
         const textoConfidencial = construirMensajeBarbero(citaAEnviar);
@@ -563,7 +986,6 @@ export default function AdminAgenda({ barberos, servicios }) {
                 </div>
               </div>
 
-              {/* Mensaje de Seguridad / Privacidad de Datos */}
               <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div>
@@ -575,7 +997,6 @@ export default function AdminAgenda({ barberos, servicios }) {
                 </div>
               </div>
 
-              {/* Vista previa del mensaje */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-xs text-slate-800 whitespace-pre-line leading-relaxed mb-4">
                 {textoConfidencial}
               </div>
@@ -586,7 +1007,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                     href={whatsappUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition-all"
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     <span>Abrir WhatsApp de {citaAEnviar.barbero_nombre}</span>
@@ -601,7 +1022,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                 <button
                   type="button"
                   onClick={() => handleCopiarMensaje(textoConfidencial)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   {mensajeCopiado ? (
                     <>
@@ -619,7 +1040,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                 <button
                   type="button"
                   onClick={() => setCitaAEnviar(null)}
-                  className="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold"
+                  className="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer"
                 >
                   Cerrar
                 </button>
@@ -648,46 +1069,73 @@ export default function AdminAgenda({ barberos, servicios }) {
               </div>
             )}
 
-            <form onSubmit={handleCrearCitaManual} className="space-y-3.5 text-sm">
+            <form onSubmit={handleCrearCitaManual} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Barbero Asignado *
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Nombre del Cliente *
                 </label>
-                <select
+                <input
+                  type="text"
                   required
-                  value={nuevaCita.barbero_id}
-                  onChange={(e) => setNuevaCita({ ...nuevaCita, barbero_id: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Selecciona barbero</option>
-                  {barberos.map(b => (
-                    <option key={b.id} value={b.id}>{b.nombre}</option>
-                  ))}
-                </select>
+                  placeholder="Ej: Juan Pérez"
+                  value={nuevaCita.cliente_nombre}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_nombre: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Servicio a Realizar *
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Teléfono / WhatsApp
                 </label>
-                <select
-                  required
-                  value={nuevaCita.servicio_id}
-                  onChange={(e) => setNuevaCita({ ...nuevaCita, servicio_id: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Selecciona servicio</option>
-                  {servicios.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre} - {formatCOP(s.precio_cop)} ({s.duracion_minutos} min)
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="tel"
+                  placeholder="Ej: 3001234567"
+                  value={nuevaCita.cliente_telefono}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_telefono: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Barbero *
+                  </label>
+                  <select
+                    required
+                    value={nuevaCita.barbero_id}
+                    onChange={(e) => setNuevaCita({ ...nuevaCita, barbero_id: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-semibold"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {barberos.map(b => (
+                      <option key={b.id} value={b.id}>{b.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Servicio *
+                  </label>
+                  <select
+                    required
+                    value={nuevaCita.servicio_id}
+                    onChange={(e) => setNuevaCita({ ...nuevaCita, servicio_id: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-semibold"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {servicios.map(s => (
+                      <option key={s.id} value={s.id}>{s.nombre} ({formatCOP(s.precio_cop)})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                     Fecha *
                   </label>
                   <input
@@ -695,64 +1143,51 @@ export default function AdminAgenda({ barberos, servicios }) {
                     required
                     value={nuevaCita.fecha}
                     onChange={(e) => setNuevaCita({ ...nuevaCita, fecha: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Hora Inicio *
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Hora de Inicio *
                   </label>
                   <input
                     type="time"
                     required
                     value={nuevaCita.hora_inicio}
                     onChange={(e) => setNuevaCita({ ...nuevaCita, hora_inicio: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Nombre del Cliente *
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Notas adicionales
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nombre y apellido"
-                  value={nuevaCita.cliente_nombre}
-                  onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_nombre: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                <textarea
+                  rows="2"
+                  placeholder="Detalles sobre el corte o pedido especial..."
+                  value={nuevaCita.notas}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, notas: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 resize-none"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Teléfono / WhatsApp
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Ej. 300 123 4567"
-                  value={nuevaCita.cliente_telefono}
-                  onChange={(e) => setNuevaCita({ ...nuevaCita, cliente_telefono: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-3">
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setMostrarModalNueva(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={guardandoNueva}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold disabled:opacity-50 shadow-md shadow-blue-500/20"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                 >
-                  {guardandoNueva ? 'Guardando...' : 'Agendar Cita'}
+                  {guardandoNueva ? 'Guardando...' : 'Confirmar Turno'}
                 </button>
               </div>
             </form>
@@ -760,6 +1195,130 @@ export default function AdminAgenda({ barberos, servicios }) {
         </div>
       )}
 
+    </div>
+  );
+}
+
+// Subcomponente de Tarjeta para Tablero Kanban & Vista por Barbero
+function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar }) {
+  const isCompletada = cita.estado === 'completada';
+  const isCancelada = cita.estado === 'cancelada';
+  const isNoAsistio = cita.estado === 'no_asistio';
+
+  return (
+    <div className={`p-3.5 rounded-xl border transition-all text-xs space-y-2.5 ${
+      isCompletada
+        ? 'bg-white border-emerald-200 shadow-xs'
+        : isCancelada
+        ? 'bg-white border-slate-200 opacity-60'
+        : isNoAsistio
+        ? 'bg-white border-rose-200 opacity-80'
+        : 'bg-white border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md'
+    }`}>
+      {/* Horario y Estado */}
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="font-mono font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[11px] border border-blue-200/80">
+          {formatTime12(cita.hora_inicio)} - {formatTime12(cita.hora_fin)}
+        </span>
+        <span className="text-[10px] text-slate-400 font-mono">
+          {cita.fecha}
+        </span>
+      </div>
+
+      {/* Cliente y Teléfono */}
+      <div>
+        <span className="font-extrabold text-slate-900 block text-xs truncate">
+          {cita.cliente_nombre}
+        </span>
+        {cita.cliente_telefono && (
+          <a
+            href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] text-emerald-600 hover:text-emerald-700 font-mono flex items-center gap-1 mt-0.5"
+          >
+            <Phone className="w-2.5 h-2.5" />
+            <span>{cita.cliente_telefono}</span>
+          </a>
+        )}
+      </div>
+
+      {/* Servicio & Valor */}
+      <div className="flex items-center justify-between text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+        <span className="text-slate-700 font-semibold truncate pr-2">
+          {cita.servicio_nombre}
+        </span>
+        <span className="font-black text-emerald-700 shrink-0">
+          {formatCOP(cita.precio_cobrado)}
+        </span>
+      </div>
+
+      {/* Barbero */}
+      <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+        <User className="w-3 h-3 text-slate-400" />
+        <span className="font-bold text-slate-700 truncate">{cita.barbero_nombre}</span>
+      </div>
+
+      {/* Notas */}
+      {cita.notas && (
+        <p className="text-[10px] text-slate-500 italic bg-slate-50 p-1.5 rounded-md border border-slate-200 line-clamp-2">
+          "{cita.notas}"
+        </p>
+      )}
+
+      {/* Botones de Acción */}
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+        {!isCompletada && !isCancelada && (
+          <button
+            type="button"
+            onClick={onCompletar}
+            className="flex-1 py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
+            title="Marcar como atendida y cobrada"
+          >
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Cobrar</span>
+          </button>
+        )}
+
+        {!isCancelada && (
+          <>
+            <button
+              type="button"
+              onClick={onReasignar}
+              className="p-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Reasignar barbero"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onEnviar}
+              className="p-1 rounded-lg bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
+              title="Enviar al WhatsApp del barbero"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+
+        {!isCancelada && !isCompletada && (
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+            title="Cancelar cita"
+          >
+            <XCircle className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {isCompletada && (
+          <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 ml-auto">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <span>Cobrada</span>
+          </span>
+        )}
+      </div>
     </div>
   );
 }

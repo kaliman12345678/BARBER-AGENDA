@@ -139,10 +139,10 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
             type="button"
             onClick={() => setMobileMenuOpen(true)}
             className="md:hidden flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
-            title="Abrir menú de módulos"
+            title="Abrir menú"
           >
             <Menu className="w-4 h-4 text-white" />
-            <span>Menú de Módulos ({tabs.length})</span>
+            <span>Menú</span>
           </button>
 
           {/* En escritorio: Título del módulo activo */}
