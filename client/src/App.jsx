@@ -154,7 +154,13 @@ export default function App() {
       sessionStorage.setItem('barberia_admin_token', data.token);
       setIsAdminLoggedIn(true);
       setActiveView('admin');
-      window.history.pushState(null, '', `/?b=${tenantSlug}&admin=1`);
+      const targetSlug = data.barberia_slug || tenantSlug;
+      if (targetSlug && targetSlug !== tenantSlug) {
+        setTenantSlug(targetSlug);
+        sessionStorage.setItem('current_barberia_slug', targetSlug);
+        if (typeof window !== 'undefined') window.__BARBERIA_SLUG = targetSlug;
+      }
+      window.history.pushState(null, '', `/?b=${targetSlug}&admin=1`);
     } else if (data.role === 'barbero') {
       sessionStorage.setItem('barberia_barbero_session', JSON.stringify(data.barbero));
       if (data.token) {
@@ -162,7 +168,13 @@ export default function App() {
       }
       setBarberoAutenticado(data.barbero);
       setActiveView('barbero');
-      window.history.pushState(null, '', `/?b=${tenantSlug}&barbero=1`);
+      const targetSlug = data.barberia_slug || tenantSlug;
+      if (targetSlug && targetSlug !== tenantSlug) {
+        setTenantSlug(targetSlug);
+        sessionStorage.setItem('current_barberia_slug', targetSlug);
+        if (typeof window !== 'undefined') window.__BARBERIA_SLUG = targetSlug;
+      }
+      window.history.pushState(null, '', `/?b=${targetSlug}&barbero=1`);
     }
   }
 

@@ -29,6 +29,37 @@
       "activo": 1,
       "total_barberos": 3,
       "total_citas": 0
+    },
+    {
+      "id": 1794434400000,
+      "slug": "bip-barber-clib",
+      "nombre": "BIP BARBER CLUB",
+      "eslogan": "Tu estilo en las mejores manos",
+      "logo_url": "",
+      "color_primario": "#2563eb",
+      "color_secundario": "#1e293b",
+      "telefono": "3000000000",
+      "email": "hellenaiza@gmail.com",
+      "direccion": "Sede Principal",
+      "plan": "pro",
+      "precio_mensual_cop": 180000,
+      "modulos_activos": {
+        "agenda": true,
+        "max_barberos": 5,
+        "portal_barberos": true,
+        "liquidaciones": true,
+        "costos": true,
+        "notificaciones_audio": true,
+        "productos": true,
+        "rentabilidad": true,
+        "galeria": true,
+        "auditoria": true,
+        "fidelizacion_clientes": true
+      },
+      "pin_admin": "Vipadmin#1",
+      "activo": 1,
+      "total_barberos": 1,
+      "total_citas": 0
     }
   ],
   "barberos": [
@@ -76,6 +107,21 @@
       "horario_inicio": "09:00",
       "horario_fin": "20:00",
       "dias_laborales": "1,2,3,4,5,6,7"
+    },
+    {
+      "id": 1794434400001,
+      "barberia_id": 1794434400000,
+      "nombre": "Barbero Principal",
+      "especialidad": "Estilos Generales & Barba",
+      "telefono": "3000000000",
+      "email": "hellenaiza@gmail.com",
+      "password": "Vipadmin#1",
+      "activo": 1,
+      "foto_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
+      "porcentaje_comision": 50,
+      "horario_inicio": "09:00",
+      "horario_fin": "20:00",
+      "dias_laborales": "1,2,3,4,5,6"
     }
   ],
   "servicios": [
@@ -105,6 +151,24 @@
       "duracion_minutos": 50,
       "activo": 1,
       "descripcion": "Servicio completo con exfoliación y masaje capilar"
+    },
+    {
+      "id": 1794434400010,
+      "barberia_id": 1794434400000,
+      "nombre": "Corte Clásico / Fade",
+      "precio_cop": 25000,
+      "duracion_minutos": 45,
+      "activo": 1,
+      "descripcion": "Corte tradicional de cabello con tijera y máquina."
+    },
+    {
+      "id": 1794434400011,
+      "barberia_id": 1794434400000,
+      "nombre": "Corte y Barba Completa",
+      "precio_cop": 35000,
+      "duracion_minutos": 60,
+      "activo": 1,
+      "descripcion": "Perfilado de barba con toalla caliente y corte."
     }
   ],
   "citas": [],

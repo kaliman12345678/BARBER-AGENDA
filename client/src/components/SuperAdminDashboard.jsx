@@ -107,6 +107,12 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   // Modales
   const [modalCrearOpen, setModalCrearOpen] = useState(false);
   const [modalEditarOpen, setModalEditarOpen] = useState(false);
+  const [modalEliminarOpen, setModalEliminarOpen] = useState(false);
+  const [barberiaAEliminar, setBarberiaAEliminar] = useState(null);
+  const [passwordSuperAEliminar, setPasswordSuperAEliminar] = useState('');
+  const [mostrarPassEliminar, setMostrarPassEliminar] = useState(false);
+  const [errorEliminar, setErrorEliminar] = useState('');
+  const [eliminandoBarberia, setEliminandoBarberia] = useState(false);
   const [barberiaAEditar, setBarberiaAEditar] = useState(null);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [slugCopiado, setSlugCopiado] = useState(null);
@@ -563,23 +569,52 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     }
   }
 
-  async function handleEliminarBarberia(id, nombre, e) {
+  function handleAbrirModalEliminar(barberia, e) {
     if (e) e.stopPropagation();
-    if (Number(id) === 1) {
+    if (Number(barberia.id) === 1) {
       alert('La barbería principal (ID 1) no puede ser eliminada.');
       return;
     }
-    if (!window.confirm(`¿Estás seguro de eliminar "${nombre}" y todos sus datos (citas, barberos, finanzas)? Esta acción no se puede deshacer.`)) {
+    setBarberiaAEliminar(barberia);
+    setPasswordSuperAEliminar('');
+    setErrorEliminar('');
+    setModalEliminarOpen(true);
+  }
+
+  async function handleConfirmarEliminarBarberia(e) {
+    if (e) e.preventDefault();
+    if (!barberiaAEliminar) return;
+    if (!passwordSuperAEliminar.trim()) {
+      setErrorEliminar('Debes ingresar tu contraseña de SuperAdmin para autorizar la eliminación.');
       return;
     }
+
+    setEliminandoBarberia(true);
+    setErrorEliminar('');
     try {
-      const res = await fetch(`/api/superadmin/barberias/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setModalDetalleOpen(false);
-        cargarBarberias();
+      const res = await fetch(`/api/superadmin/barberias/${barberiaAEliminar.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-superadmin-password': passwordSuperAEliminar.trim()
+        },
+        body: JSON.stringify({ password_superadmin: passwordSuperAEliminar.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setErrorEliminar(data.error || 'Contraseña incorrecta o error al eliminar la barbería.');
+        return;
       }
+
+      setModalEliminarOpen(false);
+      setModalDetalleOpen(false);
+      setBarberiaAEliminar(null);
+      setPasswordSuperAEliminar('');
+      await cargarBarberias();
     } catch (err) {
-      console.error(err);
+      setErrorEliminar('Error de conexión al eliminar: ' + err.message);
+    } finally {
+      setEliminandoBarberia(false);
     }
   }
 
@@ -1654,6 +1689,16 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                             <Lock className="w-3 h-3" />
                             <span>Entrar</span>
                           </button>
+
+                          {Number(barberia.id) !== 1 && (
+                            <button
+                              onClick={(e) => handleAbrirModalEliminar(barberia, e)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Eliminar barbería (requiere contraseña SuperAdmin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2884,15 +2929,15 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                         <span>Editar Todos los Datos (Nombre, Slug, PIN, Plan)</span>
                       </button>
 
-                      {barberiaDetalle.barberia.id !== 1 && (
+                      {Number(barberiaDetalle.barberia.id) !== 1 && (
                         <button
-                          onClick={(e) => handleEliminarBarberia(barberiaDetalle.barberia.id, barberiaDetalle.barberia.nombre, e)}
-                          className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 border border-rose-200 transition-colors"
+                          onClick={(e) => handleAbrirModalEliminar(barberiaDetalle.barberia, e)}
+                          className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 border border-rose-200 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar Barbería</span>
+                          <span>Eliminar Barbería (Verificación con Clave)</span>
                         </button>
-                    )}
+                      )}
                   </div>
                   </div>
                 </div>
@@ -3310,6 +3355,101 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CONFIRMAR ELIMINACIÓN CON CONTRASEÑA SUPERADMIN */}
+      {/* ======================================================== */}
+      {modalEliminarOpen && barberiaAEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-slideIn">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 leading-tight">
+                    ¿Eliminar Barbería?
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {barberiaAEliminar.nombre} ({barberiaAEliminar.slug})
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
+                <div className="font-extrabold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Acción destructiva e irreversible</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-rose-700">
+                  Esta acción eliminará de forma permanente la barbería, todos sus barberos, catálogo de servicios, citas y registros contables.
+                </p>
+              </div>
+
+              {errorEliminar && (
+                <div className="p-3 rounded-xl bg-rose-100 border border-rose-300 text-rose-900 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{errorEliminar}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleConfirmarEliminarBarberia} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Introduce tu Contraseña de SuperAdmin para autorizar:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={mostrarPassEliminar ? "text" : "password"}
+                      value={passwordSuperAEliminar}
+                      onChange={(e) => {
+                        setPasswordSuperAEliminar(e.target.value);
+                        setErrorEliminar('');
+                      }}
+                      placeholder="Contraseña maestra de SuperAdmin"
+                      autoFocus
+                      required
+                      className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-hidden focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMostrarPassEliminar(!mostrarPassEliminar)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                    >
+                      {mostrarPassEliminar ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalEliminarOpen(false);
+                      setBarberiaAEliminar(null);
+                      setPasswordSuperAEliminar('');
+                      setErrorEliminar('');
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors text-xs cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={eliminandoBarberia || !passwordSuperAEliminar.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold transition-all shadow-md shadow-rose-600/20 text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{eliminandoBarberia ? 'Eliminando...' : 'Eliminar Definitivamente'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

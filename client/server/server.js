@@ -462,6 +462,7 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
 
     // 2. Verificar si es Dueño / Administrador de la barbería
     let barberiaDueño = null;
+    const inputClean = trimmedTel.toLowerCase();
 
     // A. Buscar en barberías del store por email o teléfono y contraseña real
     if (trimmedPass || trimmedPin) {
@@ -469,8 +470,10 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
       for (const b of (store.barberias || [])) {
         const bPin = String(b.pin_admin || '').trim();
         const coincidePass = bPin && (passBuscado === bPin);
-        const coincideEmail = trimmedTel && b.email && b.email.toLowerCase() === trimmedTel.toLowerCase();
-        const coincideTel = cleanTel && b.telefono && b.telefono.replace(/[^0-9]/g, '') === cleanTel;
+        const bEmail = (b.email || '').trim().toLowerCase();
+        const bTel = (b.telefono || '').replace(/\D/g, '');
+        const coincideEmail = bEmail && (bEmail === inputClean);
+        const coincideTel = cleanTel && bTel && (bTel === cleanTel);
 
         if (coincidePass && (coincideEmail || coincideTel)) {
           barberiaDueño = b;
@@ -479,15 +482,44 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
       }
     }
 
-    // B. Si está en el tenant actual y usa la contraseña del tenant
+    // B. Buscar en base de datos si no se encontró en memoria
+    if (!barberiaDueño && (trimmedPass || trimmedPin)) {
+      const passBuscado = trimmedPass || trimmedPin;
+      try {
+        const row = await db.prepare(
+          'SELECT * FROM barberias WHERE (LOWER(email) = ? OR telefono = ?) AND pin_admin = ? AND activo = 1'
+        ).get(inputClean, cleanTel || trimmedTel, passBuscado);
+        if (row) {
+          barberiaDueño = row;
+        }
+      } catch (_) {}
+    }
+
+    // C. Si no se encontró por email de barbería, verificar si el barbero inicial de esa barbería tiene este email y pin
+    if (!barberiaDueño && (trimmedPass || trimmedPin)) {
+      const passBuscado = trimmedPass || trimmedPin;
+      const matchBarb = (store.barberos || []).find(b => {
+        const bEmail = (b.email || '').toLowerCase();
+        const bTel = (b.telefono || '').replace(/\D/g, '');
+        return ((bEmail && bEmail === inputClean) || (cleanTel && bTel && bTel === cleanTel)) && b.password === passBuscado;
+      });
+      if (matchBarb) {
+        const targetB = (store.barberias || []).find(b => String(b.id) === String(matchBarb.barberia_id));
+        if (targetB && targetB.pin_admin === passBuscado) {
+          barberiaDueño = targetB;
+        }
+      }
+    }
+
+    // D. Si está en el tenant actual y usa la contraseña del tenant
     if (!barberiaDueño && (trimmedPass || trimmedPin)) {
       const passBuscado = trimmedPass || trimmedPin;
       const tenantPin = tenant && tenant.pin_admin ? String(tenant.pin_admin).trim() : 'BarberClub2026*';
       const coincideTenantPass = tenantPin && (passBuscado === tenantPin);
       
       const coincideTenantTel = cleanTel && tenant && tenant.telefono && tenant.telefono.replace(/[^0-9]/g, '') === cleanTel;
-      const coincideTenantEmail = trimmedTel && tenant && tenant.email && tenant.email.toLowerCase() === trimmedTel.toLowerCase();
-      const esAdminUser = trimmedTel.toLowerCase() === 'admin';
+      const coincideTenantEmail = inputClean && tenant && tenant.email && tenant.email.toLowerCase() === inputClean;
+      const esAdminUser = inputClean === 'admin' || inputClean === 'dueño' || inputClean === 'dueno';
 
       if (coincideTenantPass && (coincideTenantTel || coincideTenantEmail || esAdminUser)) {
         barberiaDueño = tenant || { id: tenantId, nombre: 'The Barber Club', slug: 'the-barber-club' };
@@ -524,17 +556,20 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
 
     if (!barbero && claveBuscada && (cleanTel || trimmedTel)) {
       try {
-        barbero = await db.prepare('SELECT * FROM barberos WHERE barberia_id = ? AND (telefono = ? OR email = ?) AND password = ? AND activo = 1').get(tenantId, cleanTel || trimmedTel, trimmedTel, claveBuscada);
+        barbero = await db.prepare('SELECT * FROM barberos WHERE (telefono = ? OR LOWER(email) = ?) AND password = ? AND activo = 1').get(cleanTel || trimmedTel, inputClean, claveBuscada);
       } catch (_) {}
     }
 
     if (barbero) {
       if (req._resetLoginAttempts) req._resetLoginAttempts();
+      const finalTenantId = barbero.barberia_id || tenantId;
+      const barberoBarberia = (store.barberias || []).find(b => String(b.id) === String(finalTenantId));
       return res.json({
         success: true,
         role: 'barbero',
         token: generateSessionToken('exa_bar'),
-        barberia_id: tenantId,
+        barberia_id: finalTenantId,
+        barberia_slug: barberoBarberia?.slug || tenant?.slug || 'the-barber-club',
         barbero: {
           id: barbero.id,
           nombre: barbero.nombre,
@@ -543,7 +578,7 @@ app.post('/api/auth/unified-login', checkLoginRateLimit, async (req, res) => {
           foto_url: barbero.foto_url,
           especialidad: barbero.especialidad,
           porcentaje_comision: barbero.porcentaje_comision,
-          barberia_id: tenantId
+          barberia_id: finalTenantId
         },
         message: `Bienvenido, ${barbero.nombre}`
       });
@@ -1045,6 +1080,7 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
   const {
     nombre,
     slug,
+    email,
     eslogan,
     logo_url,
     color_primario,
@@ -1089,7 +1125,6 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
       `);
 
       const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Admin');
-      const passBarberoInicial = generateAlphanumericPass('Barbero');
 
       const result = await stmt.run(
         finalSlug,
@@ -1118,9 +1153,10 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
     } catch (_) {}
 
     try {
-      const passBarberoInicial = 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*';
+      const passBarberoInicial = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Barbero');
+      const emailFinalBarbero = email ? email.trim().toLowerCase() : `admin@${finalSlug}.com`;
       const stmtBarb = db.prepare('INSERT INTO barberos (barberia_id, nombre, telefono, email, password, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-      await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', `admin@${finalSlug}.com`, passBarberoInicial, 50.0, '09:00', '20:00', '1,2,3,4,5,6');
+      await stmtBarb.run(nuevaId, 'Barbero Principal', telefono || '', emailFinalBarbero, passBarberoInicial, 50.0, '09:00', '20:00', '1,2,3,4,5,6');
     } catch (_) {}
 
     let nuevaBarberia = null;
@@ -1144,6 +1180,7 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
       id: nuevaBarberia?.id || nuevaId,
       slug: nuevaBarberia?.slug || finalSlug,
       nombre: nuevaBarberia?.nombre || nombre.trim(),
+      email: email ? email.trim().toLowerCase() : (nuevaBarberia?.email || ''),
       eslogan: nuevaBarberia?.eslogan || eslogan || 'Tu estilo en las mejores manos',
       logo_url: nuevaBarberia?.logo_url || logo_url || '',
       color_primario: nuevaBarberia?.color_primario || color_primario || '#2563eb',
@@ -1288,9 +1325,18 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
 
 app.delete('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
+  const { password_superadmin } = req.body || {};
+  const inputSuperPass = String(password_superadmin || req.headers['x-superadmin-password'] || req.query.password_superadmin || '').trim();
+
   if (Number(id) === 1) {
     return res.status(400).json({ error: 'No se puede eliminar la barbería principal del sistema (ID 1).' });
   }
+
+  const superConfig = await getSuperAdminConfig();
+  if (!inputSuperPass || (inputSuperPass !== superConfig.pin && inputSuperPass !== DEFAULT_SUPERADMIN_PASS)) {
+    return res.status(403).json({ error: 'Contraseña de SuperAdmin incorrecta. Debes ingresar tu clave maestra para autorizar la eliminación de esta barbería.' });
+  }
+
   try {
     try {
       await db.prepare('DELETE FROM citas WHERE barberia_id = ?').run(id);
