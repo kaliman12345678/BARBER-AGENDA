@@ -39,6 +39,7 @@ export default function AdminBarberos({ barberos, onRecargar }) {
 
   const [form, setForm] = useState({
     nombre: '',
+    especialidad: '',
     telefono: '',
     email: '',
     password: '',
@@ -46,7 +47,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     porcentaje_comision: 50,
     horario_inicio: '09:00',
     horario_fin: '20:00',
-    dias_laborales: '1,2,3,4,5,6'
+    dias_laborales: '1,2,3,4,5,6',
+    activo: 1
   });
 
   const [guardando, setGuardando] = useState(false);
@@ -145,6 +147,7 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     setBarberoEditando(null);
     setForm({
       nombre: '',
+      especialidad: '',
       telefono: '',
       email: '',
       password: '123456',
@@ -152,7 +155,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       porcentaje_comision: 50,
       horario_inicio: '09:00',
       horario_fin: '20:00',
-      dias_laborales: '1,2,3,4,5,6'
+      dias_laborales: '1,2,3,4,5,6',
+      activo: 1
     });
     setError('');
     setModalAbierto(true);
@@ -162,6 +166,7 @@ export default function AdminBarberos({ barberos, onRecargar }) {
     setBarberoEditando(b);
     setForm({
       nombre: b.nombre,
+      especialidad: b.especialidad || '',
       telefono: b.telefono || '',
       email: b.email || '',
       password: b.password || '123456',
@@ -169,7 +174,8 @@ export default function AdminBarberos({ barberos, onRecargar }) {
       porcentaje_comision: b.porcentaje_comision || 50,
       horario_inicio: b.horario_inicio || '09:00',
       horario_fin: b.horario_fin || '20:00',
-      dias_laborales: b.dias_laborales || '1,2,3,4,5,6'
+      dias_laborales: b.dias_laborales || '1,2,3,4,5,6',
+      activo: b.activo !== undefined ? b.activo : 1
     });
     setError('');
     setModalAbierto(true);
@@ -292,6 +298,12 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                       </span>
                     </div>
 
+                    {b.especialidad && (
+                      <p className="text-[11px] text-amber-600 font-bold truncate mt-0.5">
+                        {b.especialidad}
+                      </p>
+                    )}
+
                     {/* Correo de usuario para iniciar sesión */}
                     <p className="text-xs text-blue-600 font-semibold flex items-center gap-1.5 mt-1 truncate">
                       <Mail className="w-3.5 h-3.5 flex-shrink-0" />
@@ -413,6 +425,16 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   <span>Ver Récord Completo de {b.nombre}</span>
                   <ExternalLink className="w-3 h-3 text-blue-500" />
                 </button>
+
+                {/* Botón Principal y Destacado: Editar Datos del Barbero */}
+                <button
+                  type="button"
+                  onClick={() => abrirModalEditar(b)}
+                  className="w-full mt-2 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Editar Datos & Perfil</span>
+                </button>
               </div>
 
               {/* Botones de acción inferiores */}
@@ -426,16 +448,17 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                       : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                   }`}
                 >
-                  {b.activo ? 'Desactivar' : 'Activar Barbero'}
+                  {b.activo ? 'Desactivar Barbero' : 'Activar Barbero'}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => abrirModalEditar(b)}
-                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                  className="px-2.5 py-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
                   title="Editar datos del barbero"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Editar</span>
                 </button>
               </div>
 
@@ -473,6 +496,19 @@ export default function AdminBarberos({ barberos, onRecargar }) {
                   placeholder="Ej. Mateo Gómez"
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  Especialidad / Título Profesional
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Master Fade & Barbas Clásicas"
+                  value={form.especialidad}
+                  onChange={(e) => setForm({ ...form, especialidad: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                 />
               </div>

@@ -1,5 +1,21 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check } from 'lucide-react';
+
+const CLIENT_THEME_OPTIONS = [
+  { id: 'oscuro', nombre: 'Obsidian Dark (Oscuro)', icon: Moon, desc: 'Fondo negro premium con alto contraste y elegancia', bg: 'bg-slate-950 text-white border-slate-800' },
+  { id: 'claro', nombre: 'Minimal Clean (Claro)', icon: Sun, desc: 'Fondo blanco moderno, fresco y luminoso', bg: 'bg-slate-50 text-slate-900 border-slate-200' },
+  { id: 'vintage', nombre: 'Barber Gold (Vintage)', icon: Sparkles, desc: 'Estilo clásico con toques de oro y barbería tradicional', bg: 'bg-[#0c0a09] text-amber-50 border-amber-900/40' },
+  { id: 'cyber', nombre: 'Cyber Tech (Moderno)', icon: Palette, desc: 'Degradados de vanguardia y estilo contemporáneo', bg: 'bg-[#090d16] text-sky-100 border-sky-900/40' }
+];
+
+const COLOR_PRESETS = [
+  { name: 'Azul Real', hex: '#2563eb' },
+  { name: 'Oro Barber', hex: '#d97706' },
+  { name: 'Esmeralda', hex: '#059669' },
+  { name: 'Rojo Rubí', hex: '#dc2626' },
+  { name: 'Púrpura Real', hex: '#7c3aed' },
+  { name: 'Carbón Dark', hex: '#0f172a' }
+];
 
 export default function AdminConfig({ shopConfig, onConfigActualizada }) {
   const [form, setForm] = useState({
@@ -8,6 +24,8 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
     telefono_barberia: shopConfig?.telefono_barberia || '+57 300 123 4567',
     direccion_barberia: shopConfig?.direccion_barberia || 'Calle Principal # 10 - 20',
     logo_url: shopConfig?.logo_url || '',
+    color_primario: shopConfig?.color_primario || '#2563eb',
+    tema_cliente: shopConfig?.tema_cliente || 'oscuro',
     pin_admin: ''
   });
 
@@ -231,6 +249,104 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
             onChange={(e) => setForm({ ...form, direccion_barberia: e.target.value })}
             className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
+        </div>
+
+        {/* PERSONALIZACIÓN DE TEMA Y COLOR PARA EL CLIENTE */}
+        <div className="pt-4 border-t border-slate-200 space-y-4">
+          <div>
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Palette className="w-4 h-4 text-blue-600" />
+              <span>Tema & Color con el que el Cliente Verá la App</span>
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Tú decides cómo experimentan tus clientes la página de agendamiento público.
+            </p>
+          </div>
+
+          {/* Selector de Tema del Cliente */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-2">
+              Tema Visual del Cliente
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {CLIENT_THEME_OPTIONS.map((t) => {
+                const Icon = t.icon;
+                const isSelected = form.tema_cliente === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setForm({ ...form, tema_cliente: t.id })}
+                    className={`p-3 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${t.bg}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">{t.nombre}</span>
+                        {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{t.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color de Acento y Marca */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-2">
+              Color de Marca de tu Barbería (Botones, Destacados y Horarios)
+            </label>
+            <div className="flex flex-wrap items-center gap-2 mb-2.5">
+              {COLOR_PRESETS.map((c) => {
+                const isSelected = form.color_primario.toLowerCase() === c.hex.toLowerCase();
+                return (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setForm({ ...form, color_primario: c.hex })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
+                      isSelected
+                        ? 'border-slate-800 bg-white shadow-sm ring-2 ring-slate-800/10'
+                        : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-700'
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: c.hex }} />
+                    <span>{c.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span className="text-xs text-slate-600 font-medium">Color Personalizado:</span>
+              <input
+                type="color"
+                value={form.color_primario}
+                onChange={(e) => setForm({ ...form, color_primario: e.target.value })}
+                className="w-8 h-8 rounded-lg cursor-pointer border-0 bg-transparent"
+              />
+              <input
+                type="text"
+                value={form.color_primario}
+                onChange={(e) => setForm({ ...form, color_primario: e.target.value })}
+                className="w-28 p-1.5 text-xs font-mono font-bold rounded-lg border border-slate-200 uppercase text-center bg-white"
+              />
+              <div 
+                className="px-3 py-1 rounded-lg text-white text-[11px] font-bold shadow-xs ml-auto"
+                style={{ backgroundColor: form.color_primario }}
+              >
+                Muestra de Botón
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* PIN DE ACCESO */}

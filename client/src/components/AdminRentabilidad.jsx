@@ -111,12 +111,57 @@ export default function AdminRentabilidad({ barberos = [] }) {
   // ==========================================
   // SIMULACIÓN DE ESCENARIOS (PESIMISTA, EQUILIBRIO, RENTABLE)
   // ==========================================
-  function calcularEscenario(cortesDiaPorBarbero) {
-    const cortesMes = Math.round(cortesDiaPorBarbero * numNumBarberos * numDiasMes);
+  function getSemaforoInfo(resultadoNeto, margenNetoPct) {
+    if (resultadoNeto < -50000) {
+      return {
+        nivel: 'rojo',
+        label: '🔴 Zona Roja: Déficit Crítico',
+        sublabel: 'Pérdida mensual por falta de volumen',
+        badge: 'bg-rose-500/20 text-rose-400 border-rose-500/40',
+        cardBorder: 'border-rose-500/50',
+        textColor: 'text-rose-400',
+        diagnostico: 'No alcanza a cubrir arriendo ni costos operativos. Requiere promociones activas o mayor volumen de clientes.'
+      };
+    } else if (resultadoNeto <= 100000) {
+      return {
+        nivel: 'amarillo',
+        label: '🟡 Zona Amarilla: Punto de Equilibrio',
+        sublabel: 'Gastos 100% cubiertos (Punto Cero)',
+        badge: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+        cardBorder: 'border-amber-500/50',
+        textColor: 'text-amber-400',
+        diagnostico: 'Todos los gastos del local están saldados. Cada cliente extra a partir de aquí es ganancia neta pura para el dueño.'
+      };
+    } else if (numMetaGanancia > 0 && resultadoNeto >= numMetaGanancia) {
+      return {
+        nivel: 'azul',
+        label: '💎 Zona Excelente: Meta Alcanzada',
+        sublabel: 'Superávit superior a tu meta deseada',
+        badge: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+        cardBorder: 'border-sky-500/50',
+        textColor: 'text-sky-400',
+        diagnostico: '¡Objetivo superado! Negocio con alto flujo de caja positivo y excelente margen neto para reinvertir o retirar.'
+      };
+    } else {
+      return {
+        nivel: 'verde',
+        label: '🟢 Zona Verde: Rentable',
+        sublabel: `Margen neto libre: ${margenNetoPct}%`,
+        badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+        cardBorder: 'border-emerald-500/50',
+        textColor: 'text-emerald-400',
+        diagnostico: 'Negocio en rentabilidad positiva. Flujo de caja favorable y ganancias estables para el dueño.'
+      };
+    }
+  }
+
+  function calcularEscenarioPorCortes(cortesMesTotal) {
+    const cortesMes = Math.max(0, Math.round(cortesMesTotal));
+    const cortesDiaPorBarbero = (cortesMes / (numDiasMes * numNumBarberos)).toFixed(1);
     const facturacion = cortesMes * numPrecioCorte;
     const comisiones = Math.round(facturacion * (porcentajeComision / 100));
     const margenServicios = facturacion - comisiones;
-    const resultadoNeto = margenServicios + numMargenProductos - numCostosFijos;
+    const resultadoNeto = Math.round(margenServicios + numMargenProductos - numCostosFijos);
     const margenNetoPct = facturacion > 0 ? Math.round((resultadoNeto / facturacion) * 100) : 0;
 
     return {
@@ -127,24 +172,31 @@ export default function AdminRentabilidad({ barberos = [] }) {
       costosFijos: numCostosFijos,
       resultadoNeto,
       margenNetoPct,
-      esRentable: resultadoNeto > 0,
-      esEquilibrio: Math.abs(resultadoNeto) < 50000
+      semaforo: getSemaforoInfo(resultadoNeto, margenNetoPct)
     };
+  }
+
+  function calcularEscenario(cortesDiaPorBarbero) {
+    const cortesMes = Math.round(cortesDiaPorBarbero * numNumBarberos * numDiasMes);
+    return calcularEscenarioPorCortes(cortesMes);
   }
 
   // Escenario interactivo según el slider
   const escenarioSimulado = calcularEscenario(ritmoDiarioPorBarbero);
 
-  // Escenario Pesimista (Días lentos)
-  const cortesPesimista = Math.max(1, Math.floor(Number(cortesEquilibrioDiaPorBarbero) * 0.6));
-  const escenarioPesimista = calcularEscenario(cortesPesimista);
+  // Escenario 1: Pesimista (65% de cortes de equilibrio -> Déficit real)
+  const cortesPesimistaMes = Math.max(1, Math.round(cortesEquilibrioMes * 0.65));
+  const escenarioPesimista = calcularEscenarioPorCortes(cortesPesimistaMes);
 
-  // Escenario de Equilibrio
-  const escenarioEquilibrio = calcularEscenario(Number(cortesEquilibrioDiaPorBarbero));
+  // Escenario 2: Equilibrio Matemático Exacto (100% de cortes)
+  const escenarioEquilibrio = calcularEscenarioPorCortes(cortesEquilibrioMes);
 
-  // Escenario Rentable / Objetivo
-  const cortesRentable = Math.ceil(Number(cortesEquilibrioDiaPorBarbero) * 1.6);
-  const escenarioRentable = calcularEscenario(cortesRentable);
+  // Escenario 3: Rentable / Superávit (140% de cortes)
+  const cortesRentableMes = Math.max(cortesEquilibrioMes + 1, Math.round(cortesEquilibrioMes * 1.4));
+  const escenarioRentable = calcularEscenarioPorCortes(cortesRentableMes);
+
+  // Semáforo del mes actual real
+  const semaforoMesActual = getSemaforoInfo(gananciaNetaActualMes, 0);
 
   // ==========================================
   // CALCULADORA INVERSA (META DE GANANCIA)
@@ -185,12 +237,8 @@ export default function AdminRentabilidad({ barberos = [] }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
-              cortesActuales >= cortesEquilibrioMes
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-            }`}>
-              {cortesActuales >= cortesEquilibrioMes ? '✓ Zona Rentable' : '⚠️ En Zona de Déficit'}
+            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border shadow-xs ${semaforoMesActual.badge}`}>
+              {semaforoMesActual.label}
             </span>
           </div>
         </div>
@@ -489,15 +537,15 @@ export default function AdminRentabilidad({ barberos = [] }) {
           </p>
         </div>
 
-        {/* 3 Escenarios Predefinidos en Tarjetas */}
+        {/* 3 Escenarios Predefinidos en Tarjetas con Semáforo Dinámico */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
           {/* ESCENARIO 1: PESIMISTA (DÉFICIT / PÉRDIDAS) */}
-          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
+          <div className={`bg-slate-900 border ${escenarioPesimista.semaforo.cardBorder} rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all`}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-500/30">
-                  🔴 Escenario Pesimista
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full ${escenarioPesimista.semaforo.badge} text-[10px] font-black uppercase tracking-wider border`}>
+                  {escenarioPesimista.semaforo.label}
                 </span>
                 <span className="text-xs font-bold text-slate-400">
                   {escenarioPesimista.cortesDiaPorBarbero} cortes/día c/u
@@ -506,11 +554,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
 
               <div>
                 <span className="text-[11px] text-slate-400 block">Resultado Neto para el Dueño:</span>
-                <span className="text-2xl font-black text-rose-400 font-serif">
-                  {formatCOP(escenarioPesimista.resultadoNeto)}
+                <span className={`text-2xl font-black font-serif ${escenarioPesimista.semaforo.textColor}`}>
+                  {escenarioPesimista.resultadoNeto > 0 ? '+' : ''}{formatCOP(escenarioPesimista.resultadoNeto)}
                 </span>
-                <span className="text-[10px] text-rose-400/80 block font-semibold mt-0.5">
-                  Pérdida mensual por falta de volumen
+                <span className="text-[10px] text-slate-400 block font-semibold mt-0.5">
+                  {escenarioPesimista.semaforo.sublabel}
                 </span>
               </div>
 
@@ -524,7 +572,7 @@ export default function AdminRentabilidad({ barberos = [] }) {
                   <span className="text-slate-200 font-bold">{formatCOP(escenarioPesimista.facturacion)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Comisiones barberos:</span>
+                  <span>Comisiones barberos ({porcentajeComision}%):</span>
                   <span className="text-slate-200">{formatCOP(escenarioPesimista.comisiones)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -534,17 +582,17 @@ export default function AdminRentabilidad({ barberos = [] }) {
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-rose-500/20 text-[11px] text-slate-400">
-              💡 <em>Diagnóstico:</em> No alcanza a cubrir arriendo ni servicios. Requiere promociones en días muertos (lunes a miércoles) o venta activa de productos.
+            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+              💡 <em>Diagnóstico:</em> {escenarioPesimista.semaforo.diagnostico}
             </div>
           </div>
 
           {/* ESCENARIO 2: EQUILIBRIO (GASTOS CUBIERTOS) */}
-          <div className="bg-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
+          <div className={`bg-slate-900 border ${escenarioEquilibrio.semaforo.cardBorder} rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all`}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
-                  🟡 Punto de Equilibrio
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full ${escenarioEquilibrio.semaforo.badge} text-[10px] font-black uppercase tracking-wider border`}>
+                  {escenarioEquilibrio.semaforo.label}
                 </span>
                 <span className="text-xs font-bold text-slate-400">
                   {escenarioEquilibrio.cortesDiaPorBarbero} cortes/día c/u
@@ -553,11 +601,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
 
               <div>
                 <span className="text-[11px] text-slate-400 block">Resultado Neto para el Dueño:</span>
-                <span className="text-2xl font-black text-amber-400 font-serif">
-                  {formatCOP(escenarioEquilibrio.resultadoNeto)}
+                <span className={`text-2xl font-black font-serif ${escenarioEquilibrio.semaforo.textColor}`}>
+                  {escenarioEquilibrio.resultadoNeto > 0 ? '+' : ''}{formatCOP(escenarioEquilibrio.resultadoNeto)}
                 </span>
                 <span className="text-[10px] text-slate-400 block mt-0.5">
-                  Gastos 100% cubiertos (Punto Cero)
+                  {escenarioEquilibrio.semaforo.sublabel}
                 </span>
               </div>
 
@@ -571,7 +619,7 @@ export default function AdminRentabilidad({ barberos = [] }) {
                   <span className="text-slate-200 font-bold">{formatCOP(escenarioEquilibrio.facturacion)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Comisiones barberos:</span>
+                  <span>Comisiones barberos ({porcentajeComision}%):</span>
                   <span className="text-slate-200">{formatCOP(escenarioEquilibrio.comisiones)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -581,17 +629,17 @@ export default function AdminRentabilidad({ barberos = [] }) {
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-amber-500/20 text-[11px] text-slate-400">
-              ⚖️ <em>Diagnóstico:</em> Todos los gastos del local están saldados. Cada cliente extra a partir de aquí es ganancia neta pura para el dueño.
+            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+              ⚖️ <em>Diagnóstico:</em> {escenarioEquilibrio.semaforo.diagnostico}
             </div>
           </div>
 
           {/* ESCENARIO 3: RENTABLE / META (SUPERÁVIT) */}
-          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
+          <div className={`bg-slate-900 border ${escenarioRentable.semaforo.cardBorder} rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all`}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
-                  🟢 Escenario Rentable
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full ${escenarioRentable.semaforo.badge} text-[10px] font-black uppercase tracking-wider border`}>
+                  {escenarioRentable.semaforo.label}
                 </span>
                 <span className="text-xs font-bold text-slate-400">
                   {escenarioRentable.cortesDiaPorBarbero} cortes/día c/u
@@ -600,11 +648,11 @@ export default function AdminRentabilidad({ barberos = [] }) {
 
               <div>
                 <span className="text-[11px] text-slate-400 block">Resultado Neto para el Dueño:</span>
-                <span className="text-2xl font-black text-emerald-400 font-serif">
+                <span className={`text-2xl font-black font-serif ${escenarioRentable.semaforo.textColor}`}>
                   +{formatCOP(escenarioRentable.resultadoNeto)}
                 </span>
-                <span className="text-[10px] text-emerald-400/80 block font-semibold mt-0.5">
-                  Margen neto libre: {escenarioRentable.margenNetoPct}%
+                <span className="text-[10px] text-slate-400 block font-semibold mt-0.5">
+                  {escenarioRentable.semaforo.sublabel}
                 </span>
               </div>
 
@@ -618,7 +666,7 @@ export default function AdminRentabilidad({ barberos = [] }) {
                   <span className="text-slate-200 font-bold">{formatCOP(escenarioRentable.facturacion)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Comisiones barberos:</span>
+                  <span>Comisiones barberos ({porcentajeComision}%):</span>
                   <span className="text-slate-200">{formatCOP(escenarioRentable.comisiones)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -628,23 +676,28 @@ export default function AdminRentabilidad({ barberos = [] }) {
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-emerald-500/20 text-[11px] text-slate-400">
-              🚀 <em>Diagnóstico:</em> Negocio en alta rentabilidad. Flujo de caja positivo y ganancias estables para reinvertir o retirar.
+            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+              🚀 <em>Diagnóstico:</em> {escenarioRentable.semaforo.diagnostico}
             </div>
           </div>
 
         </div>
 
-        {/* Simulador Manual con Slider Libre */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mt-6">
+        {/* Simulador Manual con Slider Libre y Semáforo en Tiempo Real */}
+        <div className={`bg-slate-900 border ${escenarioSimulado.semaforo.cardBorder} rounded-3xl p-6 shadow-xl mt-6 transition-all`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
-              <h5 className="font-bold text-white text-sm font-serif flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-amber-400" />
-                Simulador Dinámico Personalizado
-              </h5>
-              <span className="text-xs text-slate-400">
-                Mueve el control para ver qué pasa si cada barbero hace cierta cantidad de cortes al día:
+              <div className="flex items-center gap-2">
+                <h5 className="font-bold text-white text-sm font-serif flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-amber-400" />
+                  Simulador Dinámico Personalizado
+                </h5>
+                <span className={`px-2.5 py-0.5 rounded-full ${escenarioSimulado.semaforo.badge} text-[10px] font-black uppercase tracking-wider border`}>
+                  {escenarioSimulado.semaforo.label}
+                </span>
+              </div>
+              <span className="text-xs text-slate-400 block mt-0.5">
+                Mueve el control para ver en tiempo real cómo cambia el semáforo y la utilidad:
               </span>
             </div>
 
@@ -682,9 +735,7 @@ export default function AdminRentabilidad({ barberos = [] }) {
             </div>
             <div>
               <span className="text-slate-500 block">Ganancia Neta Dueño:</span>
-              <span className={`text-xl font-black font-serif ${
-                escenarioSimulado.resultadoNeto >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}>
+              <span className={`text-xl font-black font-serif ${escenarioSimulado.semaforo.textColor}`}>
                 {escenarioSimulado.resultadoNeto >= 0 ? '+' : ''}{formatCOP(escenarioSimulado.resultadoNeto)}
               </span>
             </div>

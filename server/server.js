@@ -269,8 +269,9 @@ app.get('/api/configuracion', async (req, res) => {
       config.nombre_barberia = tenant.nombre;
       config.eslogan_barberia = tenant.eslogan || '';
       config.logo_url = tenant.logo_url || '';
-      config.color_primario = tenant.color_primario || '#2563eb';
+      config.color_primario = tenant.color_primario || config.color_primario || '#2563eb';
       config.color_secundario = tenant.color_secundario || '#1e293b';
+      config.tema_cliente = tenant.tema_cliente || config.tema_cliente || 'oscuro';
       config.telefono_barberia = tenant.telefono || config.telefono_barberia || '';
       config.direccion_barberia = tenant.direccion || config.direccion_barberia || '';
       config.plan = tenant.plan || 'basico';
@@ -412,7 +413,7 @@ app.post('/api/auth/verify-pin', async (req, res) => {
 });
 
 app.put('/api/configuracion', async (req, res) => {
-  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url } = req.body;
+  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente } = req.body;
   try {
     const tenantId = await getTenantId(req);
 
@@ -442,7 +443,9 @@ app.put('/api/configuracion', async (req, res) => {
     if (nombre_barberia) await update.run('nombre_barberia', nombre_barberia);
     if (telefono_barberia) await update.run('telefono_barberia', telefono_barberia);
     if (direccion_barberia) await update.run('direccion_barberia', direccion_barberia);
-    if (logo_url) await update.run('logo_url', logo_url);
+    if (logo_url !== undefined) await update.run('logo_url', logo_url);
+    if (color_primario) await update.run('color_primario', color_primario);
+    if (tema_cliente) await update.run('tema_cliente', tema_cliente);
 
     const mem = memoryBarberias.find(b => Number(b.id) === Number(tenantId));
     if (mem) {
@@ -451,6 +454,7 @@ app.put('/api/configuracion', async (req, res) => {
       if (direccion_barberia) mem.direccion = direccion_barberia;
       if (logo_url !== undefined) mem.logo_url = logo_url;
       if (color_primario) mem.color_primario = color_primario;
+      if (tema_cliente) mem.tema_cliente = tema_cliente;
     }
 
     res.json({ success: true, message: 'Configuración actualizada exitosamente' });
@@ -1095,12 +1099,13 @@ app.post('/api/barberos', async (req, res) => {
 app.put('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
-  const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
+  const { nombre, especialidad, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
 
   try {
     const stmt = db.prepare(`
       UPDATE barberos 
       SET nombre = COALESCE(?, nombre),
+          especialidad = COALESCE(?, especialidad),
           telefono = COALESCE(?, telefono),
           email = COALESCE(?, email),
           password = COALESCE(?, password),
@@ -1114,6 +1119,7 @@ app.put('/api/barberos/:id', async (req, res) => {
     `);
     await stmt.run(
       nombre !== undefined ? nombre : null,
+      especialidad !== undefined ? especialidad : null,
       telefono !== undefined ? telefono : null,
       email !== undefined && email !== '' ? email.trim().toLowerCase() : null,
       password !== undefined && password !== '' ? password.trim() : null,
