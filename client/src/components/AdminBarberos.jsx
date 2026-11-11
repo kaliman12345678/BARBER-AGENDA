@@ -33,6 +33,15 @@ const DIAS_SEMANA = [
   { id: 7, nombre: 'Dom' }
 ];
 
+function generarClaveAlfanumerica(prefijo = 'Barber') {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefijo}${Math.floor(100 + Math.random() * 900)}${rand}`;
+}
+
 export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [barberoEditando, setBarberoEditando] = useState(null);
@@ -92,14 +101,18 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
   }
 
   async function handleGuardarPasswordRapida(barberoId, nuevaPassword) {
-    if (!nuevaPassword || nuevaPassword.trim().length < 4) return;
+    const pass = (nuevaPassword || '').trim();
+    if (pass.length < 6 || !/[a-zA-Z]/.test(pass) || !/[0-9]/.test(pass)) {
+      alert('La contraseña debe ser alfanumérica: debe tener al menos 6 caracteres e incluir tanto letras como números (ej: Barbero2026)');
+      return;
+    }
 
     setGuardandoPasswordId(barberoId);
     try {
       const res = await fetch(`/api/barberos/${barberoId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: nuevaPassword.trim() })
+        body: JSON.stringify({ password: pass })
       });
       if (res.ok) {
         if (onRecargar) onRecargar();
@@ -151,7 +164,7 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
       especialidad: '',
       telefono: '',
       email: '',
-      password: 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*',
+      password: generarClaveAlfanumerica('Barbero'),
       foto_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=300&h=300&fit=crop&crop=faces',
       porcentaje_comision: 50,
       horario_inicio: '09:00',
@@ -214,6 +227,12 @@ export default function AdminBarberos({ barberos, onRecargar, onIrABloqueos }) {
 
     if (!form.password || !form.password.trim()) {
       setError('La contraseña de acceso asignada es obligatoria');
+      return;
+    }
+
+    const pass = form.password.trim();
+    if (pass.length < 6 || !/[a-zA-Z]/.test(pass) || !/[0-9]/.test(pass)) {
+      setError('La contraseña del barbero debe ser alfanumérica: debe tener al menos 6 caracteres e incluir tanto letras como números (ej: Barbero2026)');
       return;
     }
 

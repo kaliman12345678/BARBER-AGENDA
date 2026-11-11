@@ -16,6 +16,21 @@ function generateSessionToken(prefix = 'exa') {
   return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
 }
 
+function isAlphanumericPass(pass) {
+  if (!pass || typeof pass !== 'string') return false;
+  const str = pass.trim();
+  return str.length >= 6 && /[a-zA-Z]/.test(str) && /[0-9]/.test(str);
+}
+
+function generateAlphanumericPass(prefix = 'Barber') {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefix}${Math.floor(100 + Math.random() * 900)}${rand}`;
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -446,6 +461,12 @@ app.put('/api/configuracion', async (req, res) => {
   try {
     const tenantId = await getTenantId(req);
 
+    if (pin_admin !== undefined && String(pin_admin).trim() !== '') {
+      if (!isAlphanumericPass(pin_admin)) {
+        return res.status(400).json({ error: 'La nueva contraseña debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+      }
+    }
+
     const stmt = db.prepare(`
       UPDATE barberias
       SET nombre = COALESCE(?, nombre),
@@ -770,6 +791,12 @@ app.post('/api/superadmin/barberias', async (req, res) => {
     const planElegido = plan || 'basico';
     const modulosFinales = modulos_activos ? (typeof modulos_activos === 'string' ? modulos_activos : JSON.stringify(modulos_activos)) : JSON.stringify(getDefaultModulesForPlan(planElegido));
 
+    if (pin_admin !== undefined && String(pin_admin).trim() !== '') {
+      if (!isAlphanumericPass(pin_admin)) {
+        return res.status(400).json({ error: 'La contraseña del dueño debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+      }
+    }
+
     let nuevaId = Date.now();
     try {
       const stmt = db.prepare(`
@@ -779,8 +806,8 @@ app.post('/api/superadmin/barberias', async (req, res) => {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `);
 
-      const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : ('Admin' + Math.floor(1000 + Math.random() * 9000) + '*');
-      const passBarberoInicial = 'Barbero' + Math.floor(1000 + Math.random() * 9000) + '*';
+      const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Admin');
+      const passBarberoInicial = generateAlphanumericPass('Barbero');
 
       const result = await stmt.run(
         finalSlug,
@@ -830,7 +857,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       parsedModulos = getDefaultModulesForPlan(planElegido);
     }
 
-    const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : ('Admin' + Math.floor(1000 + Math.random() * 9000) + '*');
+    const pinFinalCalculado = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Admin');
     const barberiaFinal = {
       id: nuevaBarberia?.id || nuevaId,
       slug: nuevaBarberia?.slug || finalSlug,
@@ -844,7 +871,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       plan: nuevaBarberia?.plan || planElegido,
       precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (planElegido === 'vip' ? 320000 : (planElegido === 'pro' ? 180000 : 80000)),
       modulos_activos: parsedModulos,
-      pin_admin: nuevaBarberia?.pin_admin || pinFinal,
+      pin_admin: nuevaBarberia?.pin_admin || pinFinalCalculado,
       activo: 1,
       total_barberos: 1,
       total_citas: 0
@@ -865,6 +892,12 @@ app.post('/api/superadmin/barberias', async (req, res) => {
 app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   const { id } = req.params;
   const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop } = req.body;
+
+  if (pin_admin !== undefined && String(pin_admin).trim() !== '') {
+    if (!isAlphanumericPass(pin_admin)) {
+      return res.status(400).json({ error: 'La contraseña del dueño debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+    }
+  }
 
   try {
     let actual = null;
@@ -1154,6 +1187,12 @@ app.post('/api/barberos', async (req, res) => {
   const { nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
+  if (password !== undefined && String(password).trim() !== '') {
+    if (!isAlphanumericPass(password)) {
+      return res.status(400).json({ error: 'La contraseña del barbero debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+    }
+  }
+
   try {
     const tenantId = await getTenantId(req);
     const tenant = await getTenant(req);
@@ -1174,7 +1213,7 @@ app.post('/api/barberos', async (req, res) => {
 
     const nombreLimpio = nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const emailFinal = email ? email.trim().toLowerCase() : `${nombreLimpio || 'barbero' + Date.now()}@barberia.com`;
-    const passwordFinal = password ? password.trim() : ('Barbero' + Math.floor(1000 + Math.random() * 9000) + '*');
+    const passwordFinal = password && password.trim() ? password.trim() : generateAlphanumericPass('Barbero');
 
     const stmt = db.prepare(`
       INSERT INTO barberos (barberia_id, nombre, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo)
@@ -1202,6 +1241,12 @@ app.put('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   const { nombre, especialidad, telefono, email, password, foto_url, porcentaje_comision, horario_inicio, horario_fin, dias_laborales, activo } = req.body;
+
+  if (password !== undefined && String(password).trim() !== '') {
+    if (!isAlphanumericPass(password)) {
+      return res.status(400).json({ error: 'La contraseña del barbero debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+    }
+  }
 
   try {
     const stmt = db.prepare(`
@@ -1244,6 +1289,12 @@ app.patch('/api/barberos/:id', async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   const { porcentaje_comision, activo, pin, email, password } = req.body;
+
+  if (password !== undefined && String(password).trim() !== '') {
+    if (!isAlphanumericPass(password)) {
+      return res.status(400).json({ error: 'La contraseña del barbero debe ser alfanumérica (contener letras y números, mínimo 6 caracteres)' });
+    }
+  }
 
   try {
     const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(id, tenantId);

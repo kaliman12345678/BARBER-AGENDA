@@ -62,6 +62,15 @@ const COLOR_PRESETS = [
   { name: 'Grafito Dark', hex: '#1e293b' },
 ];
 
+function generarClaveAlfanumerica(prefijo = 'Admin') {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefijo}${Math.floor(100 + Math.random() * 900)}${rand}`;
+}
+
 export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberia }) {
   const [isSuperLoggedIn, setIsSuperLoggedIn] = useState(false);
   const [superTelefono, setSuperTelefono] = useState('3114220554');
@@ -109,7 +118,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     plan: 'pro',
     precio_mensual_cop: 180000,
     color_primario: '#2563eb',
-    pin_admin: 'BarberClub2026*',
+    pin_admin: generarClaveAlfanumerica('Admin'),
     telefono: '',
     direccion: '',
     eslogan: 'Tu estilo en las mejores manos'
@@ -470,6 +479,12 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       return;
     }
 
+    const pin = nuevaBarberia.pin_admin ? nuevaBarberia.pin_admin.trim() : '';
+    if (pin && (pin.length < 6 || !/[a-zA-Z]/.test(pin) || !/[0-9]/.test(pin))) {
+      alert('La contraseña del dueño debe ser alfanumérica: debe tener al menos 6 caracteres e incluir tanto letras como números (ej: Barber2026)');
+      return;
+    }
+
     setCargando(true);
     try {
       const res = await fetch('/api/superadmin/barberias', {
@@ -490,7 +505,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           email: '',
           plan: 'pro',
           color_primario: '#2563eb',
-          pin_admin: 'BarberClub2026*',
+          pin_admin: generarClaveAlfanumerica('Admin'),
           telefono: '',
           direccion: '',
           eslogan: 'Tu estilo en las mejores manos'
@@ -546,6 +561,12 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     const cleanTel = barberiaAEditar.telefono ? barberiaAEditar.telefono.replace(/\D/g, '') : '';
     if (cleanTel && cleanTel.length !== 10) {
       alert('El teléfono debe tener exactamente 10 dígitos numéricos (ej: 3001234567)');
+      return;
+    }
+
+    const pin = barberiaAEditar.pin_admin ? barberiaAEditar.pin_admin.trim() : '';
+    if (pin && (pin.length < 6 || !/[a-zA-Z]/.test(pin) || !/[0-9]/.test(pin))) {
+      alert('La contraseña del dueño debe ser alfanumérica: debe tener al menos 6 caracteres e incluir tanto letras como números (ej: Barber2026)');
       return;
     }
 

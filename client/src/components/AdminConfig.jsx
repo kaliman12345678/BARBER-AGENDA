@@ -92,6 +92,14 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
       return;
     }
 
+    if (form.pin_admin && form.pin_admin.trim()) {
+      const p = form.pin_admin.trim();
+      if (p.length < 6 || !/[a-zA-Z]/.test(p) || !/[0-9]/.test(p)) {
+        setError('La nueva contraseña debe ser alfanumérica: debe tener al menos 6 caracteres e incluir tanto letras como números (ej: Barber2026)');
+        return;
+      }
+    }
+
     setGuardando(true);
     setMensaje('');
 
@@ -463,14 +471,14 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
           </label>
           <input
             type="password"
-            maxLength={12}
-            placeholder="Dejar en blanco para conservar la contraseña actual"
+            maxLength={30}
+            placeholder="Dejar en blanco para conservar actual (mín. 6 letras y números)"
             value={form.pin_admin}
             onChange={(e) => setForm({ ...form, pin_admin: e.target.value })}
-            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center tracking-widest font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center tracking-wider font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
           <p className="text-[11px] text-slate-400 mt-1">
-            Contraseña para ingresar al panel de dueño. Al cambiarla, la app notificará automáticamente al SuperAdmin.
+            Contraseña alfanumérica (mínimo 6 caracteres, letras y números obligatorios). Al cambiarla, la app notificará automáticamente al SuperAdmin.
           </p>
         </div>
 
