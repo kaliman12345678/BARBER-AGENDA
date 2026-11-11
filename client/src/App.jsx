@@ -73,15 +73,14 @@ export default function App() {
       if (isAdminRoute) {
         setActiveView('admin');
       }
+    } else if (isAdminRoute) {
+      // Si el dueño abre el enlace con &admin=1, desplegar directamente el modal para digitar su PIN
+      setActiveView('client');
+      setShowLoginModal(true);
     } else {
-      // Para clientes y nuevos visitantes: siempre vista limpia de reservas sin abrir modales emergentes
+      // Para clientes regulares: vista limpia de agendamiento
       setActiveView('client');
       setShowLoginModal(false);
-      if (isAdminRoute) {
-        // Limpiar parámetros administrativos de la URL para no confundir al cliente
-        const cleanSlug = urlParams.get('b') || 'the-barber-club';
-        window.history.replaceState(null, '', `/?b=${cleanSlug}`);
-      }
     }
 
     if (isBarberoRoute && barberoGuardado) {

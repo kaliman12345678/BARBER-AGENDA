@@ -591,26 +591,28 @@ app.get('/api/superadmin/barberias/:id/detalle', async (req, res) => {
     const diasParaVencer = Math.max(1, 30 - diffDias);
 
     const preciosPlanes = {
-      basico: { usd: 20, cop: 80000 },
-      pro: { usd: 45, cop: 180000 },
-      vip: { usd: 80, cop: 320000 },
+      basico: { cop: 80000 },
+      pro: { cop: 180000 },
+      vip: { cop: 320000 },
       personalizado: { 
-        usd: barberia.precio_mensual_usd || 50, 
         cop: barberia.precio_mensual_cop || 200000 
       }
     };
     const infoPlan = preciosPlanes[barberia.plan] || preciosPlanes.basico;
+    const precioCopFinal = barberia.precio_mensual_cop !== undefined && barberia.precio_mensual_cop !== null && barberia.precio_mensual_cop !== ''
+      ? Number(barberia.precio_mensual_cop)
+      : infoPlan.cop;
 
     res.json({
       success: true,
       barberia: {
         ...barberia,
+        precio_mensual_cop: precioCopFinal,
         modulos_activos: modulos
       },
       suscripcion: {
         plan: barberia.plan || 'basico',
-        precio_usd: infoPlan.usd,
-        precio_cop: infoPlan.cop,
+        precio_cop: precioCopFinal,
         dias_para_vencer: diasParaVencer,
         porcentaje_ciclo: Math.round(((30 - diasParaVencer) / 30) * 100),
         estado_pago: 'Al día',
@@ -671,7 +673,8 @@ app.post('/api/superadmin/barberias', async (req, res) => {
     direccion,
     plan,
     modulos_activos,
-    pin_admin
+    pin_admin,
+    precio_mensual_cop
   } = req.body;
 
   if (!nombre) return res.status(400).json({ error: 'El nombre de la barbería es obligatorio' });
@@ -757,6 +760,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
       telefono: nuevaBarberia?.telefono || telefono || '',
       direccion: nuevaBarberia?.direccion || direccion || '',
       plan: nuevaBarberia?.plan || planElegido,
+      precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (planElegido === 'vip' ? 320000 : (planElegido === 'pro' ? 180000 : 80000)),
       modulos_activos: parsedModulos,
       pin_admin: nuevaBarberia?.pin_admin || pin_admin || '1234',
       activo: 1,
@@ -778,7 +782,7 @@ app.post('/api/superadmin/barberias', async (req, res) => {
 
 app.patch('/api/superadmin/barberias/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo } = req.body;
+  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop } = req.body;
 
   try {
     let actual = null;
@@ -865,6 +869,7 @@ app.patch('/api/superadmin/barberias/:id', async (req, res) => {
       telefono: updated?.telefono || telefono || actual?.telefono || '',
       direccion: updated?.direccion || direccion || actual?.direccion || '',
       plan: updated?.plan || plan || actual?.plan || 'basico',
+      precio_mensual_cop: precio_mensual_cop !== undefined && precio_mensual_cop !== '' ? Number(precio_mensual_cop) : (actual?.precio_mensual_cop ?? ((updated?.plan || plan || actual?.plan) === 'vip' ? 320000 : ((updated?.plan || plan || actual?.plan) === 'pro' ? 180000 : 80000))),
       modulos_activos: parsedUpdatedModulos,
       pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || '1234',
       activo: updated?.activo !== undefined ? updated.activo : (activo !== undefined ? (activo ? 1 : 0) : (actual?.activo ?? 1)),
