@@ -3546,10 +3546,43 @@ app.get('/api/notificaciones/recientes', requireAdminOrSuper, async (req, res) =
   }
 });
 
-// Soporte para rutas SPA frontend
+// Soporte para rutas SPA frontend con Open Graph dinámico por barbería
 if (fs.existsSync(clientDistPath)) {
-  app.use((req, res) => {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+  app.use(async (req, res) => {
+    try {
+      const indexPath = path.join(clientDistPath, 'index.html');
+      let html = fs.readFileSync(indexPath, 'utf8');
+
+      const tenant = await getTenant(req);
+      if (tenant && tenant.nombre) {
+        const nombre = tenant.nombre;
+        const eslogan = tenant.eslogan || 'Reserva tu turno en línea con nuestros barberos profesionales.';
+        const logo = tenant.logo_url || '';
+
+        html = html.replace(/<title>.*?<\/title>/i, `<title>${nombre} - Agenda de Citas Online</title>`);
+
+        const ogTags = `
+    <title>${nombre} - Agenda de Citas Online</title>
+    <meta property="og:title" content="${nombre}" />
+    <meta property="og:description" content="${eslogan}" />
+    <meta property="og:type" content="website" />
+    ${logo ? `<meta property="og:image" content="${logo}" />` : ''}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="${nombre}" />
+    <meta name="twitter:description" content="${eslogan}" />
+    ${logo ? `<meta name="twitter:image" content="${logo}" />` : ''}
+        `.trim();
+
+        if (html.includes('</head>')) {
+          html = html.replace('</head>', `  ${ogTags}\n  </head>`);
+        }
+      }
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    } catch (_) {
+      res.sendFile(path.join(clientDistPath, 'index.html'));
+    }
   });
 }
 
