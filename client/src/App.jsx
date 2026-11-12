@@ -5,6 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import BarberoPortal from './components/BarberoPortal';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import UnifiedLoginModal from './components/UnifiedLoginModal';
+import FloatingWhatsApp from './components/FloatingWhatsApp';
 import { Lock, AlertTriangle } from 'lucide-react';
 
 function getInitialSlug() {
@@ -311,6 +312,14 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Botón flotante grande de WhatsApp en la esquina inferior derecha con movimiento */}
+      {shopConfig.telefono_barberia && (
+        <FloatingWhatsApp
+          phone={shopConfig.telefono_barberia}
+          shopName={shopConfig.nombre_barberia}
+        />
+      )}
 
     </div>
   );

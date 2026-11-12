@@ -151,20 +151,6 @@ export default function Navbar({
                 <span>Agenda tu cita</span>
               </span>
 
-              {/* Botón WhatsApp directo (sin mostrar números en texto plano) */}
-              {shopPhone && (
-                <a
-                  href={`https://wa.me/${shopPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`¡Hola ${shopName}! Quisiera consultar sobre sus servicios de barbería.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Chatear por WhatsApp con la barbería"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 fill-white/20 text-white" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </a>
-              )}
-
               {/* Botón único de Iniciar Sesión */}
               <button
                 onClick={onAbrirLogin}
