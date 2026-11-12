@@ -43,6 +43,7 @@ import {
   Award,
   Sliders,
   Save,
+  Edit2,
   Edit3,
   Share2,
   Bell,
