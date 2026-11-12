@@ -212,8 +212,9 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 ## 9. Próximas Tareas Pendientes
 
 Cuando el usuario lo solicite, el trabajo debe orientarse a:
-1. **Landing Page Comercial de Presentación de Dolores:**
+1. **Landing Page Comercial de Presentación de Dolores + Panel de Gestión de Contenido (CMS):**
    * Crear una página independiente (ej. `/landing` o componente comercial) enfocada en los dolores que resuelve EXAKTA frente a la competencia (comisiones desordenadas, inasistencias de clientes, costos abusivos en dólares de WeiBook/BEWE, y caja ciega).
+   * **Requisito Fundamental:** Debe incluir un bloque o panel de administración para que el SuperAdmin pueda editar todo el contenido de la landing (textos del hero, dolores, soluciones, planes, enlace de WhatsApp comercial, testimonios, etc.) directamente desde la interfaz, guardándose en base de datos (`configuracion` en Supabase), **sin necesidad de entrar al código**.
 2. **Implementación de la Fase 1 (Google Reviews) y Fase 2 (Tirilla POS).**
 
 > **RECUERDA:** Antes de hacer modificaciones a la base de datos o a la lógica de reservas, consulta este documento y preserva el soporte multi-tenant de Supabase.
