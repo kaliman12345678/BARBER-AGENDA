@@ -6,6 +6,7 @@ import BarberoPortal from './components/BarberoPortal';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import UnifiedLoginModal from './components/UnifiedLoginModal';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
+import LandingPage from './components/landing/LandingPage';
 import { Lock, AlertTriangle } from 'lucide-react';
 
 function getInitialSlug() {
@@ -20,9 +21,27 @@ function getInitialSlug() {
   return sessionStorage.getItem('current_barberia_slug') || 'the-barber-club';
 }
 
+function getInitialView() {
+  if (typeof window === 'undefined') return 'client';
+  const urlParams = new URLSearchParams(window.location.search);
+  const path = (window.location.pathname || '').toLowerCase();
+  if (
+    path.includes('/landing') ||
+    path.includes('/presentacion') ||
+    urlParams.get('landing') !== null ||
+    urlParams.get('presentacion') !== null
+  ) {
+    return 'landing';
+  }
+  if (path.includes('/superadmin') || urlParams.get('superadmin') !== null) {
+    return 'superadmin';
+  }
+  return 'client';
+}
+
 export default function App() {
   const [tenantSlug, setTenantSlug] = useState(getInitialSlug);
-  const [activeView, setActiveView] = useState('client'); // 'client', 'admin', 'barbero', 'superadmin'
+  const [activeView, setActiveView] = useState(getInitialView); // 'client', 'admin', 'barbero', 'superadmin'
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [barberoAutenticado, setBarberoAutenticado] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -57,9 +76,18 @@ export default function App() {
     }
 
     const urlParams = new URLSearchParams(window.location.search);
+    const isLandingRoute = window.location.pathname.includes('/landing') || 
+                           window.location.pathname.includes('/presentacion') || 
+                           urlParams.get('landing') !== null || 
+                           urlParams.get('presentacion') !== null;
     const isSuperRoute = window.location.pathname.includes('/superadmin') || urlParams.get('superadmin') !== null;
     const isAdminRoute = window.location.pathname.includes('/admin') || window.location.hash.includes('admin') || urlParams.get('admin') !== null;
     const isBarberoRoute = window.location.pathname.includes('/barbero') || window.location.hash.includes('barbero') || urlParams.get('barbero') !== null;
+
+    if (isLandingRoute) {
+      setActiveView('landing');
+      return;
+    }
 
     if (isSuperRoute) {
       setActiveView('superadmin');
@@ -113,6 +141,15 @@ export default function App() {
         if (data.color_primario) {
           document.documentElement.style.setProperty('--color-primary', data.color_primario);
         }
+
+        // Título de la pestaña y Favicon dinámicos con la marca de la barbería
+        if (data.nombre_barberia) {
+          document.title = `${data.nombre_barberia} | Citas & Reservas Online`;
+        }
+        if (data.logo_url) {
+          const iconEl = document.querySelector("link[rel*='icon']");
+          if (iconEl) iconEl.href = data.logo_url;
+        }
       }
     } catch (err) {
       console.error('Error cargando configuración multi-tenant:', err);
@@ -120,7 +157,10 @@ export default function App() {
   }
 
   function handleSwitchView(view) {
-    if (view === 'superadmin') {
+    if (view === 'landing') {
+      setActiveView('landing');
+      window.history.pushState(null, '', '/landing');
+    } else if (view === 'superadmin') {
       setActiveView('superadmin');
       window.history.pushState(null, '', '/superadmin');
     } else if (view === 'admin') {
@@ -207,6 +247,24 @@ export default function App() {
       setActiveView('client');
       window.history.pushState(null, '', `/?b=${nuevoSlug}`);
     }
+  }
+
+  // Vista pública de la Landing Page de EXAKTA
+  if (activeView === 'landing') {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <LandingPage
+          onIrABarberia={(slug) => cambiarBarberia(slug || 'the-barber-club')}
+          onAbrirLogin={() => setShowLoginModal(true)}
+        />
+        {showLoginModal && (
+          <UnifiedLoginModal
+            onLoginSuccess={handleUnifiedLoginSuccess}
+            onCancel={() => setShowLoginModal(false)}
+          />
+        )}
+      </div>
+    );
   }
 
   // Vista exclusiva de SuperAdmin
@@ -296,7 +354,14 @@ export default function App() {
       <footer className="border-t border-slate-200 py-6 text-xs text-slate-500 bg-white shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="font-medium text-slate-500 text-center sm:text-left">
-            {shopConfig.nombre_barberia} • Impulsado por <strong className="text-slate-700">EXAKTA</strong>
+            {shopConfig.nombre_barberia} • Impulsado por{' '}
+            <button
+              onClick={() => handleSwitchView('landing')}
+              className="font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+              title="Conoce la plataforma EXAKTA para barberías"
+            >
+              EXAKTA
+            </button>
           </p>
 
           <div className="flex items-center gap-3">

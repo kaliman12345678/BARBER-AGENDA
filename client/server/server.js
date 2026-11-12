@@ -7,6 +7,7 @@ const cors = require('cors');
 const multer = require('multer');
 const db = require('./database');
 const store = require('./store');
+const { DEFAULT_LANDING_CONFIG } = require('./landing_default_config');
 
 const app = express();
 const PORT = process.env.PORT || 4001;
@@ -915,6 +916,82 @@ app.put('/api/superadmin/configuracion-planes', requireSuperAdmin, async (req, r
       success: true,
       message: 'Tarifas de planes actualizadas correctamente.',
       precios: cleanPrecios
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint público para consultar la configuración completa de la Landing Page
+app.get('/api/landing-config', async (req, res) => {
+  try {
+    let config = store.obtenerConfiguracion('landing_config', DEFAULT_LANDING_CONFIG);
+    try {
+      const row = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'landing_config'").get();
+      if (row && row.valor) {
+        config = typeof row.valor === 'string' ? JSON.parse(row.valor) : row.valor;
+      }
+    } catch (_) {}
+    
+    // Garantizar que no vengan campos nulos si faltan propiedades nuevas
+    const mergedConfig = {
+      ...DEFAULT_LANDING_CONFIG,
+      ...config,
+      general: { ...DEFAULT_LANDING_CONFIG.general, ...(config?.general || {}) },
+      hero: { ...DEFAULT_LANDING_CONFIG.hero, ...(config?.hero || {}) },
+      dolores: config?.dolores && Array.isArray(config.dolores) && config.dolores.length > 0 ? config.dolores : DEFAULT_LANDING_CONFIG.dolores,
+      flujo: config?.flujo && Array.isArray(config.flujo) && config.flujo.length > 0 ? config.flujo : DEFAULT_LANDING_CONFIG.flujo,
+      comparativa: { ...DEFAULT_LANDING_CONFIG.comparativa, ...(config?.comparativa || {}) },
+      planes: config?.planes && Array.isArray(config.planes) && config.planes.length > 0 ? config.planes : DEFAULT_LANDING_CONFIG.planes,
+      testimonios: config?.testimonios || DEFAULT_LANDING_CONFIG.testimonios,
+      faqs: config?.faqs || DEFAULT_LANDING_CONFIG.faqs
+    };
+
+    res.json({ success: true, data: mergedConfig });
+  } catch (err) {
+    res.json({ success: true, data: DEFAULT_LANDING_CONFIG });
+  }
+});
+
+// Endpoint protegido para que el SuperAdmin actualice todo el contenido del CMS de la Landing
+app.put('/api/superadmin/landing-config', requireSuperAdmin, async (req, res) => {
+  try {
+    const nuevaConfig = req.body;
+    if (!nuevaConfig || typeof nuevaConfig !== 'object') {
+      return res.status(400).json({ error: 'Formato de configuración inválido.' });
+    }
+
+    const jsonString = JSON.stringify(nuevaConfig);
+    try {
+      await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('landing_config', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(jsonString);
+    } catch (_) {}
+
+    store.guardarConfiguracion('landing_config', nuevaConfig);
+
+    res.json({
+      success: true,
+      message: 'Landing page actualizada correctamente en tiempo real.',
+      data: nuevaConfig
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint para restablecer la configuración de fábrica de la Landing Page
+app.post('/api/superadmin/landing-config/reset', requireSuperAdmin, async (req, res) => {
+  try {
+    const jsonString = JSON.stringify(DEFAULT_LANDING_CONFIG);
+    try {
+      await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('landing_config', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(jsonString);
+    } catch (_) {}
+
+    store.guardarConfiguracion('landing_config', DEFAULT_LANDING_CONFIG);
+
+    res.json({
+      success: true,
+      message: 'Configuración de la Landing Page restablecida a los valores de fábrica.',
+      data: DEFAULT_LANDING_CONFIG
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

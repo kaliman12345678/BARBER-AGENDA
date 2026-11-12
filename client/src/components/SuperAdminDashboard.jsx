@@ -53,10 +53,12 @@ import {
   UserCog,
   LayoutGrid,
   List,
-  Table
+  Table,
+  Globe
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
+import LandingCmsEditor from './landing/LandingCmsEditor';
 
 const COLOR_PRESETS = [
   { name: 'Azul EXAKTA', hex: '#2563eb' },
@@ -1158,6 +1160,23 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           >
             <Crown className="w-4 h-4 text-amber-500" />
             <span>Planes & Beneficios</span>
+          </button>
+
+          <button
+            onClick={() => { setSeccionActiva('landing'); setSidebarMovilAbierto(false); }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              seccionActiva === 'landing'
+                ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100/60 shadow-xs'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Globe className="w-4 h-4 text-blue-600" />
+              <span>Landing & CMS</span>
+            </div>
+            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
+              CMS
+            </span>
           </button>
 
           <button
@@ -2457,6 +2476,15 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   </button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECCIÓN CMS: GESTIÓN DE CONTENIDO DE LA LANDING PAGE */}
+          {/* ======================================================== */}
+          {seccionActiva === 'landing' && (
+            <div className="animate-fadeIn">
+              <LandingCmsEditor onVerLanding={() => window.open('/landing', '_blank')} />
             </div>
           )}
 

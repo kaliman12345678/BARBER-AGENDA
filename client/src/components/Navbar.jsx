@@ -135,6 +135,18 @@ export default function Navbar({
             /* Vista para clientes comunes: Limpia, profesional con solo Agenda e Iniciar Sesión */
             <div className="flex items-center gap-2 sm:gap-3">
               
+              {/* Botón para conocer la Landing de EXAKTA */}
+              <button
+                type="button"
+                onClick={() => setActiveView('landing')}
+                title="Ver presentación y ventas de EXAKTA"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition-all shadow-xs cursor-pointer"
+              >
+                <Scissors className="w-3.5 h-3.5 text-blue-600 -rotate-45" />
+                <span className="hidden sm:inline">Conoce EXAKTA</span>
+                <span className="sm:hidden">Landing</span>
+              </button>
+
               {/* Botón Actualizar para Clientes */}
               <button
                 type="button"
