@@ -11,7 +11,7 @@ const store = require('./store');
 const app = express();
 const PORT = process.env.PORT || 4001;
 
-const DEFAULT_SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || process.env.SUPERADMIN_PIN || 'Exakta#2026Master!';
+let DEFAULT_SUPERADMIN_PASS = process.env.SUPERADMIN_PASSWORD || process.env.SUPERADMIN_PIN || 'Exakta#2026Master!';
 
 async function getSuperAdminConfig() {
   let pin = store.obtenerConfiguracion('pin_superadmin', DEFAULT_SUPERADMIN_PASS);

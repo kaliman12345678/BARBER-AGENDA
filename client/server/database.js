@@ -54,11 +54,11 @@ if (effectiveDbUrl) {
           let idx = 1;
           let pgSql = sql.replace(/\?/g, () => '$' + (idx++));
           if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.toUpperCase().includes('RETURNING')) {
-            pgSql += ' RETURNING id';
+            pgSql += ' RETURNING *';
           }
           const res = await pool.query(pgSql, flat);
           return {
-            lastInsertRowid: res.rows[0]?.id || Date.now(),
+            lastInsertRowid: res.rows[0]?.id || res.rows[0]?.clave || Date.now(),
             changes: res.rowCount || 1
           };
         } catch (err) {
