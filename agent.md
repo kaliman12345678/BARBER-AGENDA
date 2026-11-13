@@ -279,3 +279,29 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 ---
 
 > **RECUERDA:** Antes de hacer modificaciones a la base de datos o a la lógica de reservas, consulta este documento y preserva el soporte multi-tenant de Supabase.
+
+### [2026-11-13] — Fix Overflow Barra SuperAdmin + Bug Definitivo Horarios + Rediseño Panel Cliente
+
+#### 1. Overflow horizontal barra Modo SuperAdmin
+* **Bug:** La barra negra superior `<aside>` de Modo SuperAdmin causaba desbordamiento horizontal (overflow-x) en dispositivos móviles. Al deslizar a la izquierda se veía espacio blanco a la derecha. También afectaba la vista cliente cuando se accedía desde SuperAdmin.
+* **Causa Raíz:** El `<aside>` usaba `flex-wrap` con múltiples elementos sin restricción de ancho. En mobile, el texto "Modo SuperAdmin" + selector + botón "Volver a SuperAdmin" superaban el viewport.
+* **Solución:** Rediseño del `<aside>` con `w-full max-w-full overflow-hidden`. Selector compactado con `max-w-[110px]` y texto truncado. Botón de retorno con texto corto en mobile (`SA` / `SuperAdmin` responsive). Eliminado `flex-wrap` y substituido por layout sin desbordamiento.
+* **Archivo:** `client/src/App.jsx`
+
+#### 2. Bug Definitivo — Horarios bloqueados en vista cliente (causa raíz multi-tenant)
+* **Bug Recurrente:** En el panel del dueño aparecen horarios disponibles pero en el del cliente **todos los horarios aparecen bloqueados**.
+* **Causa Raíz Definitiva:** El fetch de `cargarDisponibilidad()` en `ClientBooking.jsx` llamaba a `/api/disponibilidad?barbero_id=...&fecha=...&duracion_minutos=...` **SIN pasar el slug de la barbería**. El servidor (`getTenantId`) hacía fallback a `tenantId = 1` (The Barber Club). Cuando el barbero pertenecía a otra barbería (ej: vice-barber con ID ≠ 1), la query SQL `WHERE barberia_id = 1` no lo encontraba y caía al Fallback 3 (barbero genérico 09:00-20:00). Adicionalmente, los bloqueos se buscaban también con `tenantId = 1`, mostrando los bloqueos de otra barbería aplicados al cliente.
+* **Solución:** Pasar `b=slug` como query param y `x-barberia-slug` como header HTTP en el fetch de disponibilidad. Mismo fix aplicado al POST de `/api/citas`. El slug se obtiene de `shopConfig.slug || window.__BARBERIA_SLUG || sessionStorage`.
+* **Archivo:** `client/src/components/ClientBooking.jsx` — funciones `cargarDisponibilidad()` y `handleSubmitReserva()`
+
+#### 3. Rediseño del Panel Cliente — Landing de Barbería + CTA "AGENDA TU CITA"
+* **Cambio Solicitado:** El cliente al abrir el enlace de la barbería debía ver primero un perfil visual de la barbería (logo, nombre, eslogan, contacto, redes sociales) y un único botón prominente "AGENDA TU CITA". Solo al presionar ese botón se despliega el flujo de agendamiento.
+* **Implementación:**
+  - Nuevo estado `mostrandoAgenda` (false por defecto) controla qué pantalla se muestra.
+  - **Pantalla de perfil:** Logo grande centrado (o inicial del nombre como fallback), nombre/eslogan, datos de contacto (teléfono, dirección), redes sociales (Instagram via `instagram_url`, Facebook via `facebook_url`, web via `sitio_web`), botón CTA azul "AGENDA TU CITA" con sombra dinámica del color primario. `ClientReviewsSection` integrado al final.
+  - **Pantalla de agenda:** Encabezado compacto con botón "← Perfil" para regresar, logo mini + nombre de la barbería, badge "Sin login". Flujo de selección barbero → servicio → horario → datos → confirmación sin cambios.
+  - **Tarjetas de barbero:** Rediseñadas de grid grande a **lista compacta**: avatar 40×40px + nombre + especialidad + horario en una sola línea + flecha de acción. Mucho más limpio, premium y escalable para equipos grandes.
+  - `reiniciarReserva()` retorna también a la pantalla de perfil (`setMostrandoAgenda(false)`).
+* **Archivo:** `client/src/components/ClientBooking.jsx`
+* **Campos de BBDD requeridos** para redes sociales: `instagram_url`, `facebook_url`, `sitio_web` en tabla `barberias`. Si no existen, los botones simplemente no se renderizan (renderizado condicional).
+* **Compilación:** ✅ Vite build exitoso. Commit `790412c` → push a `origin main`.
