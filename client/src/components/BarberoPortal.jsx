@@ -30,6 +30,7 @@ import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../uti
 import InstagramIcon from './InstagramIcon';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
+import ModalFichaTecnica from './ModalFichaTecnica';
 
 export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [tab, setTab] = useState('citas'); // 'citas', 'record', 'balance', 'calculadora', 'portafolio'
@@ -37,6 +38,7 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [balance, setBalance] = useState(null);
   const [recordData, setRecordData] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [clienteFichaModal, setClienteFichaModal] = useState(null);
   const [filtroFecha, setFiltroFecha] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -396,10 +398,21 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                         </span>
                       </div>
 
-                      <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                        <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{c.cliente_nombre}</span>
-                      </h4>
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 min-w-0">
+                          <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <span className="truncate">{c.cliente_nombre}</span>
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => setClienteFichaModal(c)}
+                          className="px-2 py-0.5 rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 transition-colors flex items-center gap-1 text-[10px] font-bold shrink-0 cursor-pointer"
+                          title="Consultar estilo o guardar foto y fórmula de corte"
+                        >
+                          <Scissors className="w-3 h-3 text-amber-600" />
+                          <span>Ficha</span>
+                        </button>
+                      </div>
 
                       <div className="mt-3 space-y-1.5 text-xs text-slate-600">
                         <p className="flex items-center gap-2">
@@ -426,8 +439,18 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                       </span>
                     </div>
 
-                    {isCompletada && (
-                      <div className="mt-3 pt-2.5 border-t border-emerald-100/70">
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setClienteFichaModal(c)}
+                        className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Ver o guardar notas técnicas y foto de este corte"
+                      >
+                        <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Fórmula & Foto del Corte</span>
+                      </button>
+
+                      {isCompletada && (
                         <button
                           type="button"
                           onClick={() => handlePedirResenaGoogle(c)}
@@ -437,8 +460,8 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                           <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
                           <span>Pedir Reseña 5★ en Google</span>
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -906,6 +929,20 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
 
           </div>
         </div>
+      )}
+
+      {/* MODAL FICHA TÉCNICA DE ESTILO (FASE 2) */}
+      {clienteFichaModal && (
+        <ModalFichaTecnica
+          cliente={{
+            cliente_nombre: clienteFichaModal.cliente_nombre,
+            cliente_telefono: clienteFichaModal.cliente_telefono
+          }}
+          barberoActual={barbero}
+          barberos={[barbero]}
+          citaRelacionada={clienteFichaModal}
+          onClose={() => setClienteFichaModal(null)}
+        />
       )}
 
     </div>

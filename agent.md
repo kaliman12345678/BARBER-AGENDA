@@ -60,6 +60,7 @@ agenda-barberia/
 │   │   │   ├── AdminLiquidaciones.jsx # Comisiones % y comprobante WhatsApp
 │   │   │   ├── AdminCostos.jsx        # Egresos y gastos fijos
 │   │   │   ├── AdminClientes.jsx      # Directorio de clientes y fidelización
+│   │   │   ├── ModalFichaTecnica.jsx  # Ficha técnica, fórmulas de corte, degradado y fotos (Fase 2)
 │   │   │   ├── BarberoPortal.jsx      # Portal móvil para el barbero
 │   │   │   ├── SuperAdminDashboard.jsx # Panel maestro de EXAKTA
 │   │   │   ├── UnifiedLoginModal.jsx  # Modal de inicio de sesión con correo o teléfono
@@ -200,10 +201,10 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 * **AgendaPro (`agendapro.com`):** Planes de hasta $510.000 COP/mes con cobro de paquetes adicionales por WhatsApp.
 * **AionClock (`aionclock.app`):** $29.900 COP/mes, pero carece de liquidación de comisiones, caja, egresos, inventario y marca blanca.
 
-### Las 5 Fases Planificadas para EXAKTA (Modular y sin romper lo actual):
-1. **Fase 1 (Google Reviews Flex):** Captación automática de calificaciones de 5 estrellas en Google Maps tras cada corte vía WhatsApp.
-2. **Fase 2 (Tirilla Digital Recibo POS):** Comprobante térmico digital con desglose de servicios, productos y código QR para enviar al cliente.
-3. **Fase 3 (Ficha Técnica de Estilo CRM):** Ficha técnica con fórmula de corte del cliente (número de máquina, peinado, barba y fotos antes/después).
+### Las 5 Fases Estratégicas para Superar a la Competencia:
+1. **Fase 1 (Google Reviews Flex) — [COMPLETADA]:** Captación automática de calificaciones de 5 estrellas en Google Maps tras cada corte vía WhatsApp con plantilla editable y variables dinámicas.
+2. **Fase 2 (Ficha Técnica & Historial de Estilo) — [COMPLETADA]:** Expediente de estilo persistente en Supabase con fórmulas de máquina (laterales/nuca), tijera superior, barba, advertencias de piel/alergias y fotos de resultados, accesible en Clientes, Agenda y Portal de Barberos.
+3. **Fase 3 (Tirilla Digital Recibo POS):** Comprobante térmico digital con desglose de servicios, productos y código QR para enviar al cliente por WhatsApp en 1 toque.
 4. **Fase 4 (Tarjeta VIP Digital con QR):** Monedero de fidelización digital en el móvil del cliente sin requerir tarjetas de cartón.
 5. **Fase 5 (Asistente de Reactivación con IA):** Detección de clientes inactivos (> 20 días) y generación de mensajes persuasivos automáticos.
 
@@ -211,15 +212,33 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 9. Próximas Tareas Pendientes
 
-Cuando el usuario lo solicite, el trabajo debe orientarse a:
-1. **Landing Page Comercial de Presentación de Dolores + Panel de Gestión de Contenido (CMS):**
-   * Crear una página independiente (ej. `/landing` o componente comercial) enfocada en los dolores que resuelve EXAKTA frente a la competencia (comisiones desordenadas, inasistencias de clientes, costos abusivos en dólares de WeiBook/BEWE, y caja ciega).
-   * **Requisito Fundamental:** Debe incluir un bloque o panel de administración para que el SuperAdmin pueda editar todo el contenido de la landing (textos del hero, dolores, soluciones, planes, enlace de WhatsApp comercial, testimonios, etc.) directamente desde la interfaz, guardándose en base de datos (`configuracion` en Supabase), **sin necesidad de entrar al código**.
-2. **Implementación de la Fase 1 (Google Reviews) y Fase 2 (Tirilla POS).**
+1. **Fase 3: Tirilla Digital Recibo POS:** Generación automática de comprobante térmico digital con logo, desglose de servicios/productos, barbero y botón para enviar por WhatsApp.
+2. **Landing Page Comercial + Panel CMS:** Ya integrada con catálogo visual y editor en SuperAdmin.
 
 ---
 
 ## 10. Historial de Correcciones y Mantenimiento
+
+### [2026-11-13] — Fase 2: Ficha Técnica & Historial de Estilo del Cliente
+* **Funcionalidad Implementada:**
+  - Persistencia de clientes y fórmulas técnicas de corte en Supabase PostgreSQL (`clientes` y `fichas_tecnicas`).
+  - Modal especializado `ModalFichaTecnica.jsx` con presets rápidos de degradado (`Mid Fade`, `Low Fade`, etc.), guías de máquina (`0.5`, `1`, `1.5`, `Shaver`), largo de tijera, barba, productos y advertencias de piel sensible.
+  - Subida directa de fotos de resultados finales con cámara/archivo a `/api/upload` y visor en tamaño completo.
+  - Integración en `AdminClientes` (botón en tarjetas), `AdminAgenda` (botón en Kanban y Lista) y `BarberoPortal` (botón rápido y barra de acciones de turno).
+* **Archivos Intervenidos:**
+  - `server/server.js` y `client/server/server.js`: Endpoints `GET`, `POST`, `DELETE /api/fichas-tecnicas` y persistencia en `GET`, `POST`, `PATCH /api/clientes`.
+  - `client/src/components/ModalFichaTecnica.jsx`: Componente maestro de ficha técnica.
+  - `client/src/components/AdminClientes.jsx`, `client/src/components/AdminAgenda.jsx`, `client/src/components/BarberoPortal.jsx`, `client/src/components/AdminDashboard.jsx`.
+  - `agent.md`: Actualización de estado y arquitectura.
+* **Verificación:**
+  - Migración ejecutada y probada en Supabase PostgreSQL.
+  - Compilación Vite de producción completada con éxito. Regla del espejo 100% sincronizada.
+
+### [2026-11-13] — Fase 1: Google Reviews Flex (Atracción Automática 5★)
+* **Funcionalidad Implementada:**
+  - Columnas `google_reviews_url` y `google_reviews_mensaje` en Supabase.
+  - Ajustes de enlace y plantilla en `AdminConfig.jsx` con prueba en WhatsApp.
+  - Botón dorado "Pedir Reseña 5★" en `AdminAgenda.jsx` y `BarberoPortal.jsx`.
 
 ### [2026-11-13] — Marca Blanca en Enlaces Compartidos & Blindaje de Campo de Ajustes
 * **Bug / Detalle Corregido:**
