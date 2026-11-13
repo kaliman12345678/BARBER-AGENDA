@@ -399,6 +399,9 @@ app.get('/api/barberias/info', async (req, res) => {
       color_secundario: tenant.color_secundario || '#1e293b',
       telefono: tenant.telefono || '',
       direccion: tenant.direccion || '',
+      instagram_url: tenant.instagram_url || '',
+      facebook_url: tenant.facebook_url || '',
+      sitio_web: tenant.sitio_web || '',
       plan: tenant.plan || 'basico',
       modulos_activos: modulos,
       activo: tenant.activo

@@ -219,6 +219,19 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 10. Historial de Correcciones y Mantenimiento
 
+### [2026-11-13] — Redes Sociales y Presencia Web en Ajustes del Local & Perfil Cliente
+* **Funcionalidad / Detalle Agregado:**
+  - Se habilitaron los campos de configuración para `instagram_url`, `facebook_url` y `sitio_web` en la sección "Ajustes del Local & Marca" (`AdminConfig.jsx`).
+  - El dueño de la barbería ahora puede registrar su usuario o enlace de Instagram, página de Facebook y sitio web oficial.
+  - Al guardarlos, aparecen automáticamente como botones de acceso directo interactivos en la pantalla de inicio del perfil que ven sus clientes antes de pulsar "AGENDA TU CITA".
+* **Archivos Intervenidos:**
+  - `client/src/components/AdminConfig.jsx`: Nuevos inputs para Instagram, Facebook y Sitio Web, sincronizados con el estado y payload del formulario.
+  - `server/server.js` y `client/server/server.js`: Actualización de `PUT /api/configuracion` y endpoints de consulta para recibir, persistir y suministrar las columnas/variables de redes sociales.
+  - `client/src/App.jsx`: Mapeo de `instagram_url`, `facebook_url` y `sitio_web` en el estado global `shopConfig`.
+* **Comportamiento Esperado Verificado:**
+  - El dueño edita y guarda sus redes desde Ajustes del Local; los cambios se guardan y reflejan inmediatamente en la vista cliente sin fricción.
+  - Compilación Vite de producción completada con éxito. Regla del espejo Vercel 100% cumplida.
+
 ### [2026-11-13] — Tirilla Digital / Recibo POS con Código QR y Envío a WhatsApp
 * **Funcionalidad Implementada:**
   - Migración en Supabase PostgreSQL: agregado de columnas `metodo_pago` y `propina` a la tabla `citas`.

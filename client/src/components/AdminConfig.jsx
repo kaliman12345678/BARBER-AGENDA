@@ -30,6 +30,9 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
     tema_cliente: shopConfig?.tema_cliente || 'oscuro',
     google_reviews_url: shopConfig?.google_reviews_url || '',
     google_reviews_mensaje: shopConfig?.google_reviews_mensaje || DEFAULT_GOOGLE_REVIEWS_MENSAJE,
+    instagram_url: shopConfig?.instagram_url || '',
+    facebook_url: shopConfig?.facebook_url || '',
+    sitio_web: shopConfig?.sitio_web || '',
     pin_admin: ''
   });
 
@@ -436,6 +439,63 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
             onChange={(e) => setForm({ ...form, direccion_barberia: e.target.value })}
             className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
+        </div>
+
+        {/* REDES SOCIALES Y SITIO WEB (SE MUESTRAN AL CLIENTE EN SU PERFIL) */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <div>
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="w-4 h-4 text-blue-600" />
+              <span>Redes Sociales y Presencia Web</span>
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Aparecerán automáticamente como botones de acceso directo en el perfil que ven tus clientes antes de agendar.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <AtSign className="w-3.5 h-3.5 text-pink-600" />
+                <span>Instagram</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: vicebarber o @vicebarber"
+                value={form.instagram_url}
+                onChange={(e) => setForm({ ...form, instagram_url: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <Link2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>Facebook</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: vicebarberoficial o link"
+                value={form.facebook_url}
+                onChange={(e) => setForm({ ...form, facebook_url: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Sitio Web Oficial</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: www.barberia.com"
+                value={form.sitio_web}
+                onChange={(e) => setForm({ ...form, sitio_web: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
         </div>
 
         {/* SECCIÓN GOOGLE REVIEWS 5★ (POSICIONAMIENTO & CRECIMIENTO) */}
