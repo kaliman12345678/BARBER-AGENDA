@@ -217,4 +217,28 @@ Cuando el usuario lo solicite, el trabajo debe orientarse a:
    * **Requisito Fundamental:** Debe incluir un bloque o panel de administración para que el SuperAdmin pueda editar todo el contenido de la landing (textos del hero, dolores, soluciones, planes, enlace de WhatsApp comercial, testimonios, etc.) directamente desde la interfaz, guardándose en base de datos (`configuracion` en Supabase), **sin necesidad de entrar al código**.
 2. **Implementación de la Fase 1 (Google Reviews) y Fase 2 (Tirilla POS).**
 
+---
+
+## 10. Historial de Correcciones y Mantenimiento
+
+### [2026-11-13] — Marca Blanca en Enlaces Compartidos & Blindaje de Campo de Ajustes
+* **Bug / Detalle Corregido:**
+  1. Al compartir el enlace de reservas de una barbería (`/?b=vice-barber` o `/b/vice-barber`) por WhatsApp o redes sociales, la tarjeta de previsualización mostraba el nombre genérico "EXAKTA" y su logo en vez del nombre y logo oficial de la barbería emisora.
+  2. En el panel de control móvil ("Ajustes del Local & Marca"), la URL pública aparecía dentro de una caja de texto tipo `input`, generando la impresión equivocada en los dueños de que debían escribir o editar allí, con riesgo de ruptura por manipulación involuntaria.
+* **Causa Raíz:**
+  1. `vercel.json` reescribía todas las peticiones no API directamente al archivo estático `client/dist/index.html`. Los rastreadores de WhatsApp (`WhatsApp/2.x`, `facebookexternalhit`) recibían el HTML predeterminado sin pasar por la inyección dinámica de Open Graph en Supabase. Adicionalmente, `express.static` en `server.js` interceptaba la raíz con `index.html` estático antes del middleware Open Graph, y una regla de normalización forzaba prefijo `/api` a rutas raíz provocando 404.
+  2. En la UI, el enlace se renderizaba como `<input type="text" readOnly>`, lo cual seguía pareciendo un formulario editable en smartphones.
+* **Archivos Intervenidos:**
+  - `client/src/components/AdminConfig.jsx`: Se eliminó el elemento `<input>` sustituyéndolo por una tarjeta fija de solo lectura con candado de seguridad y badge informativo. Se agregaron botones de acción: "Copiar Link", "Compartir en WhatsApp" con mensaje de cortesía predeterminado, "Más opciones de compartir" (Web Share API nativa) y "Ver como cliente".
+  - `client/src/components/AdminDashboard.jsx`: Sincronización del botón rápido "Link" con Web Share API y marca blanca.
+  - `server/server.js` y `client/server/server.js`: Corrección del middleware de normalización de rutas, configuración `index: false` en `express.static(clientDistPath)`, soporte de slugs tanto en `/?b=` como en `/b/:slug`, fallback de búsqueda de `index.html` e inyección de metadatos Open Graph (`og:title`, `og:description`, `og:image`, `og:url`, `<title>` y favicon) con datos de Supabase.
+  - `vercel.json`: Rewrites actualizados para encaminar las rutas de tenant y páginas frontend al handler serverless de Express con inclusión de archivos en el bundle.
+  - `package.json`: Script `build` enriquecido para sincronizar `index.html` tanto en `server/` como en `client/server/`.
+* **Comportamiento Esperado Verificado:**
+  - Pruebas HTTP con simulación de peticiones a `/?b=vice-barber` y `/b/vice-barber` confirmaron respuesta 200 con inyección exitosa de `og:title` ("VICE BARBER - Reserva tu Cita Online"), `og:description` ("Estilo y precisión profesional") y favicon.
+  - El dueño ya no tiene campo editable alguno que pueda romper o confundir; el enlace es 100% automático y protegido.
+  - Compilación de Vite ejecutada con éxito (`npm run build`). Regla del espejo estrictamente cumplida.
+
+---
+
 > **RECUERDA:** Antes de hacer modificaciones a la base de datos o a la lógica de reservas, consulta este documento y preserva el soporte multi-tenant de Supabase.

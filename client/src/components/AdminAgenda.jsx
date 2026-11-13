@@ -30,6 +30,7 @@ import {
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
+import ModalFichaTecnica from './ModalFichaTecnica';
 
 export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   // Filtro de tiempo universal y buscador de cliente
@@ -40,6 +41,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   const [barberoId, setBarberoId] = useState('');
   const [citas, setCitas] = useState([]);
   const [cargando, setCargando] = useState(false);
+  const [citaFichaSeleccionada, setCitaFichaSeleccionada] = useState(null);
 
   // Selector de Tipo de Vista: 'tablero' | 'lista' | 'barberos' | 'cuadricula'
   const [tipoVista, setTipoVista] = useState(() => localStorage.getItem('barberia_agenda_vista') || 'tablero');
@@ -463,6 +465,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
+                        onVerFicha={() => setCitaFichaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -507,6 +510,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
+                        onVerFicha={() => setCitaFichaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -546,6 +550,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
+                        onVerFicha={() => setCitaFichaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -745,6 +750,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                             }}
                             onEnviar={() => setCitaAEnviar(cita)}
                             onPedirResena={() => handlePedirResenaGoogle(cita)}
+                            onVerFicha={() => setCitaFichaSeleccionada(cita)}
                           />
                         ))
                       )}
@@ -798,10 +804,21 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       </div>
 
                       {/* Datos del Cliente y Servicio */}
-                      <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                        <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{cita.cliente_nombre}</span>
-                      </h4>
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                          <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <span className="truncate">{cita.cliente_nombre}</span>
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => setCitaFichaSeleccionada(cita)}
+                          className="py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                          title="Consultar o registrar fórmula de corte de este cliente"
+                        >
+                          <Scissors className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Ficha de Estilo</span>
+                        </button>
+                      </div>
 
                       <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
                         <p className="flex items-center gap-2">
@@ -1244,12 +1261,25 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
         </div>
       )}
 
+      {/* MODAL FICHA TÉCNICA DE ESTILO (FASE 2) */}
+      {citaFichaSeleccionada && (
+        <ModalFichaTecnica
+          cliente={{
+            cliente_nombre: citaFichaSeleccionada.cliente_nombre,
+            cliente_telefono: citaFichaSeleccionada.cliente_telefono
+          }}
+          barberos={barberos}
+          citaRelacionada={citaFichaSeleccionada}
+          onClose={() => setCitaFichaSeleccionada(null)}
+        />
+      )}
+
     </div>
   );
 }
 
 // Subcomponente de Tarjeta para Tablero Kanban & Vista por Barbero
-function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena }) {
+function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena, onVerFicha }) {
   const isCompletada = cita.estado === 'completada';
   const isCancelada = cita.estado === 'cancelada';
   const isNoAsistio = cita.estado === 'no_asistio';
@@ -1276,9 +1306,20 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
 
       {/* Cliente y Teléfono */}
       <div>
-        <span className="font-extrabold text-slate-900 block text-xs truncate">
-          {cita.cliente_nombre}
-        </span>
+        <div className="flex items-center justify-between gap-1">
+          <span className="font-extrabold text-slate-900 block text-xs truncate">
+            {cita.cliente_nombre}
+          </span>
+          <button
+            type="button"
+            onClick={onVerFicha}
+            className="text-[9px] text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+            title="Ver o registrar fórmula de estilo de este cliente"
+          >
+            <Scissors className="w-2.5 h-2.5 text-amber-600" />
+            <span>Ficha</span>
+          </button>
+        </div>
         {cita.cliente_telefono && (
           <a
             href={`https://wa.me/${cita.cliente_telefono.replace(/[^0-9]/g, '')}`}

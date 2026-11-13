@@ -6,7 +6,7 @@
     "server": "node server/server.js",
     "client": "npm --prefix client run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "build": "npm --prefix client run build || echo Pre-built ready",
+    "build": "npm --prefix client run build && node -e \"const fs = require('fs'); if (fs.existsSync('client/dist/index.html')) { fs.copyFileSync('client/dist/index.html', 'server/index.html'); fs.copyFileSync('client/dist/index.html', 'client/server/index.html'); }\"",
     "test": "node test/api_test.js"
   },
   "dependencies": {

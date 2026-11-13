@@ -156,12 +156,13 @@ function requireAnyOperator(req, res, next) {
 
 // Normalización de rutas para Vercel Serverless
 app.use((req, res, next) => {
-  const original = req.headers['x-matched-path'] || req.originalUrl;
-  if ((req.url === '/api/index.js' || req.url === '/api/index' || req.url === '/api' || req.url === '/') && original && original !== '/api/index.js') {
+  const original = req.headers['x-matched-path'] || req.originalUrl || '';
+  if ((req.url === '/api/index.js' || req.url === '/api/index') && original && original !== '/api/index.js') {
     req.url = original;
   }
-  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/uploads') && !req.url.startsWith('/assets')) {
-    req.url = '/api' + req.url;
+  // Si la petición venía dirigida a /api pero el rewrite la despojó del prefijo
+  if (original.startsWith('/api') && !req.url.startsWith('/api')) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
   }
   next();
 });
@@ -235,10 +236,10 @@ app.post('/api/upload', requireAnyOperator, (req, res) => {
   });
 });
 
-// Servir frontend compilado si existe la carpeta client/dist
+// Servir frontend compilado si existe la carpeta client/dist (index: false para permitir Open Graph dinámico)
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
+  app.use(express.static(clientDistPath, { index: false }));
 }
 
 // ----------------------------------------------------
@@ -314,9 +315,16 @@ function getDefaultModulesForPlan(plan) {
 const memoryBarberias = store.barberias;
 
 async function getTenant(req) {
-  const rawSlug = req.headers['x-barberia-slug'] || req.query.b || req.query.slug || '';
+  let slugFromPath = '';
+  if (req && req.path && req.path.startsWith('/b/')) {
+    const parts = req.path.split('/').filter(Boolean);
+    if (parts.length >= 2 && parts[0] === 'b') {
+      slugFromPath = parts[1];
+    }
+  }
+  const rawSlug = (req && (req.headers['x-barberia-slug'] || req.query?.b || req.query?.slug || slugFromPath)) || '';
   const slug = String(rawSlug).trim().toLowerCase();
-  const rawId = req.headers['x-barberia-id'] || req.query.barberia_id || '';
+  const rawId = (req && (req.headers['x-barberia-id'] || req.query?.barberia_id)) || '';
   const id = String(rawId).trim();
 
   // 1. Si se envía ID específico
@@ -2659,13 +2667,13 @@ const memoryClientes = [
   }
 ];
 
-app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
+app.get('/api/clientes', requireAnyOperator, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { q, categoria } = req.query;
 
   try {
     // 1. Acumular historial de citas por cliente
-    let sql = `
+    let sqlCitas = `
       SELECT 
         c.cliente_nombre,
         c.cliente_telefono,
@@ -2677,24 +2685,46 @@ app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
       LEFT JOIN servicios s ON c.servicio_id = s.id
       WHERE c.barberia_id = ?
     `;
-    const params = [tenantId];
+    const paramsCitas = [tenantId];
     if (q) {
-      sql += ' AND (LOWER(c.cliente_nombre) LIKE ? OR c.cliente_telefono LIKE ?)';
-      params.push(`%${q.toLowerCase()}%`, `%${q}%`);
+      sqlCitas += ' AND (LOWER(c.cliente_nombre) LIKE ? OR c.cliente_telefono LIKE ?)';
+      paramsCitas.push(`%${q.toLowerCase()}%`, `%${q}%`);
     }
-    sql += ' GROUP BY c.cliente_nombre, c.cliente_telefono ORDER BY total_citas DESC, ultima_visita DESC';
+    sqlCitas += ' GROUP BY c.cliente_nombre, c.cliente_telefono ORDER BY total_citas DESC, ultima_visita DESC';
 
     let citasClientes = [];
     try {
-      citasClientes = await db.prepare(sql).all(...params) || [];
+      citasClientes = await db.prepare(sqlCitas).all(...paramsCitas) || [];
     } catch (_) {}
 
-    // 2. Mapa de fidelidad guardado en memoria
+    // 2. Traer registros persistentes de la tabla clientes
+    let dbClientes = [];
+    try {
+      dbClientes = await db.prepare('SELECT * FROM clientes WHERE barberia_id = ?').all(tenantId) || [];
+    } catch (_) {}
+
     const mapaFidelidad = {};
     memoryClientes.filter(m => m.barberia_id === tenantId).forEach(m => {
       const tel = (m.cliente_telefono || '').replace(/[^0-9]/g, '');
       if (tel) mapaFidelidad[tel] = m;
       if (m.cliente_nombre) mapaFidelidad[m.cliente_nombre.toLowerCase().trim()] = m;
+    });
+
+    dbClientes.forEach(dbC => {
+      const tel = (dbC.cliente_telefono || '').replace(/[^0-9]/g, '');
+      const item = {
+        id: dbC.id,
+        barberia_id: dbC.barberia_id,
+        cliente_nombre: dbC.cliente_nombre,
+        cliente_telefono: dbC.cliente_telefono,
+        cliente_email: dbC.cliente_email,
+        categoria: dbC.categoria,
+        fecha_cumpleanos: dbC.fecha_cumpleanos,
+        beneficio_fidelidad: dbC.beneficio_fidelidad,
+        notas: dbC.notas_generales || dbC.notas || ''
+      };
+      if (tel) mapaFidelidad[tel] = item;
+      if (dbC.cliente_nombre) mapaFidelidad[dbC.cliente_nombre.toLowerCase().trim()] = item;
     });
 
     const resultadoMap = new Map();
@@ -2715,6 +2745,7 @@ app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
         barberia_id: tenantId,
         cliente_nombre: fid.cliente_nombre || c.cliente_nombre,
         cliente_telefono: fid.cliente_telefono || c.cliente_telefono,
+        cliente_email: fid.cliente_email || '',
         categoria: cat,
         fecha_cumpleanos: fid.fecha_cumpleanos || null,
         beneficio_fidelidad: fid.beneficio_fidelidad || '',
@@ -2726,8 +2757,9 @@ app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
       });
     }
 
-    // Agregar clientes en memoria que no tengan citas aún
-    memoryClientes.filter(m => m.barberia_id === tenantId).forEach(m => {
+    // Agregar clientes en base de datos o memoria que no tengan citas aún
+    const allKnown = [...dbClientes, ...memoryClientes.filter(m => m.barberia_id === tenantId)];
+    allKnown.forEach(m => {
       const telLimpio = (m.cliente_telefono || '').replace(/[^0-9]/g, '');
       const nombreKey = (m.cliente_nombre || '').toLowerCase().trim();
       if (!resultadoMap.has(telLimpio) && !resultadoMap.has(nombreKey)) {
@@ -2737,10 +2769,11 @@ app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
             barberia_id: tenantId,
             cliente_nombre: m.cliente_nombre,
             cliente_telefono: m.cliente_telefono,
+            cliente_email: m.cliente_email || '',
             categoria: m.categoria || 'VIP',
             fecha_cumpleanos: m.fecha_cumpleanos || null,
             beneficio_fidelidad: m.beneficio_fidelidad || '',
-            notas: m.notas || '',
+            notas: m.notas_generales || m.notas || '',
             total_citas: 0,
             ultima_visita: null,
             primera_visita: null,
@@ -2765,26 +2798,58 @@ app.get('/api/clientes', requireAdminOrSuper, async (req, res) => {
 
 app.post('/api/clientes', async (req, res) => {
   const tenantId = await getTenantId(req);
-  const { cliente_nombre, cliente_telefono, categoria, fecha_cumpleanos, beneficio_fidelidad, notas } = req.body;
+  const { cliente_nombre, cliente_telefono, cliente_email, categoria, fecha_cumpleanos, beneficio_fidelidad, notas } = req.body;
 
   if (!cliente_nombre || !cliente_telefono) {
     return res.status(400).json({ error: 'Nombre y teléfono son obligatorios' });
   }
 
   const telLimpio = cliente_telefono.replace(/[^0-9]/g, '');
-  const existingIdx = memoryClientes.findIndex(c => c.barberia_id === tenantId && c.cliente_telefono.replace(/[^0-9]/g, '') === telLimpio);
+  let clienteId = Date.now();
+
+  try {
+    const upsertSql = `
+      INSERT INTO clientes (barberia_id, cliente_nombre, cliente_telefono, cliente_email, categoria, fecha_cumpleanos, beneficio_fidelidad, notas_generales, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON CONFLICT (barberia_id, cliente_telefono)
+      DO UPDATE SET
+        cliente_nombre = EXCLUDED.cliente_nombre,
+        cliente_email = COALESCE(EXCLUDED.cliente_email, clientes.cliente_email),
+        categoria = COALESCE(EXCLUDED.categoria, clientes.categoria),
+        fecha_cumpleanos = COALESCE(EXCLUDED.fecha_cumpleanos, clientes.fecha_cumpleanos),
+        beneficio_fidelidad = COALESCE(EXCLUDED.beneficio_fidelidad, clientes.beneficio_fidelidad),
+        notas_generales = COALESCE(EXCLUDED.notas_generales, clientes.notas_generales),
+        updated_at = NOW()
+      RETURNING *
+    `;
+    const dbRes = await db.prepare(upsertSql).get(
+      tenantId,
+      cliente_nombre.trim(),
+      cliente_telefono.trim(),
+      cliente_email ? cliente_email.trim() : null,
+      categoria || 'VIP',
+      fecha_cumpleanos || null,
+      beneficio_fidelidad || '',
+      notas || ''
+    );
+    if (dbRes?.id) clienteId = dbRes.id;
+  } catch (e) {
+    console.warn('DB upsert cliente warning:', e.message);
+  }
 
   const clienteData = {
-    id: existingIdx >= 0 ? memoryClientes[existingIdx].id : Date.now(),
+    id: clienteId,
     barberia_id: tenantId,
     cliente_nombre: cliente_nombre.trim(),
     cliente_telefono: cliente_telefono.trim(),
+    cliente_email: cliente_email || '',
     categoria: categoria || 'VIP',
     fecha_cumpleanos: fecha_cumpleanos || null,
     beneficio_fidelidad: beneficio_fidelidad || '',
     notas: notas || ''
   };
 
+  const existingIdx = memoryClientes.findIndex(c => c.barberia_id === tenantId && c.cliente_telefono.replace(/[^0-9]/g, '') === telLimpio);
   if (existingIdx >= 0) {
     memoryClientes[existingIdx] = clienteData;
   } else {
@@ -2797,7 +2862,35 @@ app.post('/api/clientes', async (req, res) => {
 app.patch('/api/clientes/:id', requireAdminOrSuper, async (req, res) => {
   const tenantId = await getTenantId(req);
   const { id } = req.params;
-  const { categoria, fecha_cumpleanos, beneficio_fidelidad, notas, cliente_nombre, cliente_telefono } = req.body;
+  const { categoria, fecha_cumpleanos, beneficio_fidelidad, notas, cliente_nombre, cliente_telefono, cliente_email } = req.body;
+
+  try {
+    const updateSql = `
+      UPDATE clientes
+      SET cliente_nombre = COALESCE(?, cliente_nombre),
+          cliente_telefono = COALESCE(?, cliente_telefono),
+          cliente_email = COALESCE(?, cliente_email),
+          categoria = COALESCE(?, categoria),
+          fecha_cumpleanos = COALESCE(?, fecha_cumpleanos),
+          beneficio_fidelidad = COALESCE(?, beneficio_fidelidad),
+          notas_generales = COALESCE(?, notas_generales),
+          updated_at = NOW()
+      WHERE id = ? AND barberia_id = ?
+    `;
+    await db.prepare(updateSql).run(
+      cliente_nombre || null,
+      cliente_telefono || null,
+      cliente_email || null,
+      categoria || null,
+      fecha_cumpleanos || null,
+      beneficio_fidelidad || null,
+      notas || null,
+      id,
+      tenantId
+    );
+  } catch (e) {
+    console.warn('DB patch cliente warning:', e.message);
+  }
 
   const idx = memoryClientes.findIndex(c => c.barberia_id === tenantId && String(c.id) === String(id));
   if (idx >= 0) {
@@ -2807,21 +2900,143 @@ app.patch('/api/clientes/:id', requireAdminOrSuper, async (req, res) => {
     if (notas !== undefined) memoryClientes[idx].notas = notas;
     if (cliente_nombre !== undefined) memoryClientes[idx].cliente_nombre = cliente_nombre;
     if (cliente_telefono !== undefined) memoryClientes[idx].cliente_telefono = cliente_telefono;
+    if (cliente_email !== undefined) memoryClientes[idx].cliente_email = cliente_email;
     return res.json({ success: true, cliente: memoryClientes[idx] });
   }
 
-  const newClient = {
-    id: Number(id) || Date.now(),
-    barberia_id: tenantId,
-    cliente_nombre: cliente_nombre || 'Cliente',
-    cliente_telefono: cliente_telefono || '',
-    categoria: categoria || 'VIP',
-    fecha_cumpleanos: fecha_cumpleanos || null,
-    beneficio_fidelidad: beneficio_fidelidad || '',
-    notas: notas || ''
-  };
-  memoryClientes.unshift(newClient);
-  res.json({ success: true, cliente: newClient });
+  res.json({ success: true, message: 'Cliente actualizado' });
+});
+
+// ----------------------------------------------------
+// 6.1.1 FICHAS TÉCNICAS & HISTORIAL DE ESTILO DEL CLIENTE (FASE 2)
+// ----------------------------------------------------
+app.get('/api/fichas-tecnicas', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { telefono } = req.query;
+
+  if (!telefono) {
+    return res.status(400).json({ error: 'El parámetro teléfono es obligatorio' });
+  }
+
+  const rawPhone = String(telefono).replace(/[^0-9]/g, '');
+
+  try {
+    const sql = `
+      SELECT 
+        ft.*,
+        b.nombre as barbero_nombre,
+        b.foto_url as barbero_foto,
+        s.nombre as servicio_nombre
+      FROM fichas_tecnicas ft
+      LEFT JOIN barberos b ON ft.barbero_id = b.id
+      LEFT JOIN citas c ON ft.cita_id = c.id
+      LEFT JOIN servicios s ON c.servicio_id = s.id
+      WHERE ft.barberia_id = ? 
+        AND (REPLACE(REPLACE(ft.cliente_telefono, ' ', ''), '-', '') LIKE ?)
+      ORDER BY ft.fecha DESC, ft.id DESC
+    `;
+    const fichas = await db.prepare(sql).all(tenantId, `%${rawPhone.slice(-10)}%`) || [];
+    res.json(fichas);
+  } catch (err) {
+    console.error('Error al consultar fichas tecnicas:', err);
+    res.status(500).json({ error: 'Error al consultar fichas técnicas del cliente' });
+  }
+});
+
+app.post('/api/fichas-tecnicas', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const {
+    cliente_telefono,
+    cliente_nombre,
+    barbero_id,
+    cita_id,
+    fecha,
+    tipo_corte,
+    maquina_laterales,
+    corte_superior,
+    detalles_barba,
+    productos_aplicados,
+    observaciones_piel,
+    foto_resultado_url
+  } = req.body;
+
+  if (!cliente_telefono) {
+    return res.status(400).json({ error: 'El teléfono del cliente es obligatorio' });
+  }
+
+  const rawPhone = String(cliente_telefono).replace(/[^0-9]/g, '');
+  const fechaFicha = fecha || new Date().toISOString().split('T')[0];
+
+  try {
+    // 1. Guardar o sincronizar cliente en tabla clientes
+    try {
+      await db.prepare(`
+        INSERT INTO clientes (barberia_id, cliente_nombre, cliente_telefono, updated_at)
+        VALUES (?, ?, ?, NOW())
+        ON CONFLICT (barberia_id, cliente_telefono)
+        DO UPDATE SET
+          cliente_nombre = COALESCE(EXCLUDED.cliente_nombre, clientes.cliente_nombre),
+          updated_at = NOW()
+      `).run(tenantId, (cliente_nombre || 'Cliente').trim(), rawPhone);
+    } catch (_) {}
+
+    // 2. Insertar ficha técnica
+    const insertSql = `
+      INSERT INTO fichas_tecnicas (
+        barberia_id,
+        cliente_telefono,
+        cliente_nombre,
+        barbero_id,
+        cita_id,
+        fecha,
+        tipo_corte,
+        maquina_laterales,
+        corte_superior,
+        detalles_barba,
+        productos_aplicados,
+        observaciones_piel,
+        foto_resultado_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING *
+    `;
+
+    const nuevaFicha = await db.prepare(insertSql).get(
+      tenantId,
+      rawPhone,
+      cliente_nombre ? cliente_nombre.trim() : 'Cliente',
+      barbero_id ? Number(barbero_id) : null,
+      cita_id ? Number(cita_id) : null,
+      fechaFicha,
+      tipo_corte || null,
+      maquina_laterales || null,
+      corte_superior || null,
+      detalles_barba || null,
+      productos_aplicados || null,
+      observaciones_piel || null,
+      foto_resultado_url || null
+    );
+
+    res.json({
+      success: true,
+      message: 'Ficha técnica registrada exitosamente',
+      ficha: nuevaFicha
+    });
+  } catch (err) {
+    console.error('Error al guardar ficha tecnica:', err);
+    res.status(500).json({ error: 'Error al registrar la ficha técnica' });
+  }
+});
+
+app.delete('/api/fichas-tecnicas/:id', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+
+  try {
+    await db.prepare('DELETE FROM fichas_tecnicas WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+    res.json({ success: true, message: 'Ficha técnica eliminada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ----------------------------------------------------
@@ -3562,45 +3777,98 @@ app.get('/api/notificaciones/recientes', requireAdminOrSuper, async (req, res) =
   }
 });
 
-// Soporte para rutas SPA frontend con Open Graph dinámico por barbería
-if (fs.existsSync(clientDistPath)) {
-  app.use(async (req, res) => {
+function obtenerIndexHtml() {
+  const possiblePaths = [
+    path.join(clientDistPath, 'index.html'),
+    path.join(__dirname, '../client/dist/index.html'),
+    path.join(__dirname, '../../client/dist/index.html'),
+    path.join(process.cwd(), 'client/dist/index.html'),
+    path.join(__dirname, 'index.html'),
+    path.join(__dirname, 'template.html')
+  ];
+  for (const p of possiblePaths) {
     try {
-      const indexPath = path.join(clientDistPath, 'index.html');
-      let html = fs.readFileSync(indexPath, 'utf8');
+      if (fs.existsSync(p)) {
+        return fs.readFileSync(p, 'utf8');
+      }
+    } catch (_) {}
+  }
+  return null;
+}
 
-      const tenant = await getTenant(req);
-      if (tenant && tenant.nombre) {
-        const nombre = tenant.nombre;
-        const eslogan = tenant.eslogan || 'Reserva tu turno en línea con nuestros barberos profesionales.';
-        const logo = tenant.logo_url || '';
+// Soporte para rutas SPA frontend con Open Graph dinámico por barbería (Local y Vercel)
+app.use(async (req, res, next) => {
+  // Ignorar peticiones de API y uploads que no hayan sido atendidas
+  if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+    return next();
+  }
 
-        html = html.replace(/<title>.*?<\/title>/i, `<title>${nombre} - Agenda de Citas Online</title>`);
+  try {
+    let html = obtenerIndexHtml();
+    if (!html) {
+      if (fs.existsSync(clientDistPath)) {
+        return res.sendFile(path.join(clientDistPath, 'index.html'));
+      }
+      return next();
+    }
 
-        const ogTags = `
-    <title>${nombre} - Agenda de Citas Online</title>
-    <meta property="og:title" content="${nombre}" />
-    <meta property="og:description" content="${eslogan}" />
-    <meta property="og:type" content="website" />
-    ${logo ? `<meta property="og:image" content="${logo}" />` : ''}
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="${nombre}" />
-    <meta name="twitter:description" content="${eslogan}" />
-    ${logo ? `<meta name="twitter:image" content="${logo}" />` : ''}
-        `.trim();
+    const tenant = await getTenant(req);
+    if (tenant && tenant.nombre) {
+      const nombre = tenant.nombre;
+      const eslogan = tenant.eslogan || 'Reserva tu turno en línea con nuestros barberos profesionales.';
+      const logo = tenant.logo_url || '';
 
-        if (html.includes('</head>')) {
-          html = html.replace('</head>', `  ${ogTags}\n  </head>`);
-        }
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.exakta.online';
+      
+      let fullLogo = logo;
+      if (fullLogo && !fullLogo.startsWith('http://') && !fullLogo.startsWith('https://')) {
+        fullLogo = `${protocol}://${host}${fullLogo.startsWith('/') ? '' : '/'}${fullLogo}`;
+      } else if (!fullLogo) {
+        fullLogo = `${protocol}://${host}/favicon.png`;
       }
 
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-    } catch (_) {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
+      const slug = tenant.slug || 'the-barber-club';
+      const targetUrl = `${protocol}://${host}/?b=${slug}`;
+
+      html = html.replace(/<title>.*?<\/title>/i, `<title>${nombre} | Agenda de Citas Online</title>`);
+
+      if (fullLogo && html.includes('<link rel="icon"')) {
+        html = html.replace(/<link rel="icon"[^>]*>/i, `<link rel="icon" type="image/png" href="${fullLogo}" />`);
+      }
+
+      const ogTags = `
+    <title>${nombre} | Agenda de Citas Online</title>
+    <meta name="description" content="${eslogan}" />
+    <meta property="og:site_name" content="${nombre}" />
+    <meta property="og:title" content="${nombre} - Reserva tu Cita Online" />
+    <meta property="og:description" content="${eslogan}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${targetUrl}" />
+    ${fullLogo ? `<meta property="og:image" content="${fullLogo}" />` : ''}
+    ${fullLogo ? `<meta property="og:image:secure_url" content="${fullLogo}" />` : ''}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${nombre} - Reserva tu Cita Online" />
+    <meta name="twitter:description" content="${eslogan}" />
+    ${fullLogo ? `<meta name="twitter:image" content="${fullLogo}" />` : ''}
+      `.trim();
+
+      if (html.includes('</head>')) {
+        html = html.replace('</head>', `  ${ogTags}\n  </head>`);
+      }
     }
-  });
-}
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (err) {
+    console.error('Error inyectando Open Graph en SPA:', err);
+    try {
+      return res.sendFile(path.join(clientDistPath, 'index.html'));
+    } catch (_) {
+      return next();
+    }
+  }
+});
 
 // Iniciar servidor local solo si se ejecuta directamente
 if (require.main === module) {

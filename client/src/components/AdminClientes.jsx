@@ -17,16 +17,20 @@ import {
   AlertCircle,
   Sparkles,
   Award,
-  Filter
+  Filter,
+  Scissors,
+  BookmarkCheck
 } from 'lucide-react';
+import ModalFichaTecnica from './ModalFichaTecnica';
 
-export default function AdminClientes({ shopConfig }) {
+export default function AdminClientes({ shopConfig, barberos = [] }) {
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [modalAbierto, setModalAbierto] = useState(false);
   const [clienteEditando, setClienteEditando] = useState(null);
+  const [clienteFichaSeleccionado, setClienteFichaSeleccionado] = useState(null);
 
   const [form, setForm] = useState({
     cliente_nombre: '',
@@ -365,16 +369,28 @@ export default function AdminClientes({ shopConfig }) {
                     </div>
                   </div>
 
-                  {/* BOTÓN OFICIAL WHATSAPP DIRECTO */}
-                  <a
-                    href={waUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors"
-                  >
-                    <MessageCircle className="w-4 h-4 text-emerald-200 fill-emerald-200/20" />
-                    <span>Escribir por WhatsApp</span>
-                  </a>
+                  {/* BOTÓN FICHA TÉCNICA Y BOTÓN WHATSAPP */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setClienteFichaSeleccionado(c)}
+                      className="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      title="Ver o registrar fórmula de corte, degradado y fotos del cliente"
+                    >
+                      <Scissors className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Ficha Técnica & Estilo</span>
+                    </button>
+
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4 text-emerald-200 fill-emerald-200/20" />
+                      <span>Escribir por WhatsApp</span>
+                    </a>
+                  </div>
                 </div>
 
               </div>
@@ -495,6 +511,15 @@ export default function AdminClientes({ shopConfig }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL FICHA TÉCNICA Y EXPEDIENTE DE ESTILO (FASE 2) */}
+      {clienteFichaSeleccionado && (
+        <ModalFichaTecnica
+          cliente={clienteFichaSeleccionado}
+          barberos={barberos}
+          onClose={() => setClienteFichaSeleccionado(null)}
+        />
       )}
 
     </div>

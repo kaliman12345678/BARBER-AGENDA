@@ -1,5 +1,10 @@
 {
   "outputDirectory": "client/dist",
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "client/dist/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -10,8 +15,12 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api|uploads).*)",
-      "destination": "/index.html"
+      "source": "/b/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/((?!assets|favicon\\.png|apple-touch-icon\\.png|manifest\\.json).*)",
+      "destination": "/api/index.js"
     }
   ]
 }

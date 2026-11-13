@@ -53,9 +53,24 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const [temaActual, setTemaActual] = useState(() => localStorage.getItem('barberia_tema_admin') || 'claro');
   const [linkCopiado, setLinkCopiado] = useState(false);
 
-  function handleCopiarLinkClientes() {
+  async function handleCopiarLinkClientes() {
     const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     const url = `${window.location.origin}/?b=${slug}`;
+    const nombre = shopConfig?.nombre_barberia || 'Nuestra Barbería';
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${nombre} - Citas Online`,
+          text: `💈 Reserva tu cita en línea en *${nombre}*:`,
+          url: url
+        });
+        setLinkCopiado(true);
+        setTimeout(() => setLinkCopiado(false), 2500);
+        return;
+      } catch (_) {}
+    }
+
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
     }
@@ -421,6 +436,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
             {activeTab === 'clientes' && (
               <AdminClientes 
                 shopConfig={shopConfig} 
+                barberos={barberos.filter(b => b.activo)}
               />
             )}
 

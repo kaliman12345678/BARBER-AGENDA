@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare, Lock, Send } from 'lucide-react';
 import { DEFAULT_GOOGLE_REVIEWS_MENSAJE } from '../utils/googleReviews';
 
 const CLIENT_THEME_OPTIONS = [
@@ -48,6 +48,27 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
     }
     setCopiadoSlug(true);
     setTimeout(() => setCopiadoSlug(false), 2500);
+  }
+
+  function handleCompartirWhatsApp() {
+    const nombre = form.nombre_barberia || 'Nuestra Barbería';
+    const texto = `💈 ¡Hola! Reserva tu cita en línea en *${nombre}* de forma rápida y sin filas aquí:\n${urlPublica}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+  }
+
+  async function handleCompartirNativo() {
+    const nombre = form.nombre_barberia || 'Nuestra Barbería';
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${nombre} - Citas Online`,
+          text: `💈 Reserva tu cita en línea en *${nombre}*:`,
+          url: urlPublica
+        });
+      } catch (_) {}
+    } else {
+      handleCopiarLink();
+    }
   }
 
   function handleProbarWhatsAppResena() {
@@ -182,56 +203,88 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
 
       <form onSubmit={handleGuardar} className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-xs space-y-5 text-xs">
         
-        {/* ENLACE PÚBLICO DE RESERVAS PARA CLIENTES */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-blue-800 flex items-center gap-1.5">
-              <Share2 className="w-3.5 h-3.5 text-blue-600" />
-              <span>Enlace Web para tus Clientes</span>
+        {/* ENLACE PÚBLICO DE RESERVAS PARA CLIENTES - PROTEGIDO SIN INPUT EDITABLE */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-blue-50/90 via-indigo-50/60 to-slate-50 border border-blue-200/80 shadow-xs space-y-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+              <Share2 className="w-4 h-4 text-blue-600" />
+              <span>Enlace Web de Reservas para tus Clientes</span>
             </span>
-            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
-              Directo & Sin Claves
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200/70 px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" />
+              <span>Automático & Protegido</span>
             </span>
           </div>
 
-          <p className="text-[11px] text-blue-900/80">
-            Comparte este enlace con tus clientes por WhatsApp o Instagram para que agenden sus citas directamente con tu marca:
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            Este es el enlace oficial de tu barbería generado por el sistema. Tus clientes agendan directamente con tu marca sin necesidad de registrarse ni contraseñas:
           </p>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={urlPublica}
-              className="flex-1 p-2.5 bg-white border border-blue-200 rounded-xl text-xs font-mono font-bold text-slate-800 select-all shadow-inner"
-            />
-            <button
-              type="button"
-              onClick={handleCopiarLink}
-              className="py-2.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
-            >
-              {copiadoSlug ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>¡Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copiar Link</span>
-                </>
-              )}
-            </button>
+          {/* Tarjeta de visualización segura (NO editable para evitar errores) */}
+          <div className="p-3 bg-white/95 border border-blue-200 rounded-2xl flex items-center justify-between gap-3 shadow-inner">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Dirección Web Oficial (Solo Lectura)</p>
+                <p className="text-xs font-mono font-bold text-blue-700 truncate select-all">
+                  {urlPublica}
+                </p>
+              </div>
+            </div>
             <a
               href={urlPublica}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
-              title="Abrir como cliente"
+              className="py-1.5 px-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-600 transition-colors shrink-0 flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+              title="Abrir como cliente para probar"
             >
-              <ExternalLink className="w-4 h-4" />
+              <span>Ver</span>
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
+
+          {/* Botones de acción principales táctiles y claros */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleCompartirWhatsApp}
+              className="py-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>Compartir en WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopiarLink}
+              className="py-2.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              {copiadoSlug ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-300" />
+                  <span>¡Enlace Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar Link</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+            <button
+              type="button"
+              onClick={handleCompartirNativo}
+              className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold flex items-center justify-center gap-1.5 transition-colors text-[11px] cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5 text-blue-600" />
+              <span>Más opciones para compartir (Instagram, SMS, etc.)</span>
+            </button>
+          )}
         </div>
         
         {/* SECCIÓN LOGO DE LA BARBERÍA */}
