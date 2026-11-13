@@ -79,7 +79,12 @@ function generarClaveAlfanumerica(prefijo = 'Admin') {
 }
 
 export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberia }) {
-  const [isSuperLoggedIn, setIsSuperLoggedIn] = useState(false);
+  const [isSuperLoggedIn, setIsSuperLoggedIn] = useState(() => {
+    return !!(
+      (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_superadmin_token'))
+    );
+  });
   const [superTelefono, setSuperTelefono] = useState('3114220554');
   const [superPin, setSuperPin] = useState('');
   const [mostrarSuperPass, setMostrarSuperPass] = useState(false);
@@ -226,7 +231,11 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   const [mostrarPassConfirmar, setMostrarPassConfirmar] = useState(false);
 
   function getSuperAuthToken() {
-    return sessionStorage.getItem('barberia_superadmin_token') || 'exa_sup_master_fallback';
+    return (
+      (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_superadmin_token')) ||
+      'exa_sup_master_fallback'
+    );
   }
 
   function superFetch(url, options = {}) {
@@ -378,7 +387,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   }
 
   useEffect(() => {
-    const token = sessionStorage.getItem('barberia_superadmin_token');
+    const token = (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) || sessionStorage.getItem('barberia_superadmin_token');
     if (token) {
       setIsSuperLoggedIn(true);
       cargarBarberias();
@@ -418,6 +427,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        if (typeof localStorage !== 'undefined') localStorage.setItem('barberia_superadmin_token', data.token);
         sessionStorage.setItem('barberia_superadmin_token', data.token);
         setIsSuperLoggedIn(true);
         cargarBarberias();
@@ -427,6 +437,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     } catch (err) {
       const cleanTel = superTelefono.replace(/\D/g, '');
       if ((cleanTel === '3114220554' || superTelefono.trim().toLowerCase() === 'superadmin') && (superPin.trim() === 'Exakta#2026Master!' || superPin.trim() === '9999')) {
+        if (typeof localStorage !== 'undefined') localStorage.setItem('barberia_superadmin_token', 'exa_sup_master_fallback');
         sessionStorage.setItem('barberia_superadmin_token', 'exa_sup_master_fallback');
         setIsSuperLoggedIn(true);
         cargarBarberias();
@@ -439,6 +450,7 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
   }
 
   function handleLogoutSuper() {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('barberia_superadmin_token');
     sessionStorage.removeItem('barberia_superadmin_token');
     setIsSuperLoggedIn(false);
     if (onVolverAApp) onVolverAApp();
@@ -934,6 +946,9 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
 
   function handleEntrarComoDueno(barberia, e) {
     if (e) e.stopPropagation();
+    const superToken = getSuperAuthToken();
+    if (typeof localStorage !== 'undefined') localStorage.setItem('barberia_superadmin_token', superToken);
+    sessionStorage.setItem('barberia_superadmin_token', superToken);
     sessionStorage.setItem('barberia_admin_token', 'auth-admin-session-token');
     sessionStorage.setItem('current_barberia_slug', barberia.slug);
     if (onSeleccionarBarberia) {

@@ -7,7 +7,7 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
 import UnifiedLoginModal from './components/UnifiedLoginModal';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import LandingPage from './components/landing/LandingPage';
-import { Lock, AlertTriangle } from 'lucide-react';
+import { Lock, AlertTriangle, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 function getInitialSlug() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -43,8 +43,41 @@ export default function App() {
   const [tenantSlug, setTenantSlug] = useState(getInitialSlug);
   const [activeView, setActiveView] = useState(getInitialView); // 'client', 'admin', 'barbero', 'superadmin'
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isSuperAdminLoggedIn, setIsSuperAdminLoggedIn] = useState(() => {
+    return !!(
+      (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_superadmin_token'))
+    );
+  });
+  const [todasLasBarberias, setTodasLasBarberias] = useState([]);
   const [barberoAutenticado, setBarberoAutenticado] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Mantener lista de barberías actualizada para el selector de SuperAdmin
+  useEffect(() => {
+    const checkSuper = !!(
+      (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_superadmin_token'))
+    );
+    if (checkSuper !== isSuperAdminLoggedIn) {
+      setIsSuperAdminLoggedIn(checkSuper);
+    }
+
+    if (checkSuper) {
+      const superToken = (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) || sessionStorage.getItem('barberia_superadmin_token') || 'exa_sup_master_fallback';
+      fetch('/api/superadmin/barberias', {
+        headers: {
+          'Authorization': `Bearer ${superToken}`,
+          'x-superadmin-token': superToken
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setTodasLasBarberias(data);
+      })
+      .catch(() => {});
+    }
+  }, [activeView, isSuperAdminLoggedIn]);
 
   const [shopConfig, setShopConfig] = useState({
     nombre_barberia: 'The Barber Club',
@@ -188,7 +221,9 @@ export default function App() {
     setShowLoginModal(false);
 
     if (data.role === 'superadmin') {
+      if (typeof localStorage !== 'undefined') localStorage.setItem('barberia_superadmin_token', data.token);
       sessionStorage.setItem('barberia_superadmin_token', data.token);
+      setIsSuperAdminLoggedIn(true);
       setActiveView('superadmin');
       window.history.pushState(null, '', '/superadmin');
     } else if (data.role === 'admin') {
@@ -222,8 +257,13 @@ export default function App() {
   function handleLogout() {
     sessionStorage.removeItem('barberia_admin_token');
     setIsAdminLoggedIn(false);
-    setActiveView('client');
-    window.history.pushState(null, '', `/?b=${tenantSlug}`);
+    if (isSuperAdminLoggedIn) {
+      setActiveView('superadmin');
+      window.history.pushState(null, '', '/superadmin');
+    } else {
+      setActiveView('client');
+      window.history.pushState(null, '', `/?b=${tenantSlug}`);
+    }
   }
 
   function handleLogoutBarbero() {
@@ -285,6 +325,57 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-blue-600 selection:text-white">
       
+      {/* Barra de Auditoría y Navegación Rápida para SuperAdmin */}
+      {isSuperAdminLoggedIn && activeView !== 'superadmin' && (
+        <aside aria-label="Modo SuperAdmin" className="bg-slate-950 border-b border-slate-800 text-white px-4 sm:px-6 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md sticky top-0 z-50 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <span className="font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Modo SuperAdmin</span>
+            </span>
+            <span className="text-slate-600 hidden sm:inline">|</span>
+            <span className="text-slate-300 hidden sm:inline">
+              Viendo barbería: <strong className="text-white font-bold">{shopConfig.nombre_barberia}</strong>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+            {/* Selector rápido entre barberías */}
+            {todasLasBarberias.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1">
+                <span className="text-[10px] font-bold text-slate-400 hidden md:inline">Cambiar a:</span>
+                <select
+                  value={tenantSlug}
+                  onChange={(e) => cambiarBarberia(e.target.value, activeView === 'admin')}
+                  className="bg-transparent text-white text-[11px] font-bold outline-none cursor-pointer"
+                >
+                  {todasLasBarberias.map(b => (
+                    <option key={b.id || b.slug} value={b.slug} className="bg-slate-900 text-white">
+                      {b.nombre} {b.slug === tenantSlug ? '✓' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Botón directo para volver al panel de SuperAdmin */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('superadmin');
+                window.history.pushState(null, '', '/superadmin');
+              }}
+              className="py-1.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              title="Volver al panel general de EXAKTA"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Volver a SuperAdmin</span>
+            </button>
+          </div>
+        </aside>
+      )}
+
       {/* Barra de Notificación si la barbería está suspendida */}
       {estaSuspendida && (
         <div className="bg-rose-600 text-white px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2 shadow-md">
@@ -298,6 +389,11 @@ export default function App() {
         activeView={activeView}
         setActiveView={handleSwitchView}
         isAdminLoggedIn={isAdminLoggedIn}
+        isSuperAdminLoggedIn={isSuperAdminLoggedIn}
+        onVolverASuperAdmin={() => {
+          setActiveView('superadmin');
+          window.history.pushState(null, '', '/superadmin');
+        }}
         barberoAutenticado={barberoAutenticado}
         onLogout={handleLogout}
         onLogoutBarbero={handleLogoutBarbero}

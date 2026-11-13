@@ -219,6 +219,24 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 10. Historial de Correcciones y Mantenimiento
 
+### [2026-11-13] — Navegación Fluida Multi-Tenant para SuperAdmin (Modo Auditoría sin Relogin)
+* **Bug / Detalle Corregido:**
+  - Cuando el SuperAdmin entraba a auditar o gestionar una barbería con "Ver como dueño" y luego quería regresar al panel maestro de SuperAdmin, el sistema no ofrecía una vía de retorno clara y lo obligaba a iniciar sesión de nuevo digitando su PIN y contraseña en cada ocasión.
+* **Causa Raíz:**
+  1. El token del SuperAdmin se almacenaba únicamente en `sessionStorage`, el cual en navegadores móviles (iOS Safari / Android) se aísla o resetea al alternar de contexto o pestañas.
+  2. En `SuperAdminDashboard.jsx`, el estado inicial `isSuperLoggedIn` arrancaba en `false` provocando parpadeo o render forzado del formulario de login.
+  3. No existía una barra persistente de auditoría en la UI que permitiera al SuperAdmin saber que estaba en modo impersonation ni un selector rápido para cambiar entre barberías cliente sin salir.
+  4. Al pulsar "Salir" en el panel de una barbería, el logout eliminaba la sesión y lo dejaba en la vista cliente de esa barbería, en lugar de retornarlo a su panel de SuperAdmin.
+* **Archivos Intervenidos:**
+  - `client/src/App.jsx`: Se implementó persistencia del token de SuperAdmin en `localStorage` sincronizado con `sessionStorage`. Se agregó una barra fija superior (`Modo SuperAdmin`) con indicador de estado, selector desplegable de barberías (`Cambiar a: ...`) y botón de retorno instantáneo `Volver a SuperAdmin`. Se reconfiguró `handleLogout` para que devuelva automáticamente al SuperAdmin a su panel maestro.
+  - `client/src/components/Navbar.jsx`: Se agregó el botón destacado `[Panel SuperAdmin]` tanto en vista dueño como en vista cliente para acceso con un solo clic.
+  - `client/src/components/SuperAdminDashboard.jsx`: Inicialización reactiva de `isSuperLoggedIn` basada en storage para cero parpadeo y cero pantallas de login redundantes; persistencia en `localStorage` de credenciales y en `handleEntrarComoDueno`.
+  - `client/src/main.jsx`: Inyección automática de cabeceras de autorización de SuperAdmin leyendo de `localStorage` y `sessionStorage`.
+* **Comportamiento Esperado Verificado:**
+  - El SuperAdmin puede entrar a "Ver como dueño" en cualquier barbería (VICE BARBER, The Barber Club, BIP BARBER CLUB) y regresar al panel de SuperAdmin con un solo clic, sin que el sistema le solicite contraseñas ni cierre su sesión maestra.
+  - El SuperAdmin puede saltar de una barbería a otra directamente desde el selector de la barra superior.
+  - Compilación exitosa en Vite y sincronización con el repositorio oficial.
+
 ### [2026-11-13] — Fase 2: Ficha Técnica & Historial de Estilo del Cliente
 * **Funcionalidad Implementada:**
   - Persistencia de clientes y fórmulas técnicas de corte en Supabase PostgreSQL (`clientes` y `fichas_tecnicas`).

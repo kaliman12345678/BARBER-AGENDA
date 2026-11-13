@@ -55,7 +55,7 @@ window.fetch = async (input, init = {}) => {
 
   // Inyectar cabeceras de autenticación automáticamente según la sesión activa
   try {
-    const superToken = sessionStorage.getItem('barberia_superadmin_token');
+    const superToken = (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) || sessionStorage.getItem('barberia_superadmin_token');
     const adminToken = sessionStorage.getItem('barberia_admin_token');
     const barberoToken = sessionStorage.getItem('barberia_barbero_token');
     const barberoSession = sessionStorage.getItem('barberia_barbero_session');

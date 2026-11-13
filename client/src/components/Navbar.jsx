@@ -5,6 +5,8 @@ export default function Navbar({
   activeView, 
   setActiveView, 
   isAdminLoggedIn, 
+  isSuperAdminLoggedIn = false,
+  onVolverASuperAdmin,
   barberoAutenticado,
   onLogout, 
   onLogoutBarbero,
@@ -122,13 +124,26 @@ export default function Navbar({
                 <span>Panel Dueño</span>
               </button>
 
+              {isSuperAdminLoggedIn && (
+                <button
+                  type="button"
+                  onClick={onVolverASuperAdmin}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black shadow-xs transition-all cursor-pointer"
+                  title="Regresar al panel maestro de SuperAdmin"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span className="hidden sm:inline">Panel SuperAdmin</span>
+                  <span className="sm:hidden">SuperAdmin</span>
+                </button>
+              )}
+
               <button
                 onClick={onLogout}
-                title="Cerrar sesión de administrador"
+                title={isSuperAdminLoggedIn ? "Regresar a SuperAdmin" : "Cerrar sesión de administrador"}
                 className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors text-xs font-bold border border-rose-200 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Salir</span>
+                <span className="hidden sm:inline">{isSuperAdminLoggedIn ? "Salir" : "Salir"}</span>
               </button>
             </div>
           ) : (
@@ -163,14 +178,26 @@ export default function Navbar({
                 <span>Agenda tu cita</span>
               </span>
 
-              {/* Botón único de Iniciar Sesión */}
-              <button
-                onClick={onAbrirLogin}
-                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-              >
-                <Lock className="w-3 h-3 text-slate-300" />
-                <span>Iniciar Sesión</span>
-              </button>
+              {/* Botón según estado de SuperAdmin o Iniciar Sesión */}
+              {isSuperAdminLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={onVolverASuperAdmin}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-all shadow-xs cursor-pointer"
+                  title="Regresar al panel maestro de SuperAdmin"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Panel SuperAdmin</span>
+                </button>
+              ) : (
+                <button
+                  onClick={onAbrirLogin}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Lock className="w-3 h-3 text-slate-300" />
+                  <span>Iniciar Sesión</span>
+                </button>
+              )}
 
             </div>
           )}
