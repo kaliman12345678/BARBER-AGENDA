@@ -414,6 +414,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               <AdminAgenda 
                 barberos={barberos.filter(b => b.activo)} 
                 servicios={servicios.filter(s => s.activo)} 
+                shopConfig={shopConfig}
               />
             )}
 

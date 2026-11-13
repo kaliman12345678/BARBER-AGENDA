@@ -335,6 +335,7 @@ export default function App() {
         ) : activeView === 'barbero' && barberoAutenticado ? (
           <BarberoPortal 
             barbero={barberoAutenticado}
+            shopConfig={shopConfig}
             onLogout={handleLogoutBarbero}
           />
         ) : (

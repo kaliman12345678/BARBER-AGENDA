@@ -422,6 +422,8 @@ app.get('/api/configuracion', async (req, res) => {
       config.tema_cliente = tenant.tema_cliente || config.tema_cliente || 'oscuro';
       config.telefono_barberia = tenant.telefono || config.telefono_barberia || '';
       config.direccion_barberia = tenant.direccion || config.direccion_barberia || '';
+      config.google_reviews_url = tenant.google_reviews_url || config.google_reviews_url || '';
+      config.google_reviews_mensaje = tenant.google_reviews_mensaje || config.google_reviews_mensaje || '';
       config.plan = tenant.plan || 'basico';
       config.activo = tenant.activo;
       try {
@@ -660,7 +662,7 @@ app.post('/api/auth/verify-pin', checkLoginRateLimit, async (req, res) => {
 });
 
 app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
-  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente } = req.body;
+  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente, google_reviews_url, google_reviews_mensaje } = req.body;
   try {
     const tenantId = await getTenantId(req);
 
@@ -678,7 +680,9 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
           pin_admin = COALESCE(?, pin_admin),
           color_primario = COALESCE(?, color_primario),
           eslogan = COALESCE(?, eslogan),
-          logo_url = COALESCE(?, logo_url)
+          logo_url = COALESCE(?, logo_url),
+          google_reviews_url = COALESCE(?, google_reviews_url),
+          google_reviews_mensaje = COALESCE(?, google_reviews_mensaje)
       WHERE id = ?
     `);
     await stmt.run(
@@ -689,6 +693,8 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
       color_primario || null,
       eslogan || null,
       logo_url !== undefined ? logo_url : null,
+      google_reviews_url !== undefined ? google_reviews_url : null,
+      google_reviews_mensaje !== undefined ? google_reviews_mensaje : null,
       tenantId
     );
 
@@ -699,6 +705,8 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
     if (logo_url !== undefined) await update.run('logo_url', logo_url);
     if (color_primario) await update.run('color_primario', color_primario);
     if (tema_cliente) await update.run('tema_cliente', tema_cliente);
+    if (google_reviews_url !== undefined) await update.run('google_reviews_url', google_reviews_url);
+    if (google_reviews_mensaje !== undefined) await update.run('google_reviews_mensaje', google_reviews_mensaje);
 
     if (pin_admin) {
       const bActual = store.obtenerBarberiaPorId(tenantId);
@@ -721,6 +729,8 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
       if (color_primario) mem.color_primario = color_primario;
       if (tema_cliente) mem.tema_cliente = tema_cliente;
       if (pin_admin) mem.pin_admin = pin_admin;
+      if (google_reviews_url !== undefined) mem.google_reviews_url = google_reviews_url;
+      if (google_reviews_mensaje !== undefined) mem.google_reviews_mensaje = google_reviews_mensaje;
     }
 
     res.json({ success: true, message: 'Configuración actualizada exitosamente' });
@@ -1377,7 +1387,7 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
 
 app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) => {
   const { id } = req.params;
-  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop, email } = req.body;
+  const { nombre, slug, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, precio_mensual_cop, email, google_reviews_url, google_reviews_mensaje } = req.body;
 
   if (pin_admin !== undefined && String(pin_admin).trim() !== '') {
     if (!isAlphanumericPass(pin_admin)) {
@@ -1418,7 +1428,9 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
             pin_admin = COALESCE(?, pin_admin),
             activo = COALESCE(?, activo),
             email = COALESCE(?, email),
-            precio_mensual_cop = COALESCE(?, precio_mensual_cop)
+            precio_mensual_cop = COALESCE(?, precio_mensual_cop),
+            google_reviews_url = COALESCE(?, google_reviews_url),
+            google_reviews_mensaje = COALESCE(?, google_reviews_mensaje)
         WHERE id = ?
       `);
 
@@ -1437,6 +1449,8 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
         activo !== undefined ? (activo ? 1 : 0) : null,
         email !== undefined ? email.trim().toLowerCase() : null,
         precio_mensual_cop !== undefined ? Number(precio_mensual_cop) : null,
+        google_reviews_url !== undefined ? google_reviews_url : null,
+        google_reviews_mensaje !== undefined ? google_reviews_mensaje : null,
         id
       );
     } catch (e) {
@@ -1479,7 +1493,9 @@ app.patch('/api/superadmin/barberias/:id', requireSuperAdmin, async (req, res) =
       pin_admin: updated?.pin_admin || pin_admin || actual?.pin_admin || 'BarberClub2026*',
       activo: updated?.activo !== undefined ? updated.activo : (activo !== undefined ? (activo ? 1 : 0) : (actual?.activo ?? 1)),
       total_barberos: updated?.total_barberos || actual?.total_barberos || 1,
-      total_citas: updated?.total_citas || actual?.total_citas || 0
+      total_citas: updated?.total_citas || actual?.total_citas || 0,
+      google_reviews_url: updated?.google_reviews_url !== undefined ? updated.google_reviews_url : (google_reviews_url !== undefined ? google_reviews_url : (actual?.google_reviews_url || '')),
+      google_reviews_mensaje: updated?.google_reviews_mensaje !== undefined ? updated.google_reviews_mensaje : (google_reviews_mensaje !== undefined ? google_reviews_mensaje : (actual?.google_reviews_mensaje || ''))
     };
 
     store.actualizarBarberia(id, barberiaActualizada);

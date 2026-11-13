@@ -24,12 +24,14 @@ import {
   Columns,
   LayoutGrid,
   DollarSign,
-  Sparkles
+  Sparkles,
+  Star
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import DateRangeFilter from './DateRangeFilter';
+import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 
-export default function AdminAgenda({ barberos, servicios }) {
+export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   // Filtro de tiempo universal y buscador de cliente
   const [filtroTiempo, setFiltroTiempo] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
   const [fechaDesde, setFechaDesde] = useState('');
@@ -112,6 +114,27 @@ export default function AdminAgenda({ barberos, servicios }) {
     }
   }
 
+  function handlePedirResenaGoogle(cita) {
+    if (!cita) return;
+    const rawPhone = String(cita.cliente_telefono || '').replace(/\D/g, '');
+    if (!rawPhone) {
+      alert('Esta cita no tiene un número de WhatsApp registrado para contactar al cliente.');
+      return;
+    }
+
+    if (!shopConfig?.google_reviews_url) {
+      const continuar = window.confirm(
+        'Aún no has configurado el enlace directo de Google Maps en Ajustes > Google Reviews 5★.\n\n¿Deseas enviar el mensaje de agradecimiento por WhatsApp de todas formas?'
+      );
+      if (!continuar) return;
+    }
+
+    const waUrl = generarUrlWhatsAppResena({ cita, shopConfig });
+    if (waUrl) {
+      window.open(waUrl, '_blank');
+    }
+  }
+
   async function cambiarEstadoCita(id, nuevoEstado) {
     try {
       const res = await fetch(`/api/citas/${id}/estado`, {
@@ -120,6 +143,17 @@ export default function AdminAgenda({ barberos, servicios }) {
         body: JSON.stringify({ estado: nuevoEstado })
       });
       if (res.ok) {
+        if (nuevoEstado === 'completada') {
+          const citaObj = citas.find(c => c.id === id);
+          if (citaObj && citaObj.cliente_telefono) {
+            const desearResena = window.confirm(
+              `¡Turno completado y cobrado! 🎉\n\n¿Deseas enviar a ${citaObj.cliente_nombre || 'el cliente'} la solicitud de reseña de 5★ en Google por WhatsApp ahora?`
+            );
+            if (desearResena) {
+              handlePedirResenaGoogle(citaObj);
+            }
+          }
+        }
         cargarCitas();
       }
     } catch (err) {
@@ -428,6 +462,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                           setNuevoBarberoId(String(cita.barbero_id));
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
+                        onPedirResena={() => handlePedirResenaGoogle(cita)}
                       />
                     ))
                   )}
@@ -471,6 +506,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                           setNuevoBarberoId(String(cita.barbero_id));
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
+                        onPedirResena={() => handlePedirResenaGoogle(cita)}
                       />
                     ))
                   )}
@@ -509,6 +545,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                           setNuevoBarberoId(String(cita.barbero_id));
                         }}
                         onEnviar={() => setCitaAEnviar(cita)}
+                        onPedirResena={() => handlePedirResenaGoogle(cita)}
                       />
                     ))
                   )}
@@ -707,6 +744,7 @@ export default function AdminAgenda({ barberos, servicios }) {
                               setNuevoBarberoId(String(cita.barbero_id));
                             }}
                             onEnviar={() => setCitaAEnviar(cita)}
+                            onPedirResena={() => handlePedirResenaGoogle(cita)}
                           />
                         ))
                       )}
@@ -861,10 +899,21 @@ export default function AdminAgenda({ barberos, servicios }) {
                       )}
 
                       {cita.estado === 'completada' && (
-                        <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 ml-auto">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Listo para liquidación
-                        </span>
+                        <div className="flex items-center gap-2 ml-auto">
+                          <button
+                            type="button"
+                            onClick={() => handlePedirResenaGoogle(cita)}
+                            className="py-1 px-2.5 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                            title="Enviar WhatsApp al cliente para pedir reseña de 5 estrellas en Google Maps"
+                          >
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                            <span>Pedir Reseña 5★</span>
+                          </button>
+                          <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Listo para liquidación
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1200,7 +1249,7 @@ export default function AdminAgenda({ barberos, servicios }) {
 }
 
 // Subcomponente de Tarjeta para Tablero Kanban & Vista por Barbero
-function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar }) {
+function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena }) {
   const isCompletada = cita.estado === 'completada';
   const isCancelada = cita.estado === 'cancelada';
   const isNoAsistio = cita.estado === 'no_asistio';
@@ -1313,10 +1362,21 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
         )}
 
         {isCompletada && (
-          <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 ml-auto">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Cobrada</span>
-          </span>
+          <div className="flex items-center justify-between w-full gap-1.5">
+            <button
+              type="button"
+              onClick={onPedirResena}
+              className="py-1 px-2 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+              title="Enviar WhatsApp pidiendo reseña 5★ en Google Maps"
+            >
+              <Star className="w-3 h-3 text-amber-500 fill-amber-400 shrink-0" />
+              <span>Pedir Reseña 5★</span>
+            </button>
+            <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 ml-auto">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Cobrada</span>
+            </span>
+          </div>
         )}
       </div>
     </div>

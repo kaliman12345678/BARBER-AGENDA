@@ -23,13 +23,15 @@ import {
   AlertCircle,
   Play,
   RotateCw,
-  ArrowLeft
+  ArrowLeft,
+  Star
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
 import DateRangeFilter from './DateRangeFilter';
+import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 
-export default function BarberoPortal({ barbero, onLogout }) {
+export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [tab, setTab] = useState('citas'); // 'citas', 'record', 'balance', 'calculadora', 'portafolio'
   const [citas, setCitas] = useState([]);
   const [balance, setBalance] = useState(null);
@@ -59,6 +61,27 @@ export default function BarberoPortal({ barbero, onLogout }) {
   const [cortesDiaSimulados, setCortesDiaSimulados] = useState('6');
   const [diasTrabajoMes, setDiasTrabajoMes] = useState('26');
   const [metaGananciaPersonal, setMetaGananciaPersonal] = useState('2000000');
+
+  function handlePedirResenaGoogle(cita) {
+    if (!cita) return;
+    const rawPhone = String(cita.cliente_telefono || '').replace(/\D/g, '');
+    if (!rawPhone) {
+      alert('Esta cita no tiene un número de WhatsApp registrado para contactar al cliente.');
+      return;
+    }
+
+    if (!shopConfig?.google_reviews_url) {
+      const continuar = window.confirm(
+        'La barbería aún no ha configurado el enlace directo de Google Maps en Ajustes.\n\n¿Deseas enviar el mensaje de agradecimiento por WhatsApp de todas formas?'
+      );
+      if (!continuar) return;
+    }
+
+    const waUrl = generarUrlWhatsAppResena({ cita, shopConfig });
+    if (waUrl) {
+      window.open(waUrl, '_blank');
+    }
+  }
 
   useEffect(() => {
     cargarDatos();
@@ -402,6 +425,20 @@ export default function BarberoPortal({ barbero, onLogout }) {
                         Corte: {formatCOP(c.precio_cobrado)}
                       </span>
                     </div>
+
+                    {isCompletada && (
+                      <div className="mt-3 pt-2.5 border-t border-emerald-100/70">
+                        <button
+                          type="button"
+                          onClick={() => handlePedirResenaGoogle(c)}
+                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer hover:shadow-sm"
+                          title="Enviar WhatsApp al cliente pidiendo reseña de 5 estrellas en Google"
+                        >
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                          <span>Pedir Reseña 5★ en Google</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
