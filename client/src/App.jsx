@@ -327,50 +327,48 @@ export default function App() {
       
       {/* Barra de Auditoría y Navegación Rápida para SuperAdmin */}
       {isSuperAdminLoggedIn && activeView !== 'superadmin' && (
-        <aside aria-label="Modo SuperAdmin" className="bg-slate-950 border-b border-slate-800 text-white px-4 sm:px-6 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md sticky top-0 z-50 animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-            <span className="font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Modo SuperAdmin</span>
-            </span>
-            <span className="text-slate-600 hidden sm:inline">|</span>
-            <span className="text-slate-300 hidden sm:inline">
-              Viendo barbería: <strong className="text-white font-bold">{shopConfig.nombre_barberia}</strong>
+        <aside aria-label="Modo SuperAdmin" className="bg-slate-950 border-b border-slate-800 text-white w-full max-w-full overflow-hidden px-3 sm:px-4 py-2 text-xs flex items-center justify-between gap-2 shadow-md sticky top-0 z-50 animate-fadeIn">
+          {/* Indicador izquierdo */}
+          <div className="flex items-center gap-1.5 min-w-0 shrink overflow-hidden">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="font-black text-blue-400 uppercase tracking-wider text-[10px] shrink-0 hidden xs:inline">SuperAdmin</span>
+            <span className="text-slate-500 hidden sm:inline shrink-0">•</span>
+            <span className="text-slate-300 text-[10px] truncate hidden sm:inline min-w-0">
+              <strong className="text-white">{shopConfig.nombre_barberia}</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+          {/* Controles derecha */}
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {/* Selector rápido entre barberías */}
             {todasLasBarberias.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1">
-                <span className="text-[10px] font-bold text-slate-400 hidden md:inline">Cambiar a:</span>
-                <select
-                  value={tenantSlug}
-                  onChange={(e) => cambiarBarberia(e.target.value, activeView === 'admin')}
-                  className="bg-transparent text-white text-[11px] font-bold outline-none cursor-pointer"
-                >
-                  {todasLasBarberias.map(b => (
-                    <option key={b.id || b.slug} value={b.slug} className="bg-slate-900 text-white">
-                      {b.nombre} {b.slug === tenantSlug ? '✓' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={tenantSlug}
+                onChange={(e) => cambiarBarberia(e.target.value, activeView === 'admin')}
+                className="bg-slate-800 border border-slate-700 text-white text-[10px] font-bold outline-none cursor-pointer rounded-lg px-1.5 py-1 max-w-[110px] truncate"
+              >
+                {todasLasBarberias.map(b => (
+                  <option key={b.id || b.slug} value={b.slug} className="bg-slate-900 text-white">
+                    {b.nombre}{b.slug === tenantSlug ? ' ✓' : ''}
+                  </option>
+                ))}
+              </select>
             )}
 
-            {/* Botón directo para volver al panel de SuperAdmin */}
+            {/* Botón volver */}
             <button
               type="button"
               onClick={() => {
                 setActiveView('superadmin');
                 window.history.pushState(null, '', '/superadmin');
               }}
-              className="py-1.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] flex items-center gap-1 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
               title="Volver al panel general de EXAKTA"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Volver a SuperAdmin</span>
+              <ArrowLeft className="w-3 h-3" />
+              <span className="hidden xs:inline">SuperAdmin</span>
+              <span className="xs:hidden">SA</span>
             </button>
           </div>
         </aside>

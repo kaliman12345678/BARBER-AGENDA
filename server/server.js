@@ -2585,7 +2585,7 @@ app.patch('/api/citas/:id/reasignar', requireAdminOrSuper, async (req, res) => {
 
 app.patch('/api/citas/:id/estado', requireAnyOperator, async (req, res) => {
   const { id } = req.params;
-  const { estado, precio_cobrado } = req.body;
+  const { estado, precio_cobrado, metodo_pago, propina } = req.body;
   const tenantId = await getTenantId(req);
 
   const estadosValidos = ['confirmada', 'completada', 'cancelada', 'no_asistio'];
@@ -2597,21 +2597,29 @@ app.patch('/api/citas/:id/estado', requireAnyOperator, async (req, res) => {
     const citaActual = await db.prepare('SELECT * FROM citas WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     if (!citaActual) return res.status(404).json({ error: 'Cita no encontrada' });
 
-    let stmt;
-    if (precio_cobrado !== undefined) {
-      stmt = db.prepare('UPDATE citas SET estado = ?, precio_cobrado = ? WHERE id = ? AND barberia_id = ?');
-      await stmt.run(estado, Number(precio_cobrado), id, tenantId);
-    } else {
-      stmt = db.prepare('UPDATE citas SET estado = ? WHERE id = ? AND barberia_id = ?');
-      await stmt.run(estado, id, tenantId);
-    }
+    const stmt = db.prepare(`
+      UPDATE citas 
+      SET estado = ?, 
+          precio_cobrado = COALESCE(?, precio_cobrado),
+          metodo_pago = COALESCE(?, metodo_pago),
+          propina = COALESCE(?, propina)
+      WHERE id = ? AND barberia_id = ?
+    `);
+    await stmt.run(
+      estado,
+      precio_cobrado !== undefined ? Number(precio_cobrado) : null,
+      metodo_pago || null,
+      propina !== undefined ? Number(propina) : null,
+      id,
+      tenantId
+    );
 
     await registrarAuditoria(
       tenantId,
       'cita_estado_cambiado',
       `Estado de cita #${id} cambiado a '${estado}'`,
       'Administración',
-      { cita_id: id, estado_anterior: citaActual.estado, estado_nuevo: estado }
+      { cita_id: id, estado_anterior: citaActual.estado, estado_nuevo: estado, metodo_pago, propina }
     );
 
     res.json({ success: true, message: 'Estado de la cita actualizado' });

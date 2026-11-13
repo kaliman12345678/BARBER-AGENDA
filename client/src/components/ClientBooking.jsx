@@ -11,7 +11,12 @@ import {
   Phone, 
   Sparkles,
   MessageCircle,
-  RotateCcw
+  RotateCcw,
+  MapPin,
+  Globe,
+  CalendarCheck,
+  Link2,
+  AtSign
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr, getNextDays } from '../utils/helpers';
@@ -86,6 +91,9 @@ export default function ClientBooking({ shopConfig }) {
   const colorPrimario = shopConfig?.color_primario || '#2563eb';
   const t = THEME_STYLES[temaCliente] || THEME_STYLES.oscuro;
 
+  // Control de vista: landing de barbería vs flujo de agendamiento
+  const [mostrandoAgenda, setMostrandoAgenda] = useState(false);
+
   // Datos maestros
   const [barberos, setBarberos] = useState([]);
   const [servicios, setServicios] = useState([]);
@@ -153,7 +161,11 @@ export default function ClientBooking({ shopConfig }) {
     setSlotSeleccionado(null);
     try {
       const duracion = servicioSeleccionado ? servicioSeleccionado.duracion_minutos : 45;
-      const res = await fetch(`/api/disponibilidad?barbero_id=${barberoSeleccionado.id}&fecha=${fechaSeleccionada}&duracion_minutos=${duracion}`);
+      // CRÍTICO: pasar el slug de la barbería para multi-tenant correcto
+      const slug = shopConfig?.slug || window.__BARBERIA_SLUG || sessionStorage.getItem('current_barberia_slug') || 'the-barber-club';
+      const res = await fetch(`/api/disponibilidad?barbero_id=${barberoSeleccionado.id}&fecha=${fechaSeleccionada}&duracion_minutos=${duracion}&b=${encodeURIComponent(slug)}`, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -194,9 +206,13 @@ export default function ClientBooking({ shopConfig }) {
     setErrorEnvio('');
 
     try {
+      const slug = shopConfig?.slug || window.__BARBERIA_SLUG || sessionStorage.getItem('current_barberia_slug') || 'the-barber-club';
       const res = await fetch('/api/citas', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug
+        },
         body: JSON.stringify({
           barbero_id: barberoSeleccionado.id,
           servicio_id: servicioSeleccionado.id,
@@ -204,7 +220,8 @@ export default function ClientBooking({ shopConfig }) {
           cliente_telefono: telLimpio,
           fecha: fechaSeleccionada,
           hora_inicio: slotSeleccionado.hora_inicio,
-          notas: clienteNotas.trim()
+          notas: clienteNotas.trim(),
+          b: slug
         })
       });
 
@@ -268,6 +285,7 @@ export default function ClientBooking({ shopConfig }) {
 
   function reiniciarReserva() {
     setPaso(1);
+    setMostrandoAgenda(false);
     setBarberoSeleccionado(null);
     setServicioSeleccionado(null);
     setSlotSeleccionado(null);
@@ -288,47 +306,167 @@ export default function ClientBooking({ shopConfig }) {
 
   if (loadingInitial) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
-        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-400 font-medium">Cargando barberos y servicios...</p>
+      <div className={`flex flex-col items-center justify-center min-h-[70vh] text-center p-6 ${t.wrapper}`}>
+        <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mb-4" style={{ borderColor: colorPrimario, borderTopColor: 'transparent' }}></div>
+        <p className={`font-medium text-sm ${t.subtitle}`}>Cargando perfil de la barbería...</p>
       </div>
     );
   }
 
+  // ─── PANTALLA DE PERFIL DE BARBERÍA (antes del flujo de agenda) ───
+  if (!mostrandoAgenda) {
+    const ig = shopConfig?.instagram_url;
+    const fb = shopConfig?.facebook_url;
+    const web = shopConfig?.sitio_web;
+    const tel = shopConfig?.telefono_barberia;
+    const dir = shopConfig?.direccion_barberia;
+
+    return (
+      <div className={`min-h-screen transition-colors duration-300 ${t.wrapper}`}>
+        <div className="max-w-lg mx-auto px-4 py-10 flex flex-col items-center text-center space-y-6">
+
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-4">
+            {shopConfig?.logo_url ? (
+              <img
+                src={shopConfig.logo_url}
+                alt={shopConfig.nombre_barberia}
+                className="w-28 h-28 rounded-3xl object-cover shadow-xl border-4 border-white/10"
+              />
+            ) : (
+              <div
+                className="w-28 h-28 rounded-3xl flex items-center justify-center shadow-xl border-4 border-white/10 text-4xl font-black text-white"
+                style={{ backgroundColor: colorPrimario }}
+              >
+                {(shopConfig?.nombre_barberia || 'B').charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            {/* Nombre */}
+            <div>
+              <h1 className={`text-3xl sm:text-4xl font-black tracking-tight ${t.title}`}>
+                {shopConfig?.nombre_barberia || 'Tu Barbería'}
+              </h1>
+              {shopConfig?.eslogan_barberia && (
+                <p className={`text-sm mt-1.5 max-w-xs mx-auto leading-relaxed ${t.subtitle}`}>
+                  {shopConfig.eslogan_barberia}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Datos de contacto */}
+          {(tel || dir) && (
+            <div className={`w-full rounded-2xl border p-4 space-y-2.5 ${t.cardSubtle}`}>
+              {tel && (
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <Phone className="w-4 h-4 shrink-0" style={{ color: colorPrimario }} />
+                  <span className={t.subtitle}>{tel}</span>
+                </div>
+              )}
+              {dir && (
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <MapPin className="w-4 h-4 shrink-0" style={{ color: colorPrimario }} />
+                  <span className={t.subtitle}>{dir}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Redes sociales */}
+          {(ig || fb || web) && (
+            <div className="flex items-center justify-center gap-3">
+              {ig && (
+                <a
+                  href={ig.startsWith('http') ? ig : `https://instagram.com/${ig.replace('@', '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all hover:scale-110"
+                  style={{ backgroundColor: `${colorPrimario}20`, color: colorPrimario }}
+                  title="Instagram"
+                >
+                  <AtSign className="w-5 h-5" />
+                </a>
+              )}
+              {fb && (
+                <a
+                  href={fb.startsWith('http') ? fb : `https://facebook.com/${fb}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all hover:scale-110"
+                  style={{ backgroundColor: `${colorPrimario}20`, color: colorPrimario }}
+                  title="Facebook"
+                >
+                  <Link2 className="w-5 h-5" />
+                </a>
+              )}
+              {web && (
+                <a
+                  href={web.startsWith('http') ? web : `https://${web}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all hover:scale-110"
+                  style={{ backgroundColor: `${colorPrimario}20`, color: colorPrimario }}
+                  title="Sitio Web"
+                >
+                  <Globe className="w-5 h-5" />
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* CTA Principal */}
+          <button
+            onClick={() => setMostrandoAgenda(true)}
+            className="w-full py-4 rounded-2xl text-white font-black text-base shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+            style={{ backgroundColor: colorPrimario, boxShadow: `0 8px 32px ${colorPrimario}50` }}
+          >
+            <CalendarCheck className="w-5 h-5" />
+            <span>AGENDA TU CITA</span>
+          </button>
+
+          {/* Reseñas de clientes */}
+          <div className="w-full">
+            <ClientReviewsSection shopConfig={shopConfig} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── FLUJO DE AGENDAMIENTO ───
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.wrapper}`}>
       <div className="max-w-3xl mx-auto px-3.5 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
       
-        {/* Encabezado Principal */}
-        <div className="text-center space-y-2.5">
-          {shopConfig.logo_url && (
-            <div className="flex justify-center mb-1">
+        {/* Encabezado compacto en el flujo de agenda */}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => { setMostrandoAgenda(false); setPaso(1); }}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-colors font-bold shrink-0 ${t.btnSecondary}`}
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Perfil</span>
+          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            {shopConfig?.logo_url && (
               <img
                 src={shopConfig.logo_url}
                 alt={shopConfig.nombre_barberia}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-md border-2 border-white/20"
+                className="w-8 h-8 rounded-xl object-cover border border-white/10 shrink-0"
               />
-            </div>
-          )}
-
-          <div 
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wider uppercase mb-1 shadow-xs border transition-all"
-            style={{ 
-              backgroundColor: `${colorPrimario}15`, 
-              color: colorPrimario,
-              borderColor: `${colorPrimario}40`
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AGENDA SIN INICIAR SESIÓN</span>
+            )}
+            <span className={`font-black text-sm truncate ${t.title}`}>
+              {shopConfig?.nombre_barberia}
+            </span>
           </div>
-
-          <h1 className={`text-2xl sm:text-4xl font-black tracking-tight font-sans ${t.title}`}>
-            {shopConfig.nombre_barberia || 'The Barber Club'}
-          </h1>
-          <p className={`text-xs sm:text-sm max-w-lg mx-auto ${t.subtitle}`}>
-            {shopConfig.eslogan_barberia || 'Selecciona a tu barbero de confianza, el servicio deseado y elige tu horario disponible al instante.'}
-          </p>
+          <div
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0"
+            style={{ backgroundColor: `${colorPrimario}15`, color: colorPrimario, borderColor: `${colorPrimario}40` }}
+          >
+            <Sparkles className="w-3 h-3" />
+            <span className="hidden sm:inline">Sin login</span>
+          </div>
         </div>
 
         {/* Barra de Progreso de Pasos (Optimizada para Móvil) */}
@@ -388,20 +526,23 @@ export default function ClientBooking({ shopConfig }) {
       {/* ======================================================== */}
       {/* PASO 1: SELECCIONAR BARBERO */}
       {/* ======================================================== */}
+      {/* PASO 1: SELECCIONAR BARBERO — diseño compacto premium   */}
+      {/* ======================================================== */}
       {paso === 1 && (
-        <div className="space-y-5 animate-fadeIn">
+        <div className="space-y-4 animate-fadeIn">
           {/* Galería Multimedia de Redes Sociales sin salir de la página */}
           <ClientMediaFeed onSeleccionarBarbero={handleSelectBarberoFromMedia} />
 
-          <div className="text-center sm:text-left">
-            <h2 className={`text-lg sm:text-xl font-black flex items-center gap-2 justify-center sm:justify-start ${t.title}`}>
-              <User className="w-5 h-5" style={{ color: colorPrimario }} />
-              <span>1. Selecciona a tu Barbero</span>
+          <div>
+            <h2 className={`text-base font-black flex items-center gap-2 ${t.title}`}>
+              <User className="w-4 h-4" style={{ color: colorPrimario }} />
+              <span>Selecciona tu Barbero</span>
             </h2>
-            <p className={`text-xs sm:text-sm ${t.subtitle}`}>Elige el profesional que cuidará de tu estilo</p>
+            <p className={`text-xs mt-0.5 ${t.subtitle}`}>El profesional que cuidará de tu estilo</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4">
+          {/* Lista compacta de barberos */}
+          <div className="space-y-2">
             {barberos.map((b) => {
               const isSelected = barberoSeleccionado?.id === b.id;
               return (
@@ -411,45 +552,37 @@ export default function ClientBooking({ shopConfig }) {
                     setBarberoSeleccionado(b);
                     setPaso(2);
                   }}
-                  className={`group relative p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${t.card} ${
+                  className={`group flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${t.card} ${
                     isSelected ? 'ring-2' : ''
                   }`}
-                  style={isSelected ? { borderColor: colorPrimario, boxShadow: `0 0 0 2px ${colorPrimario}40` } : {}}
+                  style={isSelected ? { borderColor: colorPrimario, boxShadow: `0 0 0 2px ${colorPrimario}30` } : {}}
                 >
-                  <div className="flex items-center gap-3.5">
-                    <img 
-                      src={b.foto_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&h=150&fit=crop&crop=faces'} 
-                      alt={b.nombre} 
-                      className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-white/10 shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-sm sm:text-base truncate group-hover:opacity-90 transition-opacity">
-                        {b.nombre}
-                      </h3>
-                      {b.especialidad && (
-                        <p className="text-[11px] font-bold truncate opacity-80" style={{ color: colorPrimario }}>
-                          {b.especialidad}
-                        </p>
-                      )}
-                      <p className={`text-[11px] mt-0.5 ${t.subtitle}`}>
-                        {formatTime12(b.horario_inicio)} - {formatTime12(b.horario_fin)}
-                      </p>
-                      <div className="mt-1.5 flex items-center text-xs font-bold" style={{ color: colorPrimario }}>
-                        <span>Seleccionar</span>
-                        <ChevronRight className="w-3.5 h-3.5 ml-1 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
+                  {/* Avatar pequeño */}
+                  <img
+                    src={b.foto_url || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=100&h=100&fit=crop&crop=faces'}
+                    alt={b.nombre}
+                    className="w-10 h-10 rounded-xl object-cover border border-white/10 shrink-0"
+                  />
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{b.nombre}</p>
+                    <p className={`text-[11px] truncate ${t.subtitle}`}>
+                      {b.especialidad ? `${b.especialidad} · ` : ''}
+                      {formatTime12(b.horario_inicio)} – {formatTime12(b.horario_fin)}
+                    </p>
                   </div>
+                  {/* Flecha */}
+                  <ChevronRight className="w-4 h-4 shrink-0 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" style={{ color: colorPrimario }} />
                 </div>
               );
             })}
           </div>
 
           {barberos.length === 0 && (
-            <div className={`text-center py-12 rounded-2xl border ${t.card}`}>
-              <AlertCircle className="w-10 h-10 mx-auto mb-2" style={{ color: colorPrimario }} />
-              <p className="font-bold">No hay barberos activos en este momento.</p>
-              <p className={`text-xs mt-1 ${t.subtitle}`}>Por favor comunícate directamente con la recepción.</p>
+            <div className={`text-center py-10 rounded-2xl border ${t.card}`}>
+              <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: colorPrimario }} />
+              <p className="font-bold text-sm">No hay barberos activos en este momento.</p>
+              <p className={`text-xs mt-1 ${t.subtitle}`}>Comunícate directamente con la recepción.</p>
             </div>
           )}
         </div>
