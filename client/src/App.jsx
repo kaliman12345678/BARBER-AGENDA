@@ -165,6 +165,9 @@ export default function App() {
           color_primario: data.color_primario || '#2563eb',
           color_secundario: data.color_secundario || '#1e293b',
           tema_cliente: data.tema_cliente || 'oscuro',
+          instagram_url: data.instagram_url || '',
+          facebook_url: data.facebook_url || '',
+          sitio_web: data.sitio_web || '',
           plan: data.plan || 'basico',
           modulos_activos: data.modulos_activos || {},
           activo: data.activo !== undefined ? data.activo : 1

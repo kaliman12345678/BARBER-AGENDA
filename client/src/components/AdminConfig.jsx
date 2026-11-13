@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare, Lock, Send } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare, Lock, Send, Globe, AtSign, Link2 } from 'lucide-react';
 import { DEFAULT_GOOGLE_REVIEWS_MENSAJE } from '../utils/googleReviews';
 
 const CLIENT_THEME_OPTIONS = [

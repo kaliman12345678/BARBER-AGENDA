@@ -24,13 +24,15 @@ import {
   Play,
   RotateCw,
   ArrowLeft,
-  Star
+  Star,
+  Receipt
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 import ModalFichaTecnica from './ModalFichaTecnica';
+import ModalTirillaPOS from './ModalTirillaPOS';
 
 export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [tab, setTab] = useState('citas'); // 'citas', 'record', 'balance', 'calculadora', 'portafolio'
@@ -39,6 +41,7 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [recordData, setRecordData] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [clienteFichaModal, setClienteFichaModal] = useState(null);
+  const [citaTirillaModal, setCitaTirillaModal] = useState(null);
   const [filtroFecha, setFiltroFecha] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -451,15 +454,27 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                       </button>
 
                       {isCompletada && (
-                        <button
-                          type="button"
-                          onClick={() => handlePedirResenaGoogle(c)}
-                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer hover:shadow-sm"
-                          title="Enviar WhatsApp al cliente pidiendo reseña de 5 estrellas en Google"
-                        >
-                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
-                          <span>Pedir Reseña 5★ en Google</span>
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCitaTirillaModal(c)}
+                            className="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+                            title="Ver o enviar tirilla térmica con QR"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Recibo POS</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handlePedirResenaGoogle(c)}
+                            className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer hover:shadow-sm"
+                            title="Enviar WhatsApp al cliente pidiendo reseña de 5 estrellas en Google"
+                          >
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                            <span>Pedir 5★</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -942,6 +957,16 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
           barberos={[barbero]}
           citaRelacionada={clienteFichaModal}
           onClose={() => setClienteFichaModal(null)}
+        />
+      )}
+
+      {/* MODAL TIRILLA DIGITAL / RECIBO POS CON QR */}
+      {citaTirillaModal && (
+        <ModalTirillaPOS
+          cita={citaTirillaModal}
+          shopConfig={shopConfig}
+          onActualizarCita={cargarDatos}
+          onClose={() => setCitaTirillaModal(null)}
         />
       )}
 

@@ -60,7 +60,8 @@ agenda-barberia/
 │   │   │   ├── AdminLiquidaciones.jsx # Comisiones % y comprobante WhatsApp
 │   │   │   ├── AdminCostos.jsx        # Egresos y gastos fijos
 │   │   │   ├── AdminClientes.jsx      # Directorio de clientes y fidelización
-│   │   │   ├── ModalFichaTecnica.jsx  # Ficha técnica, fórmulas de corte, degradado y fotos (Fase 2)
+│   │   │   ├── ModalFichaTecnica.jsx  # Ficha técnica, fórmulas de corte, degradado y fotos
+│   │   │   ├── ModalTirillaPOS.jsx    # Tirilla digital térmica POS con código QR dinámico
 │   │   │   ├── BarberoPortal.jsx      # Portal móvil para el barbero
 │   │   │   ├── SuperAdminDashboard.jsx # Panel maestro de EXAKTA
 │   │   │   ├── UnifiedLoginModal.jsx  # Modal de inicio de sesión con correo o teléfono
@@ -203,8 +204,8 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ### Las 5 Fases Estratégicas para Superar a la Competencia:
 1. **Fase 1 (Google Reviews Flex) — [COMPLETADA]:** Captación automática de calificaciones de 5 estrellas en Google Maps tras cada corte vía WhatsApp con plantilla editable y variables dinámicas.
-2. **Fase 2 (Ficha Técnica & Historial de Estilo) — [COMPLETADA]:** Expediente de estilo persistente en Supabase con fórmulas de máquina (laterales/nuca), tijera superior, barba, advertencias de piel/alergias y fotos de resultados, accesible en Clientes, Agenda y Portal de Barberos.
-3. **Fase 3 (Tirilla Digital Recibo POS):** Comprobante térmico digital con desglose de servicios, productos y código QR para enviar al cliente por WhatsApp en 1 toque.
+2. **Fase 2 (Tirilla Digital Recibo POS con QR) — [COMPLETADA]:** Comprobante térmico digital (formato POS 80mm/58mm) con logo, desglose de servicios, método de pago (Efectivo, Nequi, Daviplata, Tarjeta), propina opcional, código QR dinámico de autenticidad y envío a WhatsApp en 1 toque.
+3. **Fase 3 (Ficha Técnica & Historial de Estilo) — [COMPLETADA]:** Expediente de estilo persistente en Supabase con fórmulas de máquina (laterales/nuca), tijera superior, barba, advertencias de piel/alergias y fotos de resultados, accesible en Clientes, Agenda y Portal de Barberos.
 4. **Fase 4 (Tarjeta VIP Digital con QR):** Monedero de fidelización digital en el móvil del cliente sin requerir tarjetas de cartón.
 5. **Fase 5 (Asistente de Reactivación con IA):** Detección de clientes inactivos (> 20 días) y generación de mensajes persuasivos automáticos.
 
@@ -212,12 +213,28 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 9. Próximas Tareas Pendientes
 
-1. **Fase 3: Tirilla Digital Recibo POS:** Generación automática de comprobante térmico digital con logo, desglose de servicios/productos, barbero y botón para enviar por WhatsApp.
-2. **Landing Page Comercial + Panel CMS:** Ya integrada con catálogo visual y editor en SuperAdmin.
+1. **Fase 4: Tarjeta VIP Digital con Código QR:** Monedero digital de fidelización en el móvil del cliente sin tarjetas de cartón (`/mi-tarjeta?tel=...`), con conteo de visitas y premios por lealtad.
 
 ---
 
 ## 10. Historial de Correcciones y Mantenimiento
+
+### [2026-11-13] — Tirilla Digital / Recibo POS con Código QR y Envío a WhatsApp
+* **Funcionalidad Implementada:**
+  - Migración en Supabase PostgreSQL: agregado de columnas `metodo_pago` y `propina` a la tabla `citas`.
+  - Componente `ModalTirillaPOS.jsx`: Comprobante visual con diseño de papel térmico, logo del local, metadatos del servicio, barbero, selector interactivo de métodos de pago (`Efectivo`, `Nequi / Daviplata`, `Tarjeta`, `Transferencia`), propina voluntaria y código QR dinámico generado con librería `qrcode` que apunta al enlace del local.
+  - Envío por WhatsApp con mensaje estructurado en texto ticket con emojis, detalles de cobro y enlace público.
+  - Botón de impresión con CSS `@media print` para impresoras térmicas de 80mm o guardado como PDF limpio.
+  - Integrado en `AdminAgenda.jsx` (botón en Kanban y Lista) y en `BarberoPortal.jsx` (acciones de turno completado).
+* **Archivos Intervenidos:**
+  - `client/src/components/ModalTirillaPOS.jsx` (nuevo)
+  - `client/src/components/AdminAgenda.jsx`
+  - `client/src/components/BarberoPortal.jsx`
+  - `server/server.js` y `client/server/server.js` (soporte de `metodo_pago` y `propina` en `PATCH /api/citas/:id/estado`)
+  - `agent.md`
+* **Verificación:**
+  - Migración en Supabase ejecutada y confirmada.
+  - Compilación Vite completada sin errores (3.0s). Regla del espejo 100% sincronizada.
 
 ### [2026-11-13] — Navegación Fluida Multi-Tenant para SuperAdmin (Modo Auditoría sin Relogin)
 * **Bug / Detalle Corregido:**

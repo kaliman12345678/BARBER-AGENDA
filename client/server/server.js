@@ -432,6 +432,9 @@ app.get('/api/configuracion', async (req, res) => {
       config.direccion_barberia = tenant.direccion || config.direccion_barberia || '';
       config.google_reviews_url = tenant.google_reviews_url || config.google_reviews_url || '';
       config.google_reviews_mensaje = tenant.google_reviews_mensaje || config.google_reviews_mensaje || '';
+      config.instagram_url = tenant.instagram_url || config.instagram_url || '';
+      config.facebook_url = tenant.facebook_url || config.facebook_url || '';
+      config.sitio_web = tenant.sitio_web || config.sitio_web || '';
       config.plan = tenant.plan || 'basico';
       config.activo = tenant.activo;
       try {
@@ -670,7 +673,7 @@ app.post('/api/auth/verify-pin', checkLoginRateLimit, async (req, res) => {
 });
 
 app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
-  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente, google_reviews_url, google_reviews_mensaje } = req.body;
+  const { nombre_barberia, telefono_barberia, direccion_barberia, pin_admin, color_primario, eslogan, logo_url, tema_cliente, google_reviews_url, google_reviews_mensaje, instagram_url, facebook_url, sitio_web } = req.body;
   try {
     const tenantId = await getTenantId(req);
 
@@ -690,7 +693,10 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
           eslogan = COALESCE(?, eslogan),
           logo_url = COALESCE(?, logo_url),
           google_reviews_url = COALESCE(?, google_reviews_url),
-          google_reviews_mensaje = COALESCE(?, google_reviews_mensaje)
+          google_reviews_mensaje = COALESCE(?, google_reviews_mensaje),
+          instagram_url = COALESCE(?, instagram_url),
+          facebook_url = COALESCE(?, facebook_url),
+          sitio_web = COALESCE(?, sitio_web)
       WHERE id = ?
     `);
     await stmt.run(
@@ -703,6 +709,9 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
       logo_url !== undefined ? logo_url : null,
       google_reviews_url !== undefined ? google_reviews_url : null,
       google_reviews_mensaje !== undefined ? google_reviews_mensaje : null,
+      instagram_url !== undefined ? instagram_url : null,
+      facebook_url !== undefined ? facebook_url : null,
+      sitio_web !== undefined ? sitio_web : null,
       tenantId
     );
 
@@ -715,6 +724,9 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
     if (tema_cliente) await update.run('tema_cliente', tema_cliente);
     if (google_reviews_url !== undefined) await update.run('google_reviews_url', google_reviews_url);
     if (google_reviews_mensaje !== undefined) await update.run('google_reviews_mensaje', google_reviews_mensaje);
+    if (instagram_url !== undefined) await update.run('instagram_url', instagram_url);
+    if (facebook_url !== undefined) await update.run('facebook_url', facebook_url);
+    if (sitio_web !== undefined) await update.run('sitio_web', sitio_web);
 
     if (pin_admin) {
       const bActual = store.obtenerBarberiaPorId(tenantId);
@@ -739,6 +751,9 @@ app.put('/api/configuracion', requireAdminOrSuper, async (req, res) => {
       if (pin_admin) mem.pin_admin = pin_admin;
       if (google_reviews_url !== undefined) mem.google_reviews_url = google_reviews_url;
       if (google_reviews_mensaje !== undefined) mem.google_reviews_mensaje = google_reviews_mensaje;
+      if (instagram_url !== undefined) mem.instagram_url = instagram_url;
+      if (facebook_url !== undefined) mem.facebook_url = facebook_url;
+      if (sitio_web !== undefined) mem.sitio_web = sitio_web;
     }
 
     res.json({ success: true, message: 'Configuración actualizada exitosamente' });

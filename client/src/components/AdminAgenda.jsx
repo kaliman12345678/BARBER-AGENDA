@@ -25,12 +25,14 @@ import {
   LayoutGrid,
   DollarSign,
   Sparkles,
-  Star
+  Star,
+  Receipt
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 import ModalFichaTecnica from './ModalFichaTecnica';
+import ModalTirillaPOS from './ModalTirillaPOS';
 
 export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   // Filtro de tiempo universal y buscador de cliente
@@ -42,6 +44,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   const [citas, setCitas] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [citaFichaSeleccionada, setCitaFichaSeleccionada] = useState(null);
+  const [citaTirillaSeleccionada, setCitaTirillaSeleccionada] = useState(null);
 
   // Selector de Tipo de Vista: 'tablero' | 'lista' | 'barberos' | 'cuadricula'
   const [tipoVista, setTipoVista] = useState(() => localStorage.getItem('barberia_agenda_vista') || 'tablero');
@@ -466,6 +469,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
+                        onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -511,6 +515,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
+                        onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -551,6 +556,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onEnviar={() => setCitaAEnviar(cita)}
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
+                        onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -751,6 +757,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                             onEnviar={() => setCitaAEnviar(cita)}
                             onPedirResena={() => handlePedirResenaGoogle(cita)}
                             onVerFicha={() => setCitaFichaSeleccionada(cita)}
+                            onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
                           />
                         ))
                       )}
@@ -917,6 +924,15 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
 
                       {cita.estado === 'completada' && (
                         <div className="flex items-center gap-2 ml-auto">
+                          <button
+                            type="button"
+                            onClick={() => setCitaTirillaSeleccionada(cita)}
+                            className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-slate-200"
+                            title="Ver o emitir tirilla digital térmica POS con código QR"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Recibo POS</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handlePedirResenaGoogle(cita)}
@@ -1274,12 +1290,22 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
         />
       )}
 
+      {/* MODAL TIRILLA DIGITAL / RECIBO POS CON QR */}
+      {citaTirillaSeleccionada && (
+        <ModalTirillaPOS
+          cita={citaTirillaSeleccionada}
+          shopConfig={shopConfig}
+          onActualizarCita={cargarCitas}
+          onClose={() => setCitaTirillaSeleccionada(null)}
+        />
+      )}
+
     </div>
   );
 }
 
 // Subcomponente de Tarjeta para Tablero Kanban & Vista por Barbero
-function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena, onVerFicha }) {
+function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena, onVerFicha, onVerTirilla }) {
   const isCompletada = cita.estado === 'completada';
   const isCancelada = cita.estado === 'cancelada';
   const isNoAsistio = cita.estado === 'no_asistio';
@@ -1403,7 +1429,16 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
         )}
 
         {isCompletada && (
-          <div className="flex items-center justify-between w-full gap-1.5">
+          <div className="flex items-center justify-between w-full gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={onVerTirilla}
+              className="py-1 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer border border-slate-200"
+              title="Ver tirilla digital POS con QR o enviar por WhatsApp"
+            >
+              <Receipt className="w-3 h-3 text-slate-600" />
+              <span>Recibo</span>
+            </button>
             <button
               type="button"
               onClick={onPedirResena}
@@ -1411,7 +1446,7 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
               title="Enviar WhatsApp pidiendo reseña 5★ en Google Maps"
             >
               <Star className="w-3 h-3 text-amber-500 fill-amber-400 shrink-0" />
-              <span>Pedir Reseña 5★</span>
+              <span>Pedir 5★</span>
             </button>
             <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 ml-auto">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
