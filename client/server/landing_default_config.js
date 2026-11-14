@@ -1,20 +1,20 @@
-// Configuración predeterminada de la Landing Page de EXAKTA
+// Configuración predeterminada de la Landing Page de EXAKTA (Multi-Nicho Belleza y Bienestar)
 const DEFAULT_LANDING_CONFIG = {
   general: {
     whatsapp_comercial: '573114220554',
-    whatsapp_mensaje_demo: 'Hola EXAKTA, quiero solicitar una demostración y conocer cómo digitalizar mi barbería.',
+    whatsapp_mensaje_demo: 'Hola EXAKTA, quiero solicitar una demostración y conocer cómo digitalizar mi negocio de belleza/bienestar.',
     demo_slug: 'the-barber-club',
     email_contacto: 'admin@exakta.online'
   },
   hero: {
-    badge_superior: '💈 SaaS Multi-Tenant Especializado para Barberías',
-    titulo_principal: 'Deja de perder dinero en desorden y comisiones en papel.',
-    titulo_resaltado: 'Digitaliza tu barbería en minutos.',
-    subtitulo: 'La plataforma todo-en-uno que automatiza tus citas 24/7, liquida a tus barberos en 1 clic con comprobante a WhatsApp y te muestra tu ganancia neta real sin pagar en dólares ni tarifas sorpresa.',
-    cta_principal_texto: 'Solicitar Demo por WhatsApp',
-    cta_secundario_texto: 'Ver Barbería Demo en Vivo',
+    badge_superior: '💈 💇‍♀️ 💆 💅 Plataforma Todo-en-Uno para Negocios de Belleza & Bienestar',
+    titulo_principal: 'Llena tus citas en días flojos y liquida a tu equipo',
+    titulo_resaltado: 'en 1 solo clic y sin enredos.',
+    subtitulo: 'La solución hecha en Colombia para Barberías, Salones de Belleza, Spas y Estudios de Uñas/Estética: reservas online 24/7 sin descargar apps, tirilla digital con QR y control de comisiones en pesos colombianos ($ COP).',
+    cta_principal_texto: 'Hablar con un Asesor por WhatsApp',
+    cta_secundario_texto: 'Ver Demostración en Vivo',
     badges_confianza: [
-      'Multi-tenant 100% en la Nube',
+      'Barberías, Salones, Spas & Estética',
       '$0 Costo extra por mensajes de WhatsApp',
       'Precios transparentes en Pesos Colombianos ($ COP)',
       'Cero descargas de apps para tus clientes'
@@ -25,40 +25,40 @@ const DEFAULT_LANDING_CONFIG = {
       id: 'comisiones',
       icono: 'ReceiptText',
       etiqueta: 'Dolor 1: El Caos de las Comisiones',
-      dolor_titulo: 'Planillas de papel, calculadora manual y discusiones los sábados',
-      dolor_desc: 'Pasar horas sumando recibos arrugados genera desconfianza en los barberos, errores en los porcentajes y pérdidas de dinero.',
-      solucion_titulo: 'Liquidación Automática en 1 Clic',
-      solucion_desc: 'Cada corte queda registrado. El sistema calcula comisiones al instante (%) y envía el comprobante oficial detallado al WhatsApp personal del barbero.',
-      impacto: 'Ahorra más de 4 horas cada fin de semana y elimina discusiones con el equipo.'
+      dolor_titulo: 'Planillas de papel, calculadora manual y discusiones con el equipo',
+      dolor_desc: 'Sumar cuentas a mano de manicuristas, estilistas, terapeutas o barberos genera errores en porcentajes, desconfianza y horas perdidas cada fin de semana.',
+      solucion_titulo: 'Liquidación Automática por Colaborador en 1 Clic',
+      solucion_desc: 'Cada servicio queda registrado. El sistema calcula comisiones al instante (%) más ventas de productos y propinas, enviando el comprobante oficial al WhatsApp privado del profesional.',
+      impacto: 'Ahorra más de 4 horas cada fin de semana y elimina fricciones con tu equipo.'
     },
     {
       id: 'inasistencias',
       icono: 'CalendarX2',
-      etiqueta: 'Dolor 2: Inasistencias (No-Shows)',
-      dolor_titulo: 'Clientes que olvidan su cita y dejan sillas vacías perdiendo ingresos',
-      dolor_desc: 'Los agendamientos por chat manual se olvidan con facilidad. Un hueco de 45 minutos es dinero que jamás se recupera.',
-      solucion_titulo: 'Agenda Online 24/7 + Recordatorios en 1 Toque',
-      solucion_desc: 'Tus clientes agendan en tiempo real desde el móvil sin descargar apps. Notificaciones instantáneas y recordatorio directo a WhatsApp.',
-      impacto: 'Reduce el ausentismo hasta en un 75% y llena los horarios muertos.'
+      etiqueta: 'Dolor 2: Inasistencias y Sillas Vacías (No-Shows)',
+      dolor_titulo: 'Clientes que olvidan su turno y dejan cabinas o puestos sin facturar',
+      dolor_desc: 'Agendar por chats dispersos hace que el cliente lo olvide. Una cabina de spa o puesto de peluquería vacío de 1 hora es dinero que jamás se recupera.',
+      solucion_titulo: 'Agenda Web 24/7 + Recordatorios Automáticos en 1 Toque',
+      solucion_desc: 'Tus clientes agendan en tiempo real desde Instagram o WhatsApp sin descargar aplicaciones. Confirmaciones instantáneas y recordatorio directo a su celular.',
+      impacto: 'Reduce el ausentismo hasta en un 80% y llena los horarios muertos.'
     },
     {
       id: 'cobros_dolares',
       icono: 'Coins',
-      etiqueta: 'Dolor 3: Cobros Abusivos en Dólares',
-      dolor_titulo: 'Plataformas extranjeras a US$ 89 - 99/mes y tarifas sorpresa por mensaje',
-      dolor_desc: 'WeiBook a US$ 99/mes (~$390.000 COP), BEWE a US$ 89/mes y AgendaPro cobrando paquetes de mensajes de WhatsApp que inflan tu factura.',
-      solucion_titulo: 'Tarifa Fija en COP con WhatsApp Nativo Ilimitado',
-      solucion_desc: 'Pagas una suscripción justa en Pesos Colombianos ($ COP) sin comisiones por reserva y sin pagar ni un solo peso extra por mensajes de WhatsApp.',
-      impacto: 'Ahorras hasta un 60% mensual comparado con softwares extranjeros.'
+      etiqueta: 'Dolor 3: Softwares Extranjeros en Dólares',
+      dolor_titulo: 'Pagar US$ 89 - 99/mes y tarifas sorpresa por cada mensaje de WhatsApp',
+      dolor_desc: 'Plataformas extranjeras que cobran mensualidades en dólares (~$390.000 COP) más paquetes adicionales de mensajes que encarecen tu operación.',
+      solucion_titulo: 'Tarifa Fija en Pesos ($ COP) con WhatsApp Nativo Ilimitado',
+      solucion_desc: 'Pagas una suscripción justa y transparente en Pesos Colombianos, sin comisiones por reserva y sin pagar ni un solo peso extra por mensajes de WhatsApp.',
+      impacto: 'Ahorras entre el 40% y 60% mensual frente a softwares internacionales.'
     },
     {
       id: 'caja_ciega',
       icono: 'TrendingDown',
-      etiqueta: 'Dolor 4: Caja Ciega y Descontrol',
-      dolor_titulo: 'Facturas todo el día pero no sabes cuánto dinero queda limpio al final del mes',
-      dolor_desc: 'Ingresan pagos en efectivo y transferencias, pero entre arriendo, productos y servicios no tienes claridad del beneficio neto.',
+      etiqueta: 'Dolor 4: Caja Ciega y Descontrol de Gastos',
+      dolor_titulo: 'Entra plata todo el día pero a fin de mes no sabes cuánto quedó libre',
+      dolor_desc: 'Entre tintes, productos, arriendo, servicios públicos y pagos diarios, la mayoría de dueños no tienen certeza de su verdadera ganancia neta.',
       solucion_titulo: 'Control de Egresos y Rentabilidad Neta en Tiempo Real',
-      solucion_desc: 'Módulo de caja diaria, categorización de egresos y balance instantáneo que te muestra la utilidad neta real de tu negocio.',
+      solucion_desc: 'Registro rápido de gastos diarios, categorización de insumos y balance automático que te muestra con precisión matemática la plata limpia de tu negocio.',
       impacto: 'Decisiones financieras con números exactos en lugar de intuiciones.'
     }
   ],
@@ -66,27 +66,27 @@ const DEFAULT_LANDING_CONFIG = {
     {
       paso: '01',
       titulo: 'El Cliente Reserva Online',
-      desc: 'Accede a tu enlace exclusivo (ej. exakta.online/b/tu-barberia) desde su celular. Elige barbero, servicio, fecha y hora sin descargar nada.'
+      desc: 'Accede a tu enlace exclusivo (ej. exakta.online/b/tu-negocio) desde su celular. Elige profesional, servicio, fecha y hora sin descargar nada.'
     },
     {
       paso: '02',
-      titulo: 'El Barbero Recibe el Turno',
-      desc: 'El barbero visualiza su agenda del día en su portal móvil exclusivo, sin ver las cuentas globales de la barbería.'
+      titulo: 'El Profesional Recibe su Cita',
+      desc: 'El estilista, terapeuta o barbero ve en su portal móvil privado sus turnos asignados del día, sin ver la facturación global del local.'
     },
     {
       paso: '03',
-      titulo: 'Servicio & Galería de Estilos',
-      desc: 'Atención impecable. Puedes consultar la galería multimedia para inspirar al cliente con los mejores cortes de tu estudio.'
+      titulo: 'Servicio & Ficha Técnica',
+      desc: 'Atención impecable. Puedes consultar la fórmula previa del cliente (tinte, tipo de piel, números de máquina o estilo de uñas).'
     },
     {
       paso: '04',
-      titulo: 'Cobro, Caja y Liquidación en 1 Clic',
-      desc: 'Al terminar la jornada o quincena, el dueño liquida comisiones con un clic y envía el comprobante a WhatsApp con total transparencia.'
+      titulo: 'Tirilla POS y Liquidación en 1 Clic',
+      desc: 'Genera el recibo digital con código QR para el cliente y liquida las comisiones del equipo con total transparencia a su WhatsApp.'
     }
   ],
   comparativa: {
-    titulo: '¿Por qué las barberías eligen EXAKTA?',
-    subtitulo: 'Comparativa transparente frente a los softwares del mercado',
+    titulo: '¿Por qué los negocios de belleza eligen EXAKTA?',
+    subtitulo: 'Comparativa transparente frente a los softwares tradicionales',
     criterios: [
       {
         nombre: 'Moneda de Cobro',
@@ -109,19 +109,27 @@ const DEFAULT_LANDING_CONFIG = {
         exakta: 'Sí, con comprobante a WhatsApp',
         weibook: 'Complejo de configurar',
         bewe: 'Intermedio',
-        agendapro: 'Sí, con curvas de aprendizaje altas',
+        agendapro: 'Curva de aprendizaje alta',
         aionclock: 'No disponible'
       },
       {
-        nombre: 'Portal Móvil Independiente para Barberos',
-        exakta: 'Sí, vista limpia y privada',
+        nombre: 'Portal Móvil para Colaboradores',
+        exakta: 'Sí, vista privada por profesional',
         weibook: 'App pesada requerida',
         bewe: 'App requerida',
         agendapro: 'App requerida',
         aionclock: 'No disponible'
       },
       {
-        nombre: 'Multi-Tenant Real (Link propio /b/tu-nombre)',
+        nombre: 'Ficha Técnica CRM (Fórmulas / Estilos)',
+        exakta: 'Sí, historial visual por cliente',
+        weibook: 'Limitado',
+        bewe: 'Módulo costoso',
+        agendapro: 'Básico',
+        aionclock: 'No disponible'
+      },
+      {
+        nombre: 'Multi-Tenant (Enlace Propio /b/tu-marca)',
         exakta: 'Sí, marca propia y colores',
         weibook: 'Subdominio',
         bewe: 'Genérico',
@@ -129,34 +137,26 @@ const DEFAULT_LANDING_CONFIG = {
         aionclock: 'Genérico'
       },
       {
-        nombre: 'Control de Egresos y Rentabilidad Neta',
-        exakta: 'Sí, integrado en la caja',
-        weibook: 'Módulo costoso',
-        bewe: 'Módulo avanzado',
-        agendapro: 'Solo en planes superiores',
-        aionclock: 'No disponible'
-      },
-      {
         nombre: 'Cliente no descarga apps',
-        exakta: '100% Web Móvil ultra-rápida',
+        exakta: '100% Web Móvil en 20 segundos',
         weibook: 'Parcial',
         bewe: 'Parcial',
         agendapro: 'Web/App',
         aionclock: 'Web'
       }
     ]
-  },
+  ],
   planes: [
     {
       id: 'basico',
-      nombre: 'Plan Básico',
+      nombre: 'Plan Emprendedor',
       precio_cop: 80000,
       periodo: 'mes',
-      descripcion: 'Para barberos independientes o estudios pequeños que quieren ordenar su agenda.',
+      descripcion: 'Para profesionales independientes, estudios de 1 a 2 puestos o cabinas que quieren ordenar sus citas.',
       caracteristicas: [
-        'Hasta 2 Barberos activos',
+        'Hasta 2 Profesionales / Colaboradores activos',
         'Agenda Online 24/7 sin límites',
-        'Enlace personalizado de tu barbería',
+        'Enlace personalizado de tu marca',
         'Recordatorios de citas directos a WhatsApp',
         'Soporte técnico por WhatsApp'
       ],
@@ -165,18 +165,18 @@ const DEFAULT_LANDING_CONFIG = {
     },
     {
       id: 'pro',
-      nombre: 'Plan Profesional',
+      nombre: 'Plan Profesional Pro',
       precio_cop: 180000,
       periodo: 'mes',
-      descripcion: 'El preferido por barberías en crecimiento con equipo y alto flujo de clientes.',
+      descripcion: 'El preferido por salones, barberías y spas con equipo de trabajo y alto flujo diario de clientes.',
       caracteristicas: [
-        'Hasta 6 Barberos activos',
-        'Portal móvil independiente para cada barbero',
-        'Liquidación automática de comisiones (%)',
-        'Envío de comprobante oficial a WhatsApp',
-        'Control diario de gastos y egresos',
-        'Cálculo de rentabilidad neta',
-        'Soporte prioritario'
+        'Hasta 6 Profesionales activos',
+        '⭐️ Google Reviews Flex (Más reseñas 5 estrellas en Maps)',
+        '🧾 Tirilla Digital & Recibo POS con código QR',
+        '✂️ Ficha Técnica y fórmulas personalizadas de clientes',
+        'Portal móvil independiente para cada colaborador',
+        'Liquidación automática de comisiones (%) en 1 clic',
+        'Control diario de gastos y cálculo de dinero limpio'
       ],
       destacado: true,
       badge: 'Más Elegido'
@@ -186,15 +186,15 @@ const DEFAULT_LANDING_CONFIG = {
       nombre: 'Plan VIP Ilimitado',
       precio_cop: 320000,
       periodo: 'mes',
-      descripcion: 'Para estudios premium y cadenas de barberías que buscan control total sin restricciones.',
+      descripcion: 'Para centros de estética, spas grandes y cadenas que buscan control total sin restricciones.',
       caracteristicas: [
-        'Barberos ilimitados',
-        'Módulo completo de comisiones y caja',
-        'Galería multimedia de estilos y cortes',
+        'Colaboradores y cabinas ilimitadas',
+        '💳 Tarjeta Digital VIP con sellos móviles para clientes',
+        '🤖 Asistente de Reactivación para llenar días flojos',
+        'Galería de fotos y catálogo de servicios',
         'Auditoría y registro de eventos en vivo',
-        'Módulo de fidelización de clientes',
-        'Personalización total de colores y marca',
-        'Acompañamiento VIP 1 a 1'
+        'Módulo de fidelización y métricas de rentabilidad',
+        'Acompañamiento VIP prioritario 1 a 1'
       ],
       destacado: false,
       badge: 'Sin Límites'
@@ -204,38 +204,45 @@ const DEFAULT_LANDING_CONFIG = {
     {
       nombre: 'Carlos Mario Ospina',
       rol: 'Dueño de The Barber Club (Bogotá)',
+      nicho: 'barberia',
       texto: 'Antes perdía los domingos sumando cuentas en cuadernos y los barberos siempre tenían dudas de las comisiones. Con EXAKTA liquido a los 5 barberos en 2 minutos y les llega el recibo directo a su WhatsApp. Cero discusiones.',
       estrellas: 5
     },
     {
-      nombre: 'Manuel Miranda',
-      rol: 'Fundador de Vice Barber',
-      texto: 'Estuve a punto de pagar una plataforma en dólares de 90 dólares al mes. EXAKTA me da lo mismo y mejor, en pesos colombianos y sin cobrarme nada por WhatsApp. Mis clientes aman agendar desde el enlace de Instagram.',
+      nombre: 'Camila Restrepo',
+      rol: 'Directora de Glow Salón & Colorimetría (Medellín)',
+      nicho: 'salon',
+      texto: 'Manejar 8 estilistas y manicuristas con comisiones diferentes era una pesadilla. Con EXAKTA calculo tintes, productos y porcentajes en segundos. Además la ficha técnica guarda la fórmula exacta del balayage de cada clienta.',
       estrellas: 5
     },
     {
-      nombre: 'Hellen Aiza',
-      rol: 'Administradora de BIP Barber Club',
-      texto: 'Las inasistencias eran un dolor de cabeza enorme. Desde que pusimos el agendamiento de EXAKTA los clientes confirman y el barbero sabe exactamente quién llega a cada hora en su celular.',
+      nombre: 'Dra. Paola Benítez',
+      rol: 'Fundadora de Satori Spa & Masajes (Cali)',
+      nicho: 'spa',
+      texto: 'Teníamos muchas inasistencias en masajes corporales y cabinas vacías los martes. Los recordatorios a WhatsApp redujeron el ausentismo y el semáforo inteligente nos llena los días flojos con promociones automáticas.',
       estrellas: 5
     }
   ],
   faqs: [
     {
+      pregunta: '¿Sirve para barberías, salones de belleza, spas y centros de uñas?',
+      respuesta: 'Sí, totalmente. EXAKTA fue diseñado para cualquier negocio de belleza y bienestar que maneje agenda por turnos, colaboradores con comisiones y control de caja diaria.'
+    },
+    {
       pregunta: '¿Mis clientes tienen que descargar alguna aplicación para agendar?',
-      respuesta: 'No. Tus clientes simplemente tocan el enlace de tu barbería (en tu Instagram, WhatsApp o código QR en el local) y en 20 segundos eligen su corte y barbero desde cualquier navegador sin instalar nada.'
+      respuesta: 'No. Tus clientes simplemente tocan el enlace de tu negocio (en Instagram, WhatsApp o código QR en el mostrador) y en 20 segundos eligen profesional, servicio y hora desde cualquier celular sin descargar nada.'
     },
     {
       pregunta: '¿Cobran por cada mensaje de WhatsApp que se envíe?',
       respuesta: 'No. A diferencia de otras plataformas que te cobran paquetes de mensajes o créditos extra, EXAKTA utiliza integración nativa de WhatsApp con $0 costo adicional.'
     },
     {
-      pregunta: '¿Puedo cambiar las tarifas de mis planes o la información de la landing?',
-      respuesta: 'Sí. Todo el contenido, precios, números de contacto y textos son 100% editables en tiempo real desde el SuperAdmin de EXAKTA sin tocar una sola línea de código.'
+      pregunta: '¿Mis colaboradores pueden ver la caja y facturación total del negocio?',
+      respuesta: 'No. Cada estilista, terapeuta o barbero tiene su portal móvil exclusivo donde solo ve sus propios turnos y su acumulado personal de comisiones. La caja general y los egresos son 100% privados para ti como dueño.'
     },
     {
-      pregunta: '¿Cómo funciona la liquidación de comisiones para los barberos?',
-      respuesta: 'Tú defines el porcentaje que gana cada barbero (ej. 50%, 60%). A medida que realizan servicios, el sistema acumula el valor y con un solo clic generas la liquidación y le envías el desglose exacto a su WhatsApp.'
+      pregunta: '¿Cómo funciona la liquidación automática de comisiones?',
+      respuesta: 'Tú defines el porcentaje que gana cada profesional (ej. 50%, 60%). A medida que atienden clientes y venden productos, el sistema acumula todo. Con un solo clic generas la liquidación y le envías el comprobante oficial detallado a su WhatsApp.'
     },
     {
       pregunta: '¿Qué formas de pago aceptan?',

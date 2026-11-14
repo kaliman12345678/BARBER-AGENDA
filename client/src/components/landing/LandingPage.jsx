@@ -32,7 +32,11 @@ import {
   ChevronRight,
   Zap,
   Coffee,
-  ThumbsUp
+  ThumbsUp,
+  Sparkle,
+  Layers,
+  Smile,
+  Shield
 } from 'lucide-react';
 
 export default function LandingPage({
@@ -42,10 +46,12 @@ export default function LandingPage({
 }) {
   const [config, setConfig] = useState(configCMS);
   const [cargando, setCargando] = useState(!configCMS);
+  
+  // Selector de Nicho
+  const [nichoActivo, setNichoActivo] = useState('todos'); // 'todos', 'barberia', 'salon', 'spa', 'unas'
   const [armaActiva, setArmaActiva] = useState(0); // 0 a 5 para el showcase interactivo
   const [sellosSimulados, setSellosSimulados] = useState(5);
   const [faqAbierta, setFaqAbierta] = useState(null);
-  const [tabComparativa, setTabComparativa] = useState('despues'); // 'antes' vs 'despues'
 
   useEffect(() => {
     if (configCMS) {
@@ -72,7 +78,7 @@ export default function LandingPage({
 
   const general = config?.general || {
     whatsapp_comercial: '573114220554',
-    whatsapp_mensaje_demo: 'Hola EXAKTA, quiero ver una demostración y saber cómo digitalizar mi barbería.',
+    whatsapp_mensaje_demo: 'Hola EXAKTA, quiero ver una demostración y saber cómo digitalizar mi negocio.',
     demo_slug: 'the-barber-club'
   };
 
@@ -83,30 +89,30 @@ export default function LandingPage({
       precio_cop: 80000,
       periodo: 'mes',
       badge: 'Para Empezar',
-      descripcion: 'Para barberos independientes o estudios de 1 a 2 sillas que quieren ordenar sus citas.',
+      descripcion: 'Para profesionales independientes, estudios de 1 a 2 puestos o cabinas que quieren ordenar sus citas.',
       caracteristicas: [
-        'Hasta 2 Barberos activos',
+        'Hasta 2 Profesionales activos',
         'Agenda web en tiempo real 24/7',
         'Recordatorios de citas automáticos a WhatsApp',
-        'Cero descargas de apps para el cliente',
+        'Cero descargas de apps para tus clientes',
         'Tu propio enlace exclusivo (exakta.online/b/tu-marca)'
       ],
       destacado: false
     },
     {
       id: 'pro',
-      nombre: 'Plan Barbería Pro',
+      nombre: 'Plan Negocio Pro',
       precio_cop: 180000,
       periodo: 'mes',
       badge: 'EL MÁS ELEGIDO',
-      descripcion: 'Para barberías con equipo que necesitan liquidar comisiones rápido y llenar días flojos.',
+      descripcion: 'Para salones, barberías y spas con equipo que necesitan liquidar comisiones rápido y llenar días flojos.',
       caracteristicas: [
-        'Hasta 6 Barberos activos',
+        'Hasta 6 Profesionales activos',
         '⭐️ Google Reviews Flex (Más clientes en Maps)',
         '🧾 Tirilla Digital & Recibo POS con código QR',
-        '✂️ Ficha Técnica y fórmula de corte de clientes',
+        '✂️ Ficha Técnica y fórmulas personalizadas de clientes',
         '💵 Liquidación automática de comisiones en 1 clic',
-        'Portal móvil privado para cada barbero',
+        'Portal móvil privado para cada colaborador',
         'Control de caja diaria y egresos limpios'
       ],
       destacado: true
@@ -117,12 +123,12 @@ export default function LandingPage({
       precio_cop: 320000,
       periodo: 'mes',
       badge: 'SIN LÍMITES',
-      descripcion: 'Control absoluto para barberías grandes, estudios premium y franquicias.',
+      descripcion: 'Control absoluto para centros grandes, spas, franquicias y cadenas de belleza.',
       caracteristicas: [
-        'Barberos ilimitados',
+        'Profesionales y cabinas ilimitadas',
         '💳 Tarjeta Digital VIP con sellos móviles para clientes',
         '🤖 Asistente de Reactivación para llenar martes y miércoles',
-        'Galería de cortes y estilos en alta definición',
+        'Galería de servicios y catálogo en alta definición',
         'Auditoría y reportes de rentabilidad neta',
         'Acompañamiento VIP prioritario 1 a 1 por WhatsApp'
       ],
@@ -135,7 +141,7 @@ export default function LandingPage({
     const msg = encodeURIComponent(
       mensajePersonalizado ||
       general?.whatsapp_mensaje_demo ||
-      'Hola EXAKTA, quiero ver una demostración y conocer cómo funciona en mi barbería.'
+      'Hola EXAKTA, quiero ver una demostración para mi negocio.'
     );
     window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
   }
@@ -149,54 +155,205 @@ export default function LandingPage({
     }
   }
 
-  // Las 6 Armas Clave de EXAKTA para barberías colombianas
+  // Los 4 Nichos Principales de Belleza y Bienestar
+  const nichos = [
+    {
+      id: 'todos',
+      label: '✨ Todos los Negocios',
+      titulo: 'Barberías, Salones, Spas y Estética',
+      subtitulo: 'La plataforma que llena tus citas y liquida a tu equipo en 1 clic.',
+      imagen: '/images/landing/barberia.jpg',
+      ticketEjemplo: {
+        negocio: 'BEAUTY & WELLNESS CLUB',
+        item1: 'Servicio Principal',
+        precio1: '$65.000',
+        item2: 'Tratamiento Especial',
+        precio2: '$35.000',
+        item3: 'Producto Profesional',
+        precio3: '$45.000',
+        total: '$145.000 COP',
+        profesional: 'Profesional Asignado'
+      },
+      reviewEjemplo: {
+        cliente: 'Carolina Méndez',
+        servicio: 'tu servicio hoy',
+        profesional: 'tu equipo'
+      },
+      crmEjemplo: {
+        cliente: 'Laura Sánchez',
+        visitas: '16 visitas',
+        linea1: 'Fórmula personalizada de atención',
+        linea2: 'Preferencias de producto y técnica',
+        alerta: 'Preferencia: Café negro sin azúcar al llegar'
+      }
+    },
+    {
+      id: 'barberia',
+      label: '💈 Barberías',
+      titulo: 'Barberías y Estudios Masculinos',
+      subtitulo: 'Cortes, desvanecidos y barbas organizadas sin planillas de papel.',
+      imagen: '/images/landing/barberia.jpg',
+      ticketEjemplo: {
+        negocio: 'THE BARBER CLUB',
+        item1: 'Corte Clásico + Lavado',
+        precio1: '$30.000',
+        item2: 'Perfilado de Barba a Navaja',
+        precio2: '$15.000',
+        item3: 'Cera Fijadora Mate',
+        precio3: '$25.000',
+        total: '$70.000 COP',
+        profesional: 'Santiago (Barbero)'
+      },
+      reviewEjemplo: {
+        cliente: 'Carlos Méndez',
+        servicio: 'tu corte y barba',
+        profesional: 'Mateo Barber'
+      },
+      crmEjemplo: {
+        cliente: 'Andrés Gómez',
+        visitas: '14 visitas',
+        linea1: 'Laterales: Mid Fade (Guía #1.5 palanca abierta a navaja)',
+        linea2: 'Parte Alta: Texturizado a tijera 4cm con textura mate',
+        alerta: '⚠️ Cuidado con remolino en coronilla izquierda'
+      }
+    },
+    {
+      id: 'salon',
+      label: '💇‍♀️ Salones de Belleza',
+      titulo: 'Salones de Belleza, Peluquerías & Colorimetría',
+      subtitulo: 'Balayage, tintes, peinados y alisados sin enredos de comisiones.',
+      imagen: '/images/landing/salon_belleza.jpg',
+      ticketEjemplo: {
+        negocio: 'GLOW HAIR & SALON',
+        item1: 'Balayage Premium + Matiz',
+        precio1: '$220.000',
+        item2: 'Cepillado & Ondas al Agua',
+        precio2: '$35.000',
+        item3: 'Shampoo Matizador Profesional',
+        precio3: '$65.000',
+        total: '$320.000 COP',
+        profesional: 'Camila (Estilista Master)'
+      },
+      reviewEjemplo: {
+        cliente: 'Sofía Restrepo',
+        servicio: 'tu Balayage y cepillado',
+        profesional: 'Camila Estilista'
+      },
+      crmEjemplo: {
+        cliente: 'Mariana Duque',
+        visitas: '8 visitas',
+        linea1: 'Fórmula Tinte: Base 7.1 + Matiz 9.12 con oxig. 20 vol.',
+        linea2: 'Tratamiento: Botox capilar con termo-protección',
+        alerta: '⚠️ Sensibilidad al calor alto en el cuero cabelludo'
+      }
+    },
+    {
+      id: 'spa',
+      label: '💆 Spas & Masajes',
+      titulo: 'Spas, Centros de Masajes & Terapias',
+      subtitulo: 'Cabinas ocupadas, terapeutas organizados y clientes relajados.',
+      imagen: '/images/landing/spa_masajes.jpg',
+      ticketEjemplo: {
+        negocio: 'SATORI SPA & WELLNESS',
+        item1: 'Masaje Piedras Volcánicas (60 min)',
+        precio1: '$120.000',
+        item2: 'Exfoliación Corporal con Sales',
+        precio2: '$45.000',
+        item3: 'Aceite de Eucalipto y Lavanda',
+        precio3: '$40.000',
+        total: '$205.000 COP',
+        profesional: 'Dra. Paola (Terapeuta)'
+      },
+      reviewEjemplo: {
+        cliente: 'Beatriz Londoño',
+        servicio: 'tu masaje relajante',
+        profesional: 'Terapeuta Andrea'
+      },
+      crmEjemplo: {
+        cliente: 'Patricia Vélez',
+        visitas: '12 sesiones',
+        linea1: 'Presión: Media a fuerte en trapecio y zona lumbar',
+        linea2: 'Aromaterapia: Lavanda y menta en cabina #2',
+        alerta: '⚠️ Lesión previa en hombro derecho (evitar presión directa)'
+      }
+    },
+    {
+      id: 'unas',
+      label: '💅 Uñas & Cejas',
+      titulo: 'Nail Bars, Lashistas & Cejas',
+      subtitulo: 'Uñas acrílicas, semipermanente y pestañas sin turnos cruzados.',
+      imagen: '/images/landing/nail_bar.jpg',
+      ticketEjemplo: {
+        negocio: 'DIVA NAILS & LASH STUDIO',
+        item1: 'Set Acrílico Esculpido + Efecto',
+        precio1: '$85.000',
+        item2: 'Pedicura Spa Semipermanente',
+        precio2: '$45.000',
+        item3: 'Aceite Hidratante de Cutículas',
+        precio3: '$20.000',
+        total: '$150.000 COP',
+        profesional: 'Daniela (Nail Artist)'
+      },
+      reviewEjemplo: {
+        cliente: 'Valentina Casas',
+        servicio: 'tu diseño de uñas y pestañas',
+        profesional: 'Daniela Nail Artist'
+      },
+      crmEjemplo: {
+        cliente: 'Juliana Morales',
+        visitas: '20 visitas',
+        linea1: 'Uña Almendrada #3 • Base Rubber tono Nude Rose',
+        linea2: 'Top Coat Brillo Diamante curado 60s en lámpara UV',
+        alerta: '⚠️ Cutículas sensibles (retirar suavemente a torno)'
+      }
+    }
+  ];
+
+  const nichoActual = nichos.find(n => n.id === nichoActivo) || nichos[0];
+
+  // Las 6 Armas de EXAKTA
   const armasSecretas = [
     {
       id: 'reviews',
       titulo: 'Google Reviews Flex',
-      subtitulo: 'Aparece de primero en Google Maps sin pagar publicidad',
+      subtitulo: 'Aparece de primero en Google Maps sin pagar pauta',
       icono: Star,
-      color: 'from-amber-500 to-yellow-600',
       badge: 'Multiplicador de Clientes',
-      resumen: 'Al terminar cada corte, el sistema envía un mensaje con 1 toque al WhatsApp del cliente pidiéndole su reseña de 5 estrellas.',
-      beneficioClave: 'Tu barbería se posiciona sobre tu competencia en las búsquedas de tu ciudad en automático.'
+      resumen: 'Al terminar cada servicio, el sistema envía un mensaje con 1 toque al WhatsApp del cliente pidiéndole su calificación de 5 estrellas.',
+      beneficioClave: 'Tu salón, spa o barbería se posiciona sobre tu competencia en las búsquedas locales en automático.'
     },
     {
       id: 'pos',
       titulo: 'Tirilla Digital POS con QR',
       subtitulo: 'Recibo profesional en el celular del cliente',
       icono: Receipt,
-      color: 'from-blue-500 to-indigo-600',
       badge: 'Cero Papel Térmico',
-      resumen: 'Tirilla con desglose de servicios, cortes, productos y código QR. Se envía directo al WhatsApp del cliente.',
-      beneficioClave: 'Ahorras en rollos de papel térmico y las propinas quedan 100% transparentes para el barbero.'
+      resumen: 'Tirilla con desglose de servicios, tratamientos, productos y código QR. Se envía directo al WhatsApp del cliente.',
+      beneficioClave: 'Ahorras en costosos rollos de papel térmico y las propinas quedan 100% transparentes para tu colaborador.'
     },
     {
       id: 'ficha',
-      titulo: 'Ficha Técnica de Estilo',
-      subtitulo: 'Si el barbero de siempre no vino, el corte sale idéntico',
+      titulo: 'Ficha Técnica CRM',
+      subtitulo: 'Si el colaborador habitual no vino, el servicio sale perfecto',
       icono: Scissors,
-      color: 'from-emerald-500 to-teal-600',
-      badge: 'Historial CRM del Cliente',
-      resumen: 'Guarda la fórmula exacta: número de máquina (fade, #1.5, tijera), barba, remolinos y fotos antes/después.',
-      beneficioClave: 'Cero clientes molestos diciendo: "El nuevo no me cortó como a mí me gusta".'
+      badge: 'Historial del Cliente',
+      resumen: 'Guarda fórmulas de tinte, números de máquina fade, tipo de piel para masajes o diseño de uñas con fotos antes/después.',
+      beneficioClave: 'Cero clientes molestos diciendo: "El nuevo no me atendió como a mí me gusta".'
     },
     {
       id: 'vip',
       titulo: 'Tarjeta VIP con Sellos Móviles',
       subtitulo: 'Fidelización en el teléfono del cliente sin cartones perdidos',
       icono: Gift,
-      color: 'from-purple-500 to-pink-600',
       badge: 'Monedero Digital QR',
-      resumen: 'El cliente guarda su tarjeta VIP en la pantalla de su celular. Acumula sellos por corte y redime premios (ej. corte gratis o cerveza).',
-      beneficioClave: 'Nunca más clientes con la tarjeta de cartón arrugada o botada en la casa.'
+      resumen: 'El cliente guarda su tarjeta VIP en la pantalla de su celular. Acumula sellos por servicio y redime premios (corte gratis, masaje express, etc.).',
+      beneficioClave: 'Nunca más clientes con la tarjeta de cartón arrugada o botada en la billetera.'
     },
     {
       id: 'ia',
       titulo: 'Llenador de Días Muertos',
       subtitulo: 'Semáforo de clientes que llena tus martes y miércoles',
       icono: Bot,
-      color: 'from-rose-500 to-orange-600',
       badge: 'Asistente de Reactivación',
       resumen: 'Detecta en semáforo (amarillo y rojo) a clientes que llevan más de 20 días sin venir y redacta mensajes de WhatsApp listos para enviar.',
       beneficioClave: 'Transforma los días más flojos de la semana en jornadas llenas con un solo toque.'
@@ -204,25 +361,24 @@ export default function LandingPage({
     {
       id: 'liquidacion',
       titulo: 'Liquidación en 1 Clic',
-      subtitulo: 'Sábados sin calculadoras, sin planillas y sin discusiones',
+      subtitulo: 'Fines de semana sin calculadoras y sin peleas por comisiones',
       icono: DollarSign,
-      color: 'from-emerald-600 to-green-700',
       badge: 'Paz Mental para el Dueño',
-      resumen: 'Calcula comisiones por corte (%), productos vendidos, adelantos y propinas en 2 segundos. Envía el comprobante oficial al WhatsApp privado del barbero.',
-      beneficioClave: 'Te ahorras 4 horas cada fin de semana sumando papelitos arrugados.'
+      resumen: 'Calcula comisiones por servicio (%), ventas de productos, adelantos y propinas en 2 segundos. Envía el comprobante oficial a su WhatsApp privado.',
+      beneficioClave: 'Te ahorras 4 horas cada fin de semana sumando papelitos arrugados de manicuristas, estilistas o barberos.'
     }
   ];
 
   return (
     <div className="min-h-screen bg-[#070a11] text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 relative overflow-x-hidden">
       
-      {/* Luces y Atmósfera Premium Barber Shop (Oro, Azul Noche y Esmeralda) */}
-      <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-amber-500/15 via-blue-600/10 to-transparent blur-[140px] rounded-full -z-10" />
-      <div className="pointer-events-none absolute top-[900px] -left-48 w-[500px] h-[500px] bg-emerald-600/10 blur-[150px] rounded-full -z-10" />
-      <div className="pointer-events-none absolute top-[2100px] -right-48 w-[600px] h-[600px] bg-amber-600/10 blur-[160px] rounded-full -z-10" />
+      {/* Luces y Efectos Atmosféricos */}
+      <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-b from-amber-500/15 via-blue-600/10 to-transparent blur-[140px] rounded-full -z-10" />
+      <div className="pointer-events-none absolute top-[1100px] -left-48 w-[600px] h-[600px] bg-emerald-600/10 blur-[150px] rounded-full -z-10" />
+      <div className="pointer-events-none absolute top-[2500px] -right-48 w-[600px] h-[600px] bg-purple-600/10 blur-[160px] rounded-full -z-10" />
 
       {/* =========================================================================
-          1. HEADER / NAVBAR ELEGANTE Y DIRECTO
+          1. HEADER / NAVBAR ELEGANTE Y MULTI-SECTOR
       ========================================================================= */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#070a11]/85 border-b border-slate-800/80 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -238,19 +394,20 @@ export default function LandingPage({
               <div className="flex items-center gap-2">
                 <span className="text-xl font-black tracking-wider text-white">EXAKTA</span>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                  Barber Pro
+                  Agendas & Caja
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">Hecho para Barberías en Colombia 🇨🇴</p>
+              <p className="text-[11px] text-slate-400 hidden sm:block">Barberías • Salones • Spas • Estética</p>
             </div>
           </div>
 
           {/* Menú Rápido */}
           <nav className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider text-slate-300">
+            <a href="#nichos" className="hover:text-amber-400 transition-colors">Negocios</a>
             <a href="#showcase" className="hover:text-amber-400 transition-colors">Las 6 Armas Clave</a>
+            <a href="#galeria" className="hover:text-amber-400 transition-colors">Galería</a>
             <a href="#comparativa" className="hover:text-amber-400 transition-colors">El Caos vs EXAKTA</a>
             <a href="#planes" className="hover:text-amber-400 transition-colors">Planes en Pesos</a>
-            <a href="#faqs" className="hover:text-amber-400 transition-colors">Preguntas</a>
           </nav>
 
           {/* Botones de Acción */}
@@ -260,7 +417,7 @@ export default function LandingPage({
               className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-slate-200 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 transition-all shadow-sm"
             >
               <Store className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Ver Barbería en Vivo</span>
+              <span className="hidden sm:inline">Ver Demo en Vivo</span>
               <span className="sm:hidden">Demo</span>
             </button>
 
@@ -285,32 +442,59 @@ export default function LandingPage({
       </header>
 
       {/* =========================================================================
-          2. HERO SECTION: DIRECTO AL GRANO, PERSUASIVO Y VISUAL
+          2. SELECTOR INTERACTIVO DE NICHO (EN EL CORAZÓN DEL HERO)
       ========================================================================= */}
-      <section className="relative pt-12 pb-16 sm:pt-20 sm:pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+      <section id="nichos" className="pt-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="p-3 sm:p-4 rounded-3xl bg-slate-900/70 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 shrink-0">
+            <Sparkles className="w-4 h-4" />
+            <span>Elige tu tipo de negocio:</span>
+          </span>
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+            {nichos.map(n => (
+              <button
+                key={n.id}
+                onClick={() => setNichoActivo(n.id)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  nichoActivo === n.id
+                    ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 scale-105'
+                    : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          3. HERO SECTION DINÁMICO SEGÚN EL NICHO ELEGIDO
+      ========================================================================= */}
+      <section className="relative pt-10 pb-16 sm:pt-16 sm:pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
         
-        {/* Badge Colombiano */}
+        {/* Badge Dinámico */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs sm:text-sm font-bold mb-6 shadow-inner animate-fade-in">
-          <span>🇨🇴 Especializado para Barberías y Salones en Colombia</span>
+          <span>🇨🇴 Hecho para {nichoActual.titulo} en Colombia</span>
         </div>
 
         {/* Titular Gancho */}
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.12] max-w-4xl mx-auto mb-6">
-          Llena tus sillas los días flojos y liquida a tus barberos{' '}
+        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.12] max-w-5xl mx-auto mb-6">
+          Llena tus citas en días flojos y liquida a tu equipo{' '}
           <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent">
             en 1 solo clic.
           </span>
         </h1>
 
-        {/* Subtítulo Corto */}
+        {/* Subtítulo Dinámico */}
         <p className="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto mb-8 leading-relaxed font-normal">
-          Sin cuadernos manchados, sin clientes que no llegan y sin peleas por comisiones los sábados. La plataforma que pone tu negocio en piloto automático.
+          {nichoActual.subtitulo} Cero cuadernos con tachones, recordatorios automáticos por WhatsApp y control de comisiones al centavo sin pagar en dólares.
         </p>
 
         {/* Llamado a la Acción Prominente */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto mb-12">
           <button
-            onClick={() => abrirWhatsApp('Hola EXAKTA, quiero ver cómo llenar las sillas de mi barbería y liquidar comisiones en 1 clic.')}
+            onClick={() => abrirWhatsApp(`Hola EXAKTA, tengo un negocio de ${nichoActual.titulo} y quiero ver una demostración.`)}
             className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl text-base font-black text-slate-950 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-2xl shadow-emerald-500/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
           >
             <MessageCircle className="w-5 h-5 text-slate-950 fill-slate-950" />
@@ -323,23 +507,23 @@ export default function LandingPage({
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-sm font-bold text-slate-200 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 transition-all"
           >
             <Store className="w-5 h-5 text-amber-400" />
-            <span>Ver Barbería Demo</span>
+            <span>Ver Demostración</span>
           </button>
         </div>
 
-        {/* Barra de 4 Números de Confianza */}
+        {/* Barra de 4 Métricas de Confianza */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-8 border-t border-slate-800/80">
           <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800">
             <span className="block text-2xl sm:text-3xl font-black text-amber-400">+35%</span>
-            <span className="text-xs text-slate-400 font-semibold">Más citas en martes y miércoles</span>
+            <span className="text-xs text-slate-400 font-semibold">Citas los martes y miércoles</span>
           </div>
           <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800">
             <span className="block text-2xl sm:text-3xl font-black text-emerald-400">4 Horas</span>
-            <span className="text-xs text-slate-400 font-semibold">Ahorradas los fines de semana</span>
+            <span className="text-xs text-slate-400 font-semibold">Ahorradas sumando cuentas</span>
           </div>
           <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800">
             <span className="block text-2xl sm:text-3xl font-black text-blue-400">0 Apps</span>
-            <span className="text-xs text-slate-400 font-semibold">Tu cliente agenda sin descargar nada</span>
+            <span className="text-xs text-slate-400 font-semibold">Clientes agendan sin descargar nada</span>
           </div>
           <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800">
             <span className="block text-2xl sm:text-3xl font-black text-purple-400">100% $ COP</span>
@@ -350,7 +534,131 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          3. SHOWCASE INTERACTIVO: LAS 6 ARMAS POTENTES DE EXAKTA
+          4. GALERÍA VISUAL: EXAKTA EN CADA SECTOR (IMÁGENES FOTORREALISTAS)
+      ========================================================================= */}
+      <section id="galeria" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider mb-3">
+            <Layers className="w-3.5 h-3.5" />
+            <span>Multi-Sector • Diseñado para Crecer</span>
+          </div>
+          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+            Sea cual sea tu negocio, EXAKTA se adapta a tu flujo
+          </h2>
+          <p className="text-sm sm:text-base text-slate-400 mt-2">
+            La misma potencia operativa para los 4 sectores que más mueven citas en Colombia:
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Tarjeta 1: Barberías */}
+          <div
+            onClick={() => setNichoActivo('barberia')}
+            className="group rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-amber-500 transition-all cursor-pointer shadow-xl"
+          >
+            <div className="h-48 overflow-hidden relative">
+              <img
+                src="/images/landing/barberia.jpg"
+                alt="Barbería Profesional"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-amber-400 text-[11px] font-black border border-amber-500/30">
+                💈 Barberías
+              </span>
+            </div>
+            <div className="p-5 space-y-2 text-left">
+              <h4 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors">
+                Estudios Masculinos & Barberías
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Liquidación de comisiones por corte, comprobante a WhatsApp y control de insumos y pomadas.
+              </p>
+            </div>
+          </div>
+
+          {/* Tarjeta 2: Salones de Belleza */}
+          <div
+            onClick={() => setNichoActivo('salon')}
+            className="group rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-pink-500 transition-all cursor-pointer shadow-xl"
+          >
+            <div className="h-48 overflow-hidden relative">
+              <img
+                src="/images/landing/salon_belleza.jpg"
+                alt="Salón de Belleza y Colorimetría"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-pink-400 text-[11px] font-black border border-pink-500/30">
+                💇‍♀️ Salones & Peluquerías
+              </span>
+            </div>
+            <div className="p-5 space-y-2 text-left">
+              <h4 className="text-base font-bold text-white group-hover:text-pink-400 transition-colors">
+                Salones de Belleza & Colorimetría
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ficha técnica con fórmulas de tinte/balayage, turnos de estilistas y ventas de tratamientos.
+              </p>
+            </div>
+          </div>
+
+          {/* Tarjeta 3: Spas y Masajes */}
+          <div
+            onClick={() => setNichoActivo('spa')}
+            className="group rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-emerald-500 transition-all cursor-pointer shadow-xl"
+          >
+            <div className="h-48 overflow-hidden relative">
+              <img
+                src="/images/landing/spa_masajes.jpg"
+                alt="Spa y Masajes Relajantes"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-emerald-400 text-[11px] font-black border border-emerald-500/30">
+                💆 Spas & Masajes
+              </span>
+            </div>
+            <div className="p-5 space-y-2 text-left">
+              <h4 className="text-base font-bold text-white group-hover:text-emerald-400 transition-colors">
+                Spas & Terapias de Masaje
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Gestión de cabinas por hora, ficha de preferencias y semáforo para llenar días con promociones.
+              </p>
+            </div>
+          </div>
+
+          {/* Tarjeta 4: Nail Bar y Estética */}
+          <div
+            onClick={() => setNichoActivo('unas')}
+            className="group rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-purple-500 transition-all cursor-pointer shadow-xl"
+          >
+            <div className="h-48 overflow-hidden relative">
+              <img
+                src="/images/landing/nail_bar.jpg"
+                alt="Nail Bar y Cejas"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-purple-400 text-[11px] font-black border border-purple-500/30">
+                💅 Uñas & Cejas
+              </span>
+            </div>
+            <div className="p-5 space-y-2 text-left">
+              <h4 className="text-base font-bold text-white group-hover:text-purple-400 transition-colors">
+                Nail Bars & Lash Studios
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Tarjeta VIP con sellos digitales, recordatorio de mantenimiento de uñas y agendamiento 24/7.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          5. SHOWCASE INTERACTIVO: LAS 6 ARMAS POTENTES DE EXAKTA
       ========================================================================= */}
       <section id="showcase" className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
         
@@ -360,7 +668,7 @@ export default function LandingPage({
             <span>Tecnología Práctica • Cero Enredos</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Las 6 armas que duplican la rentabilidad de tu barbería
+            Las 6 armas que duplican la rentabilidad de tu negocio
           </h2>
           <p className="text-sm sm:text-base text-slate-400 mt-2">
             Toca cualquiera de las tarjetas para ver cómo funciona en pantalla real:
@@ -431,11 +739,11 @@ export default function LandingPage({
 
               <div className="pt-2">
                 <button
-                  onClick={() => abrirWhatsApp(`Hola EXAKTA, quiero ver en vivo cómo funciona la herramienta de "${armasSecretas[armaActiva].titulo}".`)}
+                  onClick={() => abrirWhatsApp(`Hola EXAKTA, quiero ver en vivo cómo funciona "${armasSecretas[armaActiva].titulo}" para mi negocio de ${nichoActual.titulo}.`)}
                   className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 transition-all shadow-md"
                 >
                   <MessageCircle className="w-4 h-4 fill-slate-950" />
-                  <span>Quiero esto en mi barbería</span>
+                  <span>Quiero esto en mi negocio</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -466,17 +774,17 @@ export default function LandingPage({
                         </div>
                         <h5 className="text-sm font-black text-white">Reseña Automática en Google Maps</h5>
                         <p className="text-xs text-slate-300">
-                          Mensaje enviado al WhatsApp del cliente 15 min después del corte:
+                          Mensaje enviado al WhatsApp del cliente 15 min después de su cita:
                         </p>
                       </div>
 
                       <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs space-y-2">
                         <div className="flex items-center gap-2 text-emerald-400 font-bold text-[11px]">
                           <MessageCircle className="w-3.5 h-3.5" />
-                          <span>WhatsApp • The Barber Club</span>
+                          <span>WhatsApp • {nichoActual.ticketEjemplo.negocio}</span>
                         </div>
                         <p className="text-slate-300 text-xs italic">
-                          "¡Hola Carlos! 💈 Esperamos que hayas disfrutado tu corte hoy con Mateo. ¿Nos regalas tu opinión de 5 estrellas en Google? Solo toma 10 segundos 👇"
+                          "¡Hola {nichoActual.reviewEjemplo.cliente}! Esperamos que hayas disfrutado {nichoActual.reviewEjemplo.servicio} con {nichoActual.reviewEjemplo.profesional}. ¿Nos regalas tu opinión de 5 estrellas en Google? Solo toma 10 segundos 👇"
                         </p>
                         <div className="p-2.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 font-bold text-center text-[11px]">
                           ⭐⭐⭐⭐⭐ Calificar en Google Maps
@@ -484,43 +792,43 @@ export default function LandingPage({
                       </div>
 
                       <div className="text-center text-[11px] text-emerald-400 font-bold">
-                        ✓ 42 nuevas reseñas de 5 estrellas este mes
+                        ✓ +48 nuevas reseñas de 5 estrellas este mes
                       </div>
                     </div>
                   )}
 
-                  {/* VISTA 2: Tirilla Digital POS */}
+                  {/* VISTA 2: Tirilla Digital POS con QR */}
                   {armaActiva === 1 && (
                     <div className="py-2 space-y-3 animate-fade-in my-auto">
                       <div className="bg-white text-slate-950 p-4 rounded-2xl font-mono text-xs space-y-2 shadow-xl border border-slate-300">
                         <div className="text-center border-b border-dashed border-slate-400 pb-2">
-                          <p className="font-black text-sm">THE BARBER CLUB</p>
-                          <p className="text-[10px] text-slate-600">NIT: 901.458.120-1 • Bogotá</p>
+                          <p className="font-black text-sm">{nichoActual.ticketEjemplo.negocio}</p>
+                          <p className="text-[10px] text-slate-600">NIT: 901.458.120-1 • Colombia</p>
                           <p className="text-[10px] text-slate-500 font-bold">RECIBO DIGITAL #0482</p>
                         </div>
 
                         <div className="space-y-1 text-[11px] border-b border-dashed border-slate-400 pb-2">
                           <div className="flex justify-between">
-                            <span>Corte Clásico + Lavado</span>
-                            <span className="font-bold">$30.000</span>
+                            <span>{nichoActual.ticketEjemplo.item1}</span>
+                            <span className="font-bold">{nichoActual.ticketEjemplo.precio1}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Perfilado de Barba</span>
-                            <span className="font-bold">$15.000</span>
+                            <span>{nichoActual.ticketEjemplo.item2}</span>
+                            <span className="font-bold">{nichoActual.ticketEjemplo.precio2}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Cera Fijadora Mate</span>
-                            <span className="font-bold">$25.000</span>
+                            <span>{nichoActual.ticketEjemplo.item3}</span>
+                            <span className="font-bold">{nichoActual.ticketEjemplo.precio3}</span>
                           </div>
                         </div>
 
                         <div className="flex justify-between font-black text-sm pt-1">
                           <span>TOTAL PAGADO:</span>
-                          <span className="text-emerald-700">$70.000 COP</span>
+                          <span className="text-emerald-700">{nichoActual.ticketEjemplo.total}</span>
                         </div>
 
                         <div className="text-[10px] text-slate-600 pt-1 text-center border-t border-slate-200">
-                          Barbero: <strong>Santiago O.</strong> • Propina: $5.000 (100% barbero)
+                          Atendido por: <strong>{nichoActual.ticketEjemplo.profesional}</strong> • Propina transparente
                         </div>
 
                         <div className="flex justify-center pt-1">
@@ -529,7 +837,7 @@ export default function LandingPage({
                       </div>
 
                       <button
-                        onClick={() => abrirWhatsApp('Hola, me interesa la tirilla digital POS para mi barbería.')}
+                        onClick={() => abrirWhatsApp(`Hola, me interesa la tirilla digital POS para mi negocio de ${nichoActual.titulo}.`)}
                         className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center flex items-center justify-center gap-1.5"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
@@ -538,38 +846,37 @@ export default function LandingPage({
                     </div>
                   )}
 
-                  {/* VISTA 3: Ficha Técnica de Estilo */}
+                  {/* VISTA 3: Ficha Técnica CRM */}
                   {armaActiva === 2 && (
                     <div className="py-2 space-y-3 animate-fade-in my-auto">
                       <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 font-black flex items-center justify-center text-xs">
-                              AG
+                              {nichoActual.crmEjemplo.cliente.charAt(0)}
                             </div>
                             <div>
-                              <h5 className="text-xs font-black text-white">Andrés Gómez</h5>
-                              <span className="text-[10px] text-slate-400">Cliente VIP • 14 visitas</span>
+                              <h5 className="text-xs font-black text-white">{nichoActual.crmEjemplo.cliente}</h5>
+                              <span className="text-[10px] text-slate-400">Cliente VIP • {nichoActual.crmEjemplo.visitas}</span>
                             </div>
                           </div>
                           <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                            Fórmula Activa
+                            Ficha Activa
                           </span>
                         </div>
 
                         <div className="space-y-1.5 text-xs text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                          <p><strong className="text-amber-400">Laterales:</strong> Mid Fade (Guía #1.5 palanca abierta a navaja)</p>
-                          <p><strong className="text-amber-400">Parte Alta:</strong> Texturizado a tijera 4cm con textura mate</p>
-                          <p><strong className="text-amber-400">Barba:</strong> Cuadrada perfilada, aceite de eucalipto</p>
+                          <p><strong className="text-amber-400">Detalle 1:</strong> {nichoActual.crmEjemplo.linea1}</p>
+                          <p><strong className="text-amber-400">Detalle 2:</strong> {nichoActual.crmEjemplo.linea2}</p>
                           <p className="text-[11px] text-rose-300 italic pt-1">
-                            ⚠️ Cuidado con remolino en coronilla izquierda
+                            {nichoActual.crmEjemplo.alerta}
                           </p>
                         </div>
                       </div>
 
                       <div className="p-3 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-center">
                         <p className="text-xs text-emerald-300 font-bold">
-                          ✓ Cualquier barbero de tu equipo puede hacerle el mismo corte sin equivocarse.
+                          ✓ Si tu colaborador habitual no vino, cualquiera puede atenderlo igual de bien.
                         </p>
                       </div>
                     </div>
@@ -580,12 +887,12 @@ export default function LandingPage({
                     <div className="py-2 space-y-3 animate-fade-in my-auto">
                       <div className="p-4 rounded-2xl bg-gradient-to-tr from-amber-950/60 via-slate-900 to-yellow-950/50 border border-amber-500/40 space-y-3 text-center">
                         <div className="flex justify-between items-center text-xs">
-                          <span className="font-black text-amber-400 tracking-wider">THE BARBER CLUB VIP</span>
-                          <span className="text-[10px] text-slate-400 font-mono">ID: #9931</span>
+                          <span className="font-black text-amber-400 tracking-wider uppercase">{nichoActual.ticketEjemplo.negocio} VIP</span>
+                          <span className="text-[10px] text-slate-400 font-mono">ID: #8841</span>
                         </div>
 
                         <div className="py-2">
-                          <p className="text-xs text-slate-300 font-semibold mb-2">Sellos por Corte:</p>
+                          <p className="text-xs text-slate-300 font-semibold mb-2">Sellos por Cita:</p>
                           <div className="grid grid-cols-6 gap-2 max-w-[240px] mx-auto">
                             {[1, 2, 3, 4, 5, 6].map((s) => (
                               <div
@@ -596,7 +903,7 @@ export default function LandingPage({
                                     : 'bg-slate-800 text-slate-600 border border-slate-700'
                                 }`}
                               >
-                                {s <= sellosSimulados ? '✂️' : s}
+                                {s <= sellosSimulados ? '★' : s}
                               </div>
                             ))}
                           </div>
@@ -604,8 +911,8 @@ export default function LandingPage({
 
                         <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-[11px] text-amber-300 font-bold">
                           {sellosSimulados >= 6
-                            ? '🎉 ¡Corte #6 GRATIS desbloqueado!'
-                            : `¡Te falta solo 1 corte para reclamar tu premio!`}
+                            ? '🎉 ¡Premio #6 Desbloqueado en tu celular!'
+                            : `¡Te falta solo 1 visita para reclamar tu premio!`}
                         </div>
                       </div>
 
@@ -629,11 +936,11 @@ export default function LandingPage({
 
                       <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/40 flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-black text-white">🔴 Carlos Méndez</p>
-                          <p className="text-[10px] text-slate-400">Hace 28 días no viene (Riesgo)</p>
+                          <p className="text-xs font-black text-white">🔴 Carlos M.</p>
+                          <p className="text-[10px] text-slate-400">Hace 28 días no agenda (Riesgo)</p>
                         </div>
                         <button
-                          onClick={() => abrirWhatsApp('Hola Carlos, te extrañamos en The Barber Club. Este martes tenemos 20% OFF en tu corte.')}
+                          onClick={() => abrirWhatsApp(`Hola Carlos, te extrañamos en ${nichoActual.ticketEjemplo.negocio}. Este martes tenemos 20% OFF en tu servicio.`)}
                           className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-bold"
                         >
                           Llenar Martes
@@ -642,11 +949,11 @@ export default function LandingPage({
 
                       <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/40 flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-black text-white">🟡 David Rincón</p>
-                          <p className="text-[10px] text-slate-400">Hace 18 días no viene (Toca corte)</p>
+                          <p className="text-xs font-black text-white">🟡 Andrea R.</p>
+                          <p className="text-[10px] text-slate-400">Hace 18 días no agenda (Mantenimiento)</p>
                         </div>
                         <button
-                          onClick={() => abrirWhatsApp('Hola David, te toca mantenimiento de corte.')}
+                          onClick={() => abrirWhatsApp(`Hola Andrea, te toca mantenimiento en ${nichoActual.ticketEjemplo.negocio}.`)}
                           className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold"
                         >
                           Recordar
@@ -659,13 +966,13 @@ export default function LandingPage({
                     </div>
                   )}
 
-                  {/* VISTA 6: Liquidación de Barberos en 1 Clic */}
+                  {/* VISTA 6: Liquidación de Comisiones en 1 Clic */}
                   {armaActiva === 5 && (
                     <div className="py-2 space-y-2.5 animate-fade-in my-auto">
                       <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
                         <div className="flex justify-between items-center pb-2 border-b border-slate-800">
                           <div>
-                            <p className="font-black text-white">Mateo Barber</p>
+                            <p className="font-black text-white">{nichoActual.ticketEjemplo.profesional}</p>
                             <p className="text-[10px] text-slate-400">Liquidación Semanal (1 al 7)</p>
                           </div>
                           <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
@@ -675,31 +982,31 @@ export default function LandingPage({
 
                         <div className="space-y-1 text-[11px] text-slate-300">
                           <div className="flex justify-between">
-                            <span>34 Cortes realizados:</span>
-                            <span className="font-bold text-white">$1.020.000</span>
+                            <span>Servicios realizados:</span>
+                            <span className="font-bold text-white">$1.240.000</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Comisión barbero (60%):</span>
-                            <span className="font-bold text-emerald-400">$612.000</span>
+                            <span>Comisión directa (60%):</span>
+                            <span className="font-bold text-emerald-400">$744.000</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>8 Pomadas vendidas (20%):</span>
-                            <span className="font-bold text-emerald-400">$40.000</span>
+                            <span>Productos vendidos (20%):</span>
+                            <span className="font-bold text-emerald-400">$60.000</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Propinas recibidas:</span>
-                            <span className="font-bold text-emerald-400">$45.000</span>
+                            <span className="font-bold text-emerald-400">$55.000</span>
                           </div>
                         </div>
 
                         <div className="pt-2 border-t border-slate-800 flex justify-between font-black text-sm">
                           <span>A PAGAR LIMPIO:</span>
-                          <span className="text-emerald-400">$697.000 COP</span>
+                          <span className="text-emerald-400">$859.000 COP</span>
                         </div>
                       </div>
 
                       <button
-                        onClick={() => abrirWhatsApp('Hola Mateo, aquí tienes el desglose oficial de tu liquidación semanal.')}
+                        onClick={() => abrirWhatsApp(`Hola, aquí tienes el desglose oficial de tu liquidación semanal en ${nichoActual.ticketEjemplo.negocio}.`)}
                         className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs text-center flex items-center justify-center gap-1.5 shadow-md"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
@@ -723,17 +1030,17 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          4. COMPARATIVA VISUAL DIRECTA: EL CAOS DE ANTES vs TU NEGOCIO CON EXAKTA
+          6. COMPARATIVA VISUAL DIRECTA: EL CAOS DE ANTES vs TU NEGOCIO CON EXAKTA
       ========================================================================= */}
       <section id="comparativa" className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
         
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold uppercase tracking-wider mb-3">
             <Flame className="w-3.5 h-3.5" />
-            <span>La Realidad de Muchas Barberías</span>
+            <span>El Dolor Oculto</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            ¿Cómo manejas tu barbería hoy vs con EXAKTA?
+            ¿Cómo manejas tu agenda hoy vs con EXAKTA?
           </h2>
           <p className="text-sm sm:text-base text-slate-400 mt-2">
             La diferencia entre perder plata cada semana o tener el control exacto de tu negocio:
@@ -757,15 +1064,15 @@ export default function LandingPage({
             <div className="space-y-4 text-xs sm:text-sm text-slate-300">
               <div className="flex items-start gap-3">
                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p><strong>Cuentas los sábados a medianoche:</strong> Sumando papelitos manchados y recibos arrugados con calculadora.</p>
+                <p><strong>Cuentas los sábados a medianoche:</strong> Sumando papelitos manchados de manicuristas o barberos con calculadora.</p>
               </div>
               <div className="flex items-start gap-3">
                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p><strong>Discusiones con los barberos:</strong> "A mí me salieron 2 cortes más, esa cuenta está mal". Desconfianza en el equipo.</p>
+                <p><strong>Peleas por plata con el equipo:</strong> "A mí me salieron 3 servicios más, esa cuenta está mal". Fricciones y desconfianza.</p>
               </div>
               <div className="flex items-start gap-3">
                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p><strong>Sillas vacías los martes:</strong> Clientes que se les olvida el turno o no confirman y te dejan el hueco de 45 minutos.</p>
+                <p><strong>Cabinas y puestos vacíos los martes:</strong> Clientes que olvidan su turno o no confirman y te dejan el hueco de 1 hora.</p>
               </div>
               <div className="flex items-start gap-3">
                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
@@ -773,7 +1080,7 @@ export default function LandingPage({
               </div>
               <div className="flex items-start gap-3">
                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p><strong>Caja ciega:</strong> Entra plata todo el día pero a final de mes no sabes cuánto quedó libre tras arriendo e insumos.</p>
+                <p><strong>Caja ciega:</strong> Entra plata todo el día pero a final de mes no sabes cuánto quedó libre tras insumos y arriendo.</p>
               </div>
             </div>
           </div>
@@ -785,7 +1092,7 @@ export default function LandingPage({
                 <Check className="w-5 h-5 text-slate-950 stroke-[3]" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-white">Tu Barbería en Piloto Automático</h3>
+                <h3 className="text-lg font-black text-white">Tu Negocio en Piloto Automático</h3>
                 <span className="text-xs text-emerald-400 font-bold">Con EXAKTA</span>
               </div>
             </div>
@@ -793,15 +1100,15 @@ export default function LandingPage({
             <div className="space-y-4 text-xs sm:text-sm text-slate-200">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong>Liquidación en 1 Clic:</strong> El sistema calcula comisiones al centavo y envía el comprobante oficial al WhatsApp privado del barbero.</p>
+                <p><strong>Liquidación en 1 Clic:</strong> El sistema calcula comisiones al centavo y envía el comprobante oficial al WhatsApp privado del colaborador.</p>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong>Transparencia total:</strong> Cada barbero ve en su propio celular los cortes que ha hecho hoy, sin ver la caja del negocio.</p>
+                <p><strong>Transparencia total:</strong> Cada profesional ve en su celular sus turnos y sus comisiones, sin ver la caja del negocio.</p>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong>Agenda llena 24/7 sin descargar apps:</strong> Tus clientes agendan solos desde tu Instagram o WhatsApp en 20 segundos.</p>
+                <p><strong>Agenda llena 24/7 sin descargar apps:</strong> Tus clientes agendan solos desde Instagram o WhatsApp en 20 segundos.</p>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -809,7 +1116,7 @@ export default function LandingPage({
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong>Dinero limpio exacto:</strong> Sabes exactamente cuánto vendiste, cuánto pagaste en comisiones y cuánto te quedó libre de ganancia.</p>
+                <p><strong>Dinero limpio exacto:</strong> Sabes con precisión cuánto vendiste, cuánto pagaste en comisiones y cuánto te quedó libre de ganancia.</p>
               </div>
             </div>
           </div>
@@ -819,7 +1126,7 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          5. PLANES Y PRECIOS CLAROS EN PESOS COLOMBIANOS ($ COP)
+          7. PLANES Y PRECIOS CLAROS EN PESOS COLOMBIANOS ($ COP)
       ========================================================================= */}
       <section id="planes" className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
         
@@ -829,10 +1136,10 @@ export default function LandingPage({
             <span>Tarifas Claras • Facturación en Pesos</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Planes diseñados para el tamaño de tu barbería
+            Planes diseñados para el tamaño de tu negocio
           </h2>
           <p className="text-sm sm:text-base text-slate-400 mt-2">
-            Sin contratos amarrados, sin comisiones por corte y con soporte continuo por WhatsApp.
+            Sin contratos amarrados, sin comisiones por cita y con soporte continuo por WhatsApp.
           </p>
         </div>
 
@@ -898,7 +1205,7 @@ export default function LandingPage({
                     abrirWhatsApp(
                       `Hola EXAKTA, quiero activar el ${plan.nombre} ($${Number(
                         plan.precio_cop || 0
-                      ).toLocaleString('es-CO')} COP/mes) para mi barbería.`
+                      ).toLocaleString('es-CO')} COP/mes) para mi negocio de ${nichoActual.titulo}.`
                     )
                   }
                   className={`w-full py-3.5 px-6 rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all ${
@@ -908,7 +1215,7 @@ export default function LandingPage({
                   }`}
                 >
                   <MessageCircle className="w-4 h-4 fill-current" />
-                  <span>Activar Mi Barbería</span>
+                  <span>Activar Mi Negocio</span>
                 </button>
               </div>
             );
@@ -926,20 +1233,21 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          6. TESTIMONIOS REALES DE DUEÑOS EN COLOMBIA
+          8. TESTIMONIOS MULTI-NICHO REALES EN COLOMBIA
       ========================================================================= */}
       <section className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
         
         <div className="text-center max-w-3xl mx-auto mb-12">
           <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Lo que dicen los dueños de barbería
+            Lo que dicen dueños de salones, spas y barberías
           </h2>
           <p className="text-sm text-slate-400 mt-2">
-            Barberos reales en Bogotá, Medellín y Cali que cambiaron el cuaderno por EXAKTA:
+            Historias reales de negocios que cambiaron el cuaderno y los chats caóticos por EXAKTA:
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Testimonio 1: Barbería */}
           <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-4 flex flex-col justify-between">
             <div>
               <div className="flex gap-1 text-amber-400 mb-3">
@@ -962,46 +1270,48 @@ export default function LandingPage({
             </div>
           </div>
 
+          {/* Testimonio 2: Salón de Belleza */}
           <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-4 flex flex-col justify-between">
             <div>
-              <div className="flex gap-1 text-amber-400 mb-3">
+              <div className="flex gap-1 text-pink-400 mb-3">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                  <Star key={i} className="w-4 h-4 fill-pink-400" />
                 ))}
               </div>
               <p className="text-xs sm:text-sm text-slate-300 italic leading-relaxed">
-                "Casi pago un software en dólares que me cobraba 90 dólares al mes más plata por cada mensaje de WhatsApp. EXAKTA me cuesta una fracción en pesos colombianos y mis clientes agendan solos desde el link de Instagram."
+                "Manejar 8 estilistas y manicuristas con comisiones diferentes era una pesadilla. Con EXAKTA calculo tintes, productos y porcentajes en segundos. Además la ficha técnica guarda la fórmula exacta del balayage de cada clienta."
               </p>
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 font-black flex items-center justify-center text-xs">
-                M
+              <div className="w-9 h-9 rounded-full bg-pink-500/20 text-pink-400 font-black flex items-center justify-center text-xs">
+                C
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Manuel Miranda</h4>
-                <p className="text-[11px] text-slate-400">Vice Barber • Medellín</p>
+                <h4 className="text-xs font-bold text-white">Camila Restrepo</h4>
+                <p className="text-[11px] text-slate-400">Glow Salón & Colorimetría • Medellín</p>
               </div>
             </div>
           </div>
 
+          {/* Testimonio 3: Spa y Masajes */}
           <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-4 flex flex-col justify-between">
             <div>
-              <div className="flex gap-1 text-amber-400 mb-3">
+              <div className="flex gap-1 text-emerald-400 mb-3">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                  <Star key={i} className="w-4 h-4 fill-emerald-400" />
                 ))}
               </div>
               <p className="text-xs sm:text-sm text-slate-300 italic leading-relaxed">
-                "Los clientes que no llegaban nos dejaban sillas vacías perdiendo plata. Ahora con los recordatorios directos a WhatsApp las inasistencias cayeron a casi cero y los martes los llenamos con el semáforo."
+                "Teníamos muchas inasistencias en masajes corporales y cabinas vacías los martes. Los recordatorios a WhatsApp redujeron el ausentismo y el semáforo inteligente nos llena los días flojos con promociones automáticas."
               </p>
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 font-black flex items-center justify-center text-xs">
-                H
+                P
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Hellen Aiza</h4>
-                <p className="text-[11px] text-slate-400">BIP Barber Club • Cali</p>
+                <h4 className="text-xs font-bold text-white">Dra. Paola Benítez</h4>
+                <p className="text-[11px] text-slate-400">Satori Spa & Masajes • Cali</p>
               </div>
             </div>
           </div>
@@ -1010,7 +1320,7 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          7. PREGUNTAS FRECUENTES (RESPUESTAS CLARAS SIN ENREDOS)
+          9. PREGUNTAS FRECUENTES (RESPUESTAS CLARAS SIN ENREDOS)
       ========================================================================= */}
       <section id="faqs" className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto border-t border-slate-800/80">
         
@@ -1023,24 +1333,28 @@ export default function LandingPage({
         <div className="space-y-3">
           {[
             {
+              p: '¿Sirve para barberías, salones de belleza, spas y centros de uñas?',
+              r: 'Sí, totalmente. EXAKTA fue diseñado para cualquier negocio de belleza y bienestar que maneje agenda por turnos, colaboradores con comisiones y control de caja diaria.'
+            },
+            {
               p: '¿Mis clientes tienen que descargar alguna app para pedir cita?',
-              r: 'No. Tus clientes simplemente tocan el enlace de tu barbería (en tu Instagram, WhatsApp o código QR en el local) y en 20 segundos eligen su corte y barbero desde cualquier celular sin descargar nada.'
+              r: 'No. Tus clientes simplemente tocan el enlace de tu negocio (en Instagram, WhatsApp o código QR en el local) y en 20 segundos eligen su servicio y profesional desde cualquier celular sin descargar nada.'
             },
             {
               p: '¿Me cobran por cada mensaje de WhatsApp que se envíe?',
               r: 'No. A diferencia de otros programas que te cobran paquetes de mensajes o créditos extra, EXAKTA incluye WhatsApp nativo con $0 pesos de recargo adicional.'
             },
             {
-              p: '¿Mis barberos pueden ver cuánto dinero entra a la caja de la barbería?',
-              r: 'No. Cada barbero tiene su portal móvil independiente donde solo ve sus propios turnos y su acumulado de comisiones personales. La facturación global y los costos solo los ves tú como dueño.'
+              p: '¿Mis colaboradores pueden ver la facturación total y caja del negocio?',
+              r: 'No. Cada profesional tiene su portal móvil independiente donde solo ve sus propios turnos y su acumulado de comisiones personales. La facturación global y los costos solo los ves tú como dueño.'
             },
             {
               p: '¿Cómo funciona la liquidación automática de comisiones?',
-              r: 'Tú decides el porcentaje de cada barbero (ej. 50% o 60%). A medida que atienden clientes, el sistema suma todo. Al terminar la semana o quincena, tocas 1 botón y se genera el recibo oficial con el desglose exacto directo a su WhatsApp.'
+              r: 'Tú decides el porcentaje de cada colaborador (ej. 50% manicurista, 60% barbero o estilista). A medida que atienden clientes, el sistema suma todo. Al terminar la semana, tocas 1 botón y se genera el recibo oficial con el desglose exacto directo a su WhatsApp.'
             },
             {
               p: '¿Qué pasa si no sé mucho de tecnología?',
-              r: 'EXAKTA fue diseñado para ser tan fácil de usar como WhatsApp. Además, nuestro equipo te ayuda a configurar tus servicios y barberos en 10 minutos.'
+              r: 'EXAKTA fue diseñado para ser tan fácil de usar como WhatsApp. Además, nuestro equipo te ayuda a configurar tus servicios y colaboradores en 10 minutos.'
             }
           ].map((faq, idx) => {
             const abierta = faqAbierta === idx;
@@ -1066,7 +1380,7 @@ export default function LandingPage({
       </section>
 
       {/* =========================================================================
-          8. FOOTER Y CONTACTO DIRECTO
+          10. FOOTER Y CONTACTO DIRECTO
       ========================================================================= */}
       <footer className="border-t border-slate-800/80 bg-[#05080e] py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
@@ -1079,7 +1393,7 @@ export default function LandingPage({
               <span className="text-lg font-black text-white tracking-wider">EXAKTA</span>
             </div>
             <p className="text-xs text-slate-400 max-w-sm">
-              La plataforma que llena tus sillas y liquida a tus barberos en 1 clic. Hecho en Colombia 🇨🇴.
+              La plataforma que llena tus citas y liquida a tu equipo en 1 clic. Hecho para Barberías, Salones, Spas y Estética en Colombia 🇨🇴.
             </p>
           </div>
 
@@ -1105,7 +1419,7 @@ export default function LandingPage({
         </div>
 
         <div className="max-w-7xl mx-auto mt-8 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} EXAKTA Barber Pro. Todos los derechos reservados.</p>
+          <p>© {new Date().getFullYear()} EXAKTA. Todos los derechos reservados.</p>
         </div>
       </footer>
 
@@ -1113,7 +1427,7 @@ export default function LandingPage({
       <aside
         aria-label="Contacto Comercial EXAKTA"
         className="fixed bottom-6 right-6 z-50 flex items-center group cursor-pointer"
-        onClick={() => abrirWhatsApp()}
+        onClick={() => abrirWhatsApp(`Hola EXAKTA, quiero información para mi negocio de ${nichoActual.titulo}.`)}
       >
         <span className="hidden md:inline-flex items-center mr-3 px-3.5 py-1.5 rounded-full bg-slate-900/95 text-emerald-300 text-xs font-black border border-emerald-500/40 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
           ¿Dudas? Habla con un Asesor por WhatsApp
