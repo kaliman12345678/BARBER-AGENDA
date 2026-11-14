@@ -963,6 +963,26 @@ app.put('/api/superadmin/configuracion-planes', requireSuperAdmin, async (req, r
       await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('precios_planes', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(JSON.stringify(cleanPrecios));
     } catch (_) {}
     store.guardarConfiguracion('precios_planes', cleanPrecios);
+
+    // Sincronizar automáticamente en la configuración de la Landing Page
+    try {
+      let lConfig = store.obtenerConfiguracion('landing_config', null);
+      const rowL = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'landing_config'").get();
+      if (rowL && rowL.valor) {
+        lConfig = typeof rowL.valor === 'string' ? JSON.parse(rowL.valor) : rowL.valor;
+      }
+      if (lConfig && Array.isArray(lConfig.planes)) {
+        lConfig.planes = lConfig.planes.map(p => {
+          if (p.id === 'basico' && cleanPrecios.basico) return { ...p, precio_cop: cleanPrecios.basico };
+          if (p.id === 'pro' && cleanPrecios.pro) return { ...p, precio_cop: cleanPrecios.pro };
+          if (p.id === 'vip' && cleanPrecios.vip) return { ...p, precio_cop: cleanPrecios.vip };
+          return p;
+        });
+        await db.prepare("INSERT INTO configuracion (clave, valor) VALUES ('landing_config', ?) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor").run(JSON.stringify(lConfig));
+        store.guardarConfiguracion('landing_config', lConfig);
+      }
+    } catch (_) {}
+
     res.json({
       success: true,
       message: 'Tarifas de planes actualizadas correctamente.',
@@ -997,6 +1017,23 @@ app.get('/api/landing-config', async (req, res) => {
       testimonios: config?.testimonios || DEFAULT_LANDING_CONFIG.testimonios,
       faqs: config?.faqs || DEFAULT_LANDING_CONFIG.faqs
     };
+
+    // Si existen tarifas globales personalizadas de planes, asegurar que la landing las refleje
+    try {
+      let preciosRow = store.obtenerConfiguracion('precios_planes', null);
+      const rowP = await db.prepare("SELECT valor FROM configuracion WHERE clave = 'precios_planes'").get();
+      if (rowP && rowP.valor) {
+        preciosRow = typeof rowP.valor === 'string' ? JSON.parse(rowP.valor) : rowP.valor;
+      }
+      if (preciosRow && Array.isArray(mergedConfig.planes)) {
+        mergedConfig.planes = mergedConfig.planes.map(p => {
+          if (p.id === 'basico' && preciosRow.basico) return { ...p, precio_cop: Number(preciosRow.basico) };
+          if (p.id === 'pro' && preciosRow.pro) return { ...p, precio_cop: Number(preciosRow.pro) };
+          if (p.id === 'vip' && preciosRow.vip) return { ...p, precio_cop: Number(preciosRow.vip) };
+          return p;
+        });
+      }
+    } catch (_) {}
 
     res.json({ success: true, data: mergedConfig });
   } catch (err) {
