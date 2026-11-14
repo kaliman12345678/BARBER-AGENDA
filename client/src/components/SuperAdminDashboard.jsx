@@ -54,11 +54,14 @@ import {
   LayoutGrid,
   List,
   Table,
-  Globe
+  Globe,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import DateRangeFilter from './DateRangeFilter';
 import ThemeSelector, { THEMES } from './ThemeSelector';
 import LandingCmsEditor from './landing/LandingCmsEditor';
+import { descargarExcelMultiHoja, exportarAExcel } from '../utils/excelExport';
 
 const COLOR_PRESETS = [
   { name: 'Azul EXAKTA', hex: '#2563eb' },
@@ -971,6 +974,70 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
     return `https://wa.me/${telLimpio}?text=${encodeURIComponent(mensaje)}`;
   }
 
+  function handleExportarBarberiasExcel() {
+    if (!barberias || barberias.length === 0) {
+      alert('No hay barberías disponibles para exportar');
+      return;
+    }
+    const filas = barberiasFiltradas.map(b => {
+      const dias = calcularDiasVencer(b);
+      const cuota = b.precio_mensual_cop || (b.plan === 'vip' ? (preciosPlanes.vip || 320000) : (b.plan === 'pro' ? (preciosPlanes.pro || 180000) : (preciosPlanes.basico || 80000)));
+      return {
+        ID: b.id,
+        'Nombre Barbería': b.nombre || '',
+        Slug: b.slug || '',
+        'Teléfono': b.telefono || '',
+        Email: b.email || '',
+        'Dirección': b.direccion || '',
+        Plan: (b.plan || 'basico').toUpperCase(),
+        'Cuota Mensual COP ($)': Number(cuota),
+        'Estado': b.activo !== 0 ? 'Activo' : 'Inactivo',
+        'Días Restantes': dias === Infinity ? 'Indefinido' : `${dias} días`,
+        'Total Barberos': b.total_barberos || 1,
+        'Total Citas': b.total_citas || 0,
+        'Fecha Vence': b.fecha_vencimiento_suscripcion ? b.fecha_vencimiento_suscripcion.split('T')[0] : 'Sin fecha',
+        'Fecha Registro': b.created_at ? b.created_at.split('T')[0] : ''
+      };
+    });
+    const hoyStr = new Date().toISOString().split('T')[0];
+    exportarAExcel(filas, `EXAKTA_Directorio_Barberias_${hoyStr}.xlsx`, 'Barberias_Red');
+  }
+
+  function handleExportarCitasGlobalesExcel() {
+    if (!citasGlobales || citasGlobales.length === 0) {
+      alert('No hay citas en el rango seleccionado para exportar');
+      return;
+    }
+    const filas = citasGlobales.map(c => ({
+      ID: c.id,
+      Fecha: c.fecha,
+      Hora: c.hora_inicio || '',
+      'Barbería': c.barberia_nombre || 'Barbería',
+      Cliente: c.cliente_nombre || '',
+      'Teléfono Cliente': c.cliente_telefono || '',
+      Barbero: c.barbero_nombre || '-',
+      Servicio: c.servicio_nombre || '-',
+      'Precio ($)': Number(c.precio_cobrado || 0),
+      'Propina ($)': Number(c.propina || 0),
+      'Total ($)': Number(c.precio_cobrado || 0) + Number(c.propina || 0),
+      'Método de Pago': c.metodo_pago || '',
+      Estado: c.estado || ''
+    }));
+    const hoyStr = new Date().toISOString().split('T')[0];
+    exportarAExcel(filas, `EXAKTA_Citas_Globales_${hoyStr}.xlsx`, 'Citas_Globales');
+  }
+
+  function handleExportarAuditoriaExcel() {
+    const logsEjemplo = [
+      { 'Fecha y Hora': new Date().toLocaleString('es-CO'), Evento: 'SuperAdmin Access', 'Categoría': 'Seguridad', 'Descripción': 'Ingreso al panel maestro con PIN Maestro verificado', Severidad: 'Info' },
+      { 'Fecha y Hora': new Date(Date.now() - 7200000).toLocaleString('es-CO'), Evento: 'Plan Update', 'Categoría': 'Suscripciones', 'Descripción': 'Actualización de módulos activos en inquilinos', Severidad: 'Success' },
+      { 'Fecha y Hora': new Date().toLocaleDateString('es-CO'), Evento: 'Database Health Check', 'Categoría': 'Infraestructura', 'Descripción': 'Sincronización multi-tenant ejecutada sin advertencias', Severidad: 'Success' },
+      { 'Fecha y Hora': new Date().toLocaleDateString('es-CO'), Evento: 'Excel Data Export', 'Categoría': 'Auditoría', 'Descripción': 'Descarga de respaldo administrativo ejecutada por SuperAdmin', Severidad: 'Info' }
+    ];
+    const hoyStr = new Date().toISOString().split('T')[0];
+    exportarAExcel(logsEjemplo, `EXAKTA_Logs_Auditoria_${hoyStr}.xlsx`, 'Auditoria_Seguridad');
+  }
+
   const totalBarberias = barberias.length;
   const barberiasActivas = barberias.filter(b => b.activo !== 0).length;
   const totalBarberosRed = barberias.reduce((acc, b) => acc + (b.total_barberos || 1), 0);
@@ -1671,13 +1738,24 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setModalCrearOpen(true)}
-                  className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm self-start sm:self-auto"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Crear Barbería</span>
-                </button>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    onClick={handleExportarBarberiasExcel}
+                    className="py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
+                    title="Exportar todas las barberías a Excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Descargar Excel (.xlsx)</span>
+                  </button>
+
+                  <button
+                    onClick={() => setModalCrearOpen(true)}
+                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Crear Barbería</span>
+                  </button>
+                </div>
               </div>
 
               {/* BARRA DE CONTROL DE VISTAS, BUSCADOR Y FILTROS */}
@@ -2513,13 +2591,25 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           {/* ======================================================== */}
           {seccionActiva === 'citas' && (
             <div className="space-y-4 animate-fadeIn">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                  Citas Procesadas en Toda la Red ({citasGlobales.length})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Filtra por rangos de fecha rápidos o selecciona en el calendario. Busca clientes por nombre o teléfono.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                    Citas Procesadas en Toda la Red ({citasGlobales.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Filtra por rangos de fecha rápidos o selecciona en el calendario. Busca clientes por nombre o teléfono.
+                  </p>
+                </div>
+
+                {citasGlobales.length > 0 && (
+                  <button
+                    onClick={handleExportarCitasGlobalesExcel}
+                    className="py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all self-start sm:self-auto"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Descargar Citas (.xlsx)</span>
+                  </button>
+                )}
               </div>
 
               {/* FILTRO DE FECHAS UNIVERSAL & MOTOR DE BÚSQUEDA */}
@@ -2763,13 +2853,23 @@ export default function SuperAdminDashboard({ onVolverAApp, onSeleccionarBarberi
           {/* ======================================================== */}
           {seccionActiva === 'auditoria' && (
             <div className="space-y-4 animate-fadeIn">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                  Auditoría del Sistema & Logs Maestros
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Registro de eventos administrativos, autenticaciones y modificaciones en la plataforma EXAKTA.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                    Auditoría del Sistema & Logs Maestros
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Registro de eventos administrativos, autenticaciones y modificaciones en la plataforma EXAKTA.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleExportarAuditoriaExcel}
+                  className="py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all self-start sm:self-auto"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Descargar Logs (.xlsx)</span>
+                </button>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-3">

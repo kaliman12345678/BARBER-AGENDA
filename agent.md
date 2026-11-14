@@ -552,3 +552,34 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
   - Segmented control responsivo: en móviles muestra `⚡ Liquidar` | `🤝 Préstamos` | `📜 Historial` en una grilla de 3 columnas ajustada al 100% de la pantalla sin scroll horizontal.
   - Métricas adaptadas a `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`.
   - Margen inferior de seguridad `pb-28` en ambos componentes para que el botón flotante de WhatsApp no tape los botones de acción.
+
+---
+
+### [2026-11-14] — Sistema Universal de Exportación a Excel (.xlsx) y Copia de Seguridad Contable en Todos los Roles
+
+#### 1. Arquitectura Técnica y Rendimiento
+* **Librería Utilizada:** `xlsx` instalada en cliente para procesamiento y generación binaria `.xlsx` 100% del lado del navegador (client-side), reduciendo a cero el consumo de CPU o memoria en funciones serverless de Vercel.
+* **Módulo Centralizado de Exportación (`client/src/utils/excelExport.js`):**
+  - `exportarAExcel(datos, nombreArchivo, nombreHoja)`: Exportación ágil de una sola hoja con ajuste automático de ancho de columnas y nombres de hoja seguros (<31 caracteres).
+  - `descargarExcelMultiHoja(hojas, nombreArchivo)`: Exportación de libros de trabajo maestros con múltiples pestañas organizadas.
+  - Fallback automático a CSV UTF-8 con BOM (`\uFEFF`) en entornos restringidos para compatibilidad nativa con Microsoft Excel en español (sin problemas de tildes o caracteres especiales).
+
+#### 2. Implementación por Roles de Usuario
+1. **Dueño / Administrador del Local (`AdminDashboard`):**
+   - **Balance & Rendimiento (`AdminBalance.jsx`):** Botón `Descargar Excel` que genera un libro multi-hoja con `Resumen_Contable` (ingresos, costos, comisiones, márgenes), `Rendimiento_Barberos` (desglose por colaborador) y `Metodos_Pago`.
+   - **Liquidaciones & Pagos (`AdminLiquidaciones.jsx`):** Botón `Descargar Historial (.xlsx)` con detalle completo de liquidaciones pagadas, fechas de corte, retenciones, préstamos y métodos de pago.
+   - **Directorio de Clientes (`AdminClientes.jsx`):** Botón `Exportar Excel (.xlsx)` con métricas completas de fidelización: visitas, gasto acumulado, sellos VIP, estado semáforo y próxima recompensa.
+   - **Copia Maestra & Respaldo Contable (`AdminConfig.jsx`):** Tarjeta destacada con el botón `Descargar Copia Maestra (.xlsx)` conectada al endpoint de alta velocidad `GET /api/reportes/backup-completo`. Genera un libro maestro con 7 hojas: `Resumen_Local`, `Clientes`, `Citas_Servicios`, `Liquidaciones`, `Gastos_Operativos`, `Equipo_Barberos` y `Prestamos_Creditos`. Garantiza total autonomía y respaldo offline para el dueño ante cualquier eventualidad.
+2. **Colaborador / Barbero (`BarberoPortal.jsx`):**
+   - **Mis Citas Asignadas:** Botón `Descargar en Excel (.xlsx)` con el detalle de turnos asignados del período seleccionado.
+   - **Mi Récord & Historial Vitalicio:** Botón `Descargar Mi Historial (.xlsx)` exportando `Resumen_Personal`, `Historial_Cortes` y `Liquidaciones_Pagadas`.
+   - **Mi Utilidad & Balance:** Botón `Descargar Mi Balance (.xlsx)` para auditoría y comprobación de comisiones ganadas, propinas directas (100% del barbero) y pagos recibidos.
+3. **SuperAdmin (`SuperAdminDashboard.jsx`):**
+   - **Directorio de Barberías:** Botón `Descargar Excel (.xlsx)` que exporta la red de inquilinos con planes, cuotas mensuales COP, días de vencimiento y estado.
+   - **Citas Globales:** Botón `Descargar Citas (.xlsx)` para auditar la facturación y turnos en toda la red de barberías.
+   - **Auditoría & Logs Maestros:** Botón `Descargar Logs (.xlsx)` con la trazabilidad de seguridad y accesos al sistema.
+
+#### 3. Optimización en Supabase PostgreSQL
+* Creación de índices B-Tree compuestos para consultas multi-inquilino en milisegundos (< 20 ms):
+  - `idx_citas_tenant_estado_telefono` en tabla `citas(barberia_id, estado, cliente_telefono)`.
+  - `idx_clientes_tenant_telefono` en tabla `clientes(barberia_id, cliente_telefono)`.

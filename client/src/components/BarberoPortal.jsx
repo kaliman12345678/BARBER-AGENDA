@@ -26,9 +26,12 @@ import {
   ArrowLeft,
   Star,
   Receipt,
-  CreditCard
+  CreditCard,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
+import { descargarExcelMultiHoja } from '../utils/excelExport';
 import InstagramIcon from './InstagramIcon';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
@@ -237,6 +240,73 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const cortesMesNecesarios = gananciaPorCorte > 0 ? Math.ceil(numMeta / gananciaPorCorte) : 0;
   const cortesDiaNecesarios = numDias > 0 ? (cortesMesNecesarios / numDias).toFixed(1) : 0;
 
+  function handleDescargarExcelColaborador() {
+    const nombreBarbero = barbero?.nombre || 'Colaborador';
+    const miPct = Number(barbero?.porcentaje_comision || 50);
+    const hoyStr = new Date().toISOString().split('T')[0];
+
+    // Hoja 1: Resumen Financiero Colaborador
+    const resumen = [
+      { Concepto: 'Colaborador / Barbero', Detalle: nombreBarbero },
+      { Concepto: 'Comisión Pactada (%)', Detalle: `${miPct}%` },
+      { Concepto: 'Fecha de Emisión', Detalle: new Date().toLocaleString('es-CO') },
+      { Concepto: 'Cortes Registrados', Detalle: balance?.total_servicios ?? recordData?.resumen?.total_citas_completadas ?? citas.length },
+      { Concepto: 'Total Ganado en Comisiones ($)', Detalle: Number(balance?.ganancia_total_barbero ?? recordData?.resumen?.total_ganado_vitalicio ?? 0) },
+      { Concepto: 'Total Propinas (100% Barbero) ($)', Detalle: Number(balance?.total_propinas ?? 0) },
+      { Concepto: 'Total Pagado por Administración ($)', Detalle: Number(balance?.total_ya_cobrado ?? recordData?.resumen?.total_liquidado_pagado ?? 0) },
+      { Concepto: 'Saldo Pendiente por Liquidar ($)', Detalle: Number(balance?.pendiente_por_cobrar ?? recordData?.resumen?.saldo_pendiente_por_cobrar ?? 0) }
+    ];
+
+    // Hoja 2: Detalle de Citas y Turnos
+    const listadoCitas = (recordData?.citas && recordData.citas.length > 0) ? recordData.citas : citas;
+    const citasRows = listadoCitas.map(c => {
+      const precio = Number(c.precio_cobrado || 0);
+      const propina = Number(c.propina || 0);
+      const gananciaComision = Math.round(precio * (miPct / 100));
+      return {
+        Fecha: c.fecha,
+        Hora: c.hora_inicio || '',
+        Servicio: c.servicio_nombre || c.servicio || 'Corte / Barba',
+        Cliente: c.cliente_nombre || 'Cliente',
+        'Precio Cobrado ($)': precio,
+        'Mi Comisión ($)': gananciaComision,
+        'Propina 100% ($)': propina,
+        'Total a Favor ($)': gananciaComision + propina,
+        Estado: c.estado || 'completada',
+        'Estado Liquidación': c.liquidacion_id ? 'Liquidado' : 'Pendiente'
+      };
+    });
+
+    // Hoja 3: Liquidaciones y Pagos Recibidos
+    const listadoLiq = (balance?.ultimas_liquidaciones && balance.ultimas_liquidaciones.length > 0)
+      ? balance.ultimas_liquidaciones
+      : (recordData?.liquidaciones || []);
+
+    const liqRows = listadoLiq.map(l => ({
+      'Fecha Pago': l.fecha_pago ? l.fecha_pago.split(' ')[0] : '',
+      'Periodo Desde': l.fecha_inicio || '',
+      'Periodo Hasta': l.fecha_fin || '',
+      'Servicios Liquidados': l.total_servicios || 0,
+      'Total Facturado ($)': Number(l.total_bruto || 0),
+      '% Comisión': `${l.porcentaje_aplicado || miPct}%`,
+      'Comisión Pagada ($)': Number(l.monto_comision || 0),
+      'Propinas Entregadas ($)': Number(l.total_propinas || 0),
+      'Deducciones / Préstamo ($)': Number(l.deducciones || 0),
+      'Neto Recibido ($)': Number(l.total_pagado || 0),
+      'Método de Pago': l.metodo_pago || 'Efectivo',
+      Notas: l.notas || ''
+    }));
+
+    const hojas = [
+      { nombre: 'Resumen_Personal', datos: resumen },
+      { nombre: 'Historial_Cortes', datos: citasRows },
+      { nombre: 'Liquidaciones_Pagadas', datos: liqRows }
+    ];
+
+    const nombreLimpio = nombreBarbero.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    descargarExcelMultiHoja(hojas, `Reporte_Contable_${nombreLimpio}_${hoyStr}.xlsx`);
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7 animate-fadeIn">
       
@@ -378,7 +448,21 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold text-slate-500">
+                  Mostrando {citas.length} {citas.length === 1 ? 'turno asignado' : 'turnos asignados'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDescargarExcelColaborador}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all flex items-center gap-1.5 shadow-2xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Descargar en Excel (.xlsx)</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {citas.map((c) => {
                 const isCompletada = c.estado === 'completada';
                 const miGananciaCorte = Math.round(c.precio_cobrado * (miComision / 100));
@@ -506,6 +590,7 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                 );
               })}
             </div>
+          </div>
           )}
         </div>
       )}
@@ -516,12 +601,24 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
       {tab === 'record' && recordData && (
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs">
-            <h3 className="text-lg font-bold text-slate-900 font-sans mb-1">
-              Mi Expediente & Récord Vitalicio
-            </h3>
-            <p className="text-xs text-slate-500 mb-6">
-              Historial acumulado de todos tus turnos completados, dinero generado y liquidaciones pagadas.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 font-sans mb-1">
+                  Mi Expediente & Récord Vitalicio
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Historial acumulado de todos tus turnos completados, dinero generado y liquidaciones pagadas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDescargarExcelColaborador}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Descargar Mi Historial (.xlsx)</span>
+              </button>
+            </div>
 
             {/* Tarjetas de Resumen Vitalicio */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -824,6 +921,25 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
       {/* ======================================================== */}
       {tab === 'balance' && balance && (
         <div className="space-y-6 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 font-sans">
+                Mi Balance & Rendimiento Financiero
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Resumen de comisiones ganadas, propinas acumuladas y cortes pendientes por liquidar.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDescargarExcelColaborador}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Descargar Mi Balance (.xlsx)</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-6 rounded-3xl bg-blue-50/70 border border-blue-200">
               <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest block">

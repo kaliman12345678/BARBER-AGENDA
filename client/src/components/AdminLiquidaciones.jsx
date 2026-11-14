@@ -20,9 +20,11 @@ import {
   Wallet,
   Wrench,
   CheckSquare,
-  Square
+  Square,
+  FileSpreadsheet
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
+import { exportarAExcel } from '../utils/excelExport';
 import AdminPrestamosColaboradores from './AdminPrestamosColaboradores';
 
 export default function AdminLiquidaciones({ barberos, shopConfig }) {
@@ -350,6 +352,35 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
       `¡Gracias por tu excelente trabajo!`
     );
     window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
+  }
+
+  function handleExportarHistorialExcel() {
+    if (!historial || historial.length === 0) {
+      alert('No hay liquidaciones registradas para exportar.');
+      return;
+    }
+    const slug = shopConfig?.slug || 'barberia';
+    const datosFilas = historial.map(item => ({
+      'ID Liquidación': item.id,
+      'Fecha de Pago': item.fecha_pago ? String(item.fecha_pago).split('T')[0] : 'N/A',
+      'Barbero / Colaborador': item.barbero_nombre || item.barbero?.nombre || 'Colaborador',
+      'Período Liquidado': `${item.fecha_inicio} al ${item.fecha_fin}`,
+      'Servicios / Cortes': item.total_servicios || 0,
+      'Total Facturado ($ COP)': item.total_bruto || 0,
+      'Comisión Aplicada (%)': `${item.porcentaje_aplicado || 50}%`,
+      'Comisión Bruta ($ COP)': item.monto_comision || 0,
+      'Propinas (100% Barbero)': item.total_propinas || 0,
+      'Deducciones / Anticipos': item.deducciones || 0,
+      'Total Neto Pagado ($ COP)': item.total_pagado || 0,
+      'Método de Pago': item.metodo_pago || 'Efectivo',
+      'Notas': item.notas || ''
+    }));
+
+    exportarAExcel({
+      nombreArchivo: `Liquidaciones_${slug}`,
+      nombreHoja: 'Historial Liquidaciones',
+      datos: datosFilas
+    });
   }
 
   return (
@@ -1076,8 +1107,24 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                 <p className="text-sm font-medium">No se han registrado liquidaciones aún.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div>
+                <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/60">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-amber-400" />
+                    <span>Historial de Liquidaciones Registradas ({historial.length})</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleExportarHistorialExcel}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95"
+                    title="Descargar historial de liquidaciones a Microsoft Excel"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Descargar Excel</span>
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
                   <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider border-b border-slate-800">
                     <tr>
                       <th className="py-3 px-4 font-semibold">Fecha Pago</th>
@@ -1123,7 +1170,8 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
           </div>
 
           {/* Modal de Detalle Histórico */}

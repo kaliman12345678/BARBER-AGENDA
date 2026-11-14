@@ -16,9 +16,12 @@ import {
   Sparkles,
   PieChart,
   ExternalLink,
-  UserCheck
+  UserCheck,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { formatCOP, getTodayStr } from '../utils/helpers';
+import { descargarExcelMultiHoja } from '../utils/excelExport';
 import BarberoRecordModal from './BarberoRecordModal';
 
 export default function AdminBalance({ shopConfig }) {
@@ -108,6 +111,47 @@ export default function AdminBalance({ shopConfig }) {
 
   const barberosDetalle = balance.barberos_detalle || balance.balance_barberos || [];
 
+  function handleExportarBalanceExcel() {
+    const slug = shopConfig?.slug || 'barberia';
+    const nombreLocal = shopConfig?.nombre_barberia || 'The Barber Club';
+
+    // Hoja 1: Resumen General
+    const resumenHoja = [
+      { Concepto: 'Nombre de la Barbería', Valor: nombreLocal },
+      { Concepto: 'Período', Valor: `${fechaDesde || 'Inicio'} al ${fechaHasta || 'Hoy'}` },
+      { Concepto: 'Total Ingresos Recaudados ($ COP)', Valor: balance.total_ingresos || 0 },
+      { Concepto: 'Margen Neto de la Barbería ($ COP)', Valor: balance.ganancia_neta || 0 },
+      { Concepto: 'Comisiones Pagadas a Barberos ($ COP)', Valor: balance.comisiones_pagadas || 0 },
+      { Concepto: 'Gastos y Egresos de Caja ($ COP)', Valor: balance.gastos_operativos || 0 },
+      { Concepto: 'Total Servicios / Cortes Completados', Valor: balance.total_servicios || 0 }
+    ];
+
+    // Hoja 2: Rendimiento por Barbero
+    const barberosHoja = barberosDetalle.map(b => ({
+      Barbero: b.nombre,
+      'Cortes Atendidos': b.citas_count || 0,
+      'Porcentaje Comisión': `${b.porcentaje_comision || 50}%`,
+      'Total Facturado ($ COP)': b.total_facturado || 0,
+      'Comisiones Generadas ($ COP)': b.comision_total || 0,
+      'Saldo Pendiente de Pago ($ COP)': b.saldo_pendiente || 0
+    }));
+
+    // Hoja 3: Desglose por Método de Pago
+    const metodosHoja = Object.entries(balance.metodos_pago || {}).map(([metodo, valor]) => ({
+      'Método de Pago': metodo.toUpperCase(),
+      'Monto Recaudado ($ COP)': valor
+    }));
+
+    descargarExcelMultiHoja({
+      nombreArchivo: `Balance_Contable_${slug}`,
+      hojas: [
+        { nombreHoja: 'Resumen Contable', datos: resumenHoja },
+        { nombreHoja: 'Rendimiento Barberos', datos: barberosHoja },
+        { nombreHoja: 'Metodos de Pago', datos: metodosHoja }
+      ]
+    });
+  }
+
   return (
     <div className="space-y-7">
       
@@ -123,7 +167,7 @@ export default function AdminBalance({ shopConfig }) {
           </p>
         </div>
 
-        {/* Botones de período */}
+        {/* Botones de período y Exportar Excel */}
         <div className="flex flex-wrap items-center gap-2">
           {[
             { id: 'hoy', label: 'Hoy' },
@@ -143,6 +187,16 @@ export default function AdminBalance({ shopConfig }) {
               {p.label}
             </button>
           ))}
+
+          <button
+            type="button"
+            onClick={handleExportarBalanceExcel}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all cursor-pointer hover:scale-105 active:scale-95"
+            title="Descargar reporte consolidado a Microsoft Excel"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+            <span>Descargar Excel</span>
+          </button>
         </div>
       </div>
 

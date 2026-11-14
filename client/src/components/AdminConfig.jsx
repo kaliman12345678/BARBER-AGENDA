@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare, Lock, Send, Globe, AtSign, Link2 } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, KeyRound, Building, Upload, Image, Trash2, Sparkles, Palette, Sun, Moon, Check, Share2, Copy, ExternalLink, Star, MessageSquare, Lock, Send, Globe, AtSign, Link2, FileSpreadsheet, Download, ShieldCheck, Loader2 } from 'lucide-react';
 import { DEFAULT_GOOGLE_REVIEWS_MENSAJE } from '../utils/googleReviews';
+import { descargarExcelMultiHoja } from '../utils/excelExport';
 
 const CLIENT_THEME_OPTIONS = [
   { id: 'oscuro', nombre: 'Obsidian Dark (Oscuro)', icon: Moon, desc: 'Fondo negro premium con alto contraste y elegancia', bg: 'bg-slate-950 text-white border-slate-800' },
@@ -41,6 +42,7 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   const [copiadoSlug, setCopiadoSlug] = useState(false);
+  const [descargandoBackup, setDescargandoBackup] = useState(false);
 
   const slugActual = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
   const urlPublica = `${window.location.origin}/?b=${slugActual}`;
@@ -175,6 +177,141 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
       setError('Error al conectar con el servidor');
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function handleDescargarBackupExcel() {
+    setDescargandoBackup(true);
+    try {
+      const res = await fetch(`/api/reportes/backup-completo?b=${slugActual}`, {
+        headers: { 'x-barberia-slug': slugActual }
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        alert(resData.error || 'No se pudo generar la copia de seguridad');
+        return;
+      }
+
+      const { barberia = {}, clientes = [], citas = [], liquidaciones = [], gastos = [], barberos = [], prestamos = [] } = resData;
+
+      // Hoja 1: Resumen y Auditoría de Datos
+      const resumenData = [
+        { Concepto: 'Nombre de la Barbería', Detalle: barberia.nombre || form.nombre_barberia || 'The Barber Club' },
+        { Concepto: 'Identificador / Slug', Detalle: barberia.slug || slugActual },
+        { Concepto: 'Teléfono Principal', Detalle: barberia.telefono || form.telefono_barberia || '' },
+        { Concepto: 'Dirección Comercial', Detalle: barberia.direccion || form.direccion_barberia || '' },
+        { Concepto: 'Eslogan', Detalle: barberia.eslogan || form.eslogan || '' },
+        { Concepto: 'Fecha y Hora de Generación', Detalle: new Date().toLocaleString('es-CO') },
+        { Concepto: 'Total Clientes Registrados', Detalle: clientes.length },
+        { Concepto: 'Total Citas en Histórico', Detalle: citas.length },
+        { Concepto: 'Total Liquidaciones Históricas', Detalle: liquidaciones.length },
+        { Concepto: 'Total Gastos Registrados', Detalle: gastos.length },
+        { Concepto: 'Total Colaboradores Activos', Detalle: barberos.filter(b => b.activo).length },
+        { Concepto: 'Total Créditos / Préstamos', Detalle: prestamos.length }
+      ];
+
+      // Hoja 2: Directorio de Clientes
+      const clientesRows = clientes.map(c => ({
+        ID: c.id,
+        Nombre: c.cliente_nombre || 'Sin nombre',
+        'Teléfono': c.cliente_telefono || '',
+        'Categoría': c.categoria || 'Normal',
+        'Nivel VIP': c.nivel_vip ? 'VIP Activo' : 'Estándar',
+        'Sellos Acumulados': c.sellos_acumulados || 0,
+        'Meta Sellos': c.sellos_meta || 6,
+        'Próximo Premio': c.premio_proximo || '',
+        'Premios Redimidos': c.premios_redimidos || 0
+      }));
+
+      // Hoja 3: Citas y Servicios
+      const citasRows = citas.map(c => ({
+        ID: c.id,
+        Fecha: c.fecha,
+        'Hora Inicio': c.hora_inicio || '',
+        'Hora Fin': c.hora_fin || '',
+        Cliente: c.cliente_nombre || '',
+        'Teléfono Cliente': c.cliente_telefono || '',
+        Servicio: c.servicio || 'Servicio General',
+        Barbero: c.barbero || 'No asignado',
+        'Precio Cobrado ($)': Number(c.precio_cobrado || 0),
+        'Propina ($)': Number(c.propina || 0),
+        'Total Pagado ($)': Number(c.precio_cobrado || 0) + Number(c.propina || 0),
+        'Método de Pago': c.metodo_pago || 'No especificado',
+        Estado: c.estado || 'completada'
+      }));
+
+      // Hoja 4: Liquidaciones Contables
+      const liqRows = liquidaciones.map(l => ({
+        ID: l.id,
+        'Fecha Pago': l.fecha_pago ? l.fecha_pago.split('T')[0] : '',
+        Colaborador: l.barbero || 'General',
+        'Periodo Desde': l.fecha_inicio || '',
+        'Periodo Hasta': l.fecha_fin || '',
+        'Servicios Atendidos': l.total_servicios || 0,
+        'Total Bruto Facturado ($)': Number(l.total_bruto || 0),
+        '% Comisión': `${l.porcentaje_aplicado || 0}%`,
+        'Monto Comisión ($)': Number(l.monto_comision || 0),
+        'Deducciones / Préstamos ($)': Number(l.deducciones || 0),
+        'Propinas (100% Barbero) ($)': Number(l.total_propinas || 0),
+        'Neto Pagado al Barbero ($)': Number(l.total_pagado || 0),
+        'Método Pago': l.metodo_pago || 'Efectivo',
+        Notas: l.notas || ''
+      }));
+
+      // Hoja 5: Gastos y Costos
+      const gastosRows = gastos.map(g => ({
+        ID: g.id,
+        Fecha: g.fecha ? g.fecha.split('T')[0] : '',
+        'Categoría': g.categoria || 'General',
+        'Descripción': g.descripcion || '',
+        'Monto Gasto ($)': Number(g.monto || 0),
+        'Método de Pago': g.metodo_pago || 'Efectivo'
+      }));
+
+      // Hoja 6: Equipo y Colaboradores
+      const barberosRows = barberos.map(b => ({
+        ID: b.id,
+        Nombre: b.nombre,
+        'Teléfono': b.telefono || '',
+        Email: b.email || '',
+        Especialidad: b.especialidad || '',
+        'Comisión Pactada (%)': `${b.porcentaje_comision || 50}%`,
+        Estado: b.activo ? 'Activo' : 'Inactivo'
+      }));
+
+      // Hoja 7: Préstamos y Créditos
+      const prestamosRows = prestamos.map(p => ({
+        ID: p.id,
+        'Fecha Inicio': p.fecha_prestamo || '',
+        Colaborador: p.barbero || '',
+        Tipo: p.tipo || 'Préstamo',
+        'Descripción': p.descripcion || '',
+        'Monto Total ($)': Number(p.monto_total || 0),
+        'Cuotas Totales': p.numero_cuotas || 1,
+        'Cuotas Pagadas': p.cuotas_pagadas || 0,
+        'Valor Cuota ($)': Number(p.valor_cuota || 0),
+        'Saldo Pendiente ($)': Number(p.saldo_pendiente || 0),
+        Estado: p.estado || 'activo'
+      }));
+
+      const hojas = [
+        { nombre: 'Resumen_Local', datos: resumenData },
+        { nombre: 'Clientes', datos: clientesRows },
+        { nombre: 'Citas_Servicios', datos: citasRows },
+        { nombre: 'Liquidaciones', datos: liqRows },
+        { nombre: 'Gastos_Operativos', datos: gastosRows },
+        { nombre: 'Equipo_Barberos', datos: barberosRows },
+        { nombre: 'Prestamos_Creditos', datos: prestamosRows }
+      ];
+
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const nombreArchivo = `Respaldo_Total_${slugActual}_${fechaHoy}.xlsx`;
+      descargarExcelMultiHoja(hojas, nombreArchivo);
+    } catch (err) {
+      console.error('Error generando backup Excel:', err);
+      alert('Hubo un error inesperado al descargar el respaldo');
+    } finally {
+      setDescargandoBackup(false);
     }
   }
 
@@ -692,6 +829,48 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
           <span>{guardando ? 'Guardando Cambios...' : 'Guardar Ajustes'}</span>
         </button>
       </form>
+
+      {/* COPIA DE SEGURIDAD & RESPALDO CONTABLE TOTAL (EXCEL) */}
+      <div className="bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-slate-50 border border-emerald-200/80 rounded-2xl p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-slate-900">Copia de Seguridad y Respaldo Contable (.xlsx)</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  Garantía de Datos
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 max-w-xl">
+                Descarga un libro maestro de Excel con todas las hojas contables de tu negocio: Resumen del Local, Clientes, Citas históricas, Liquidaciones a colaboradores, Gastos operativos, Barberos y Préstamos. Tus datos son 100% tuyos.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDescargarBackupExcel}
+            disabled={descargandoBackup}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
+          >
+            {descargandoBackup ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Generando Excel...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span>Descargar Copia Maestra (.xlsx)</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

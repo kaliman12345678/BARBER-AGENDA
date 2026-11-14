@@ -21,8 +21,10 @@ import {
   Scissors,
   BookmarkCheck,
   CreditCard,
-  Send
+  Send,
+  FileSpreadsheet
 } from 'lucide-react';
+import { exportarAExcel } from '../utils/excelExport';
 import ModalFichaTecnica from './ModalFichaTecnica';
 import ModalTarjetaVIPAdmin from './ModalTarjetaVIPAdmin';
 
@@ -217,6 +219,42 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
     setGenerandoIA(false);
   }
 
+  function handleExportarClientesExcel() {
+    if (!clientes || clientes.length === 0) {
+      alert('No hay clientes para exportar.');
+      return;
+    }
+    const slug = shopConfig?.slug || 'barberia';
+    const datosFilas = clientes.map(c => {
+      const diasSinVisita = c.ultima_visita 
+        ? Math.max(0, Math.floor((new Date() - new Date(c.ultima_visita)) / (1000 * 60 * 60 * 24)))
+        : 999;
+      return {
+        'Nombre del Cliente': c.cliente_nombre || 'Cliente',
+        'Teléfono': c.cliente_telefono || '',
+        'Categoría': c.categoria || 'Regular',
+        'Nivel VIP': c.nivel_vip || 'Bronce VIP',
+        'Sellos Acumulados': `${c.sellos_acumulados || 0}/${c.sellos_meta || 10}`,
+        'Premios Canjeados': c.premios_redimidos || 0,
+        'Próximo Premio': c.premio_proximo || 'Corte Gratis',
+        'Fecha Cumpleaños': c.fecha_cumpleanos ? String(c.fecha_cumpleanos).split('T')[0] : 'No registrada',
+        'Beneficio Asignado': c.beneficio_fidelidad || '',
+        'Total Citas': c.total_citas || 0,
+        'Última Visita': c.ultima_visita || 'Sin visitas registradas',
+        'Días Sin Visita': diasSinVisita >= 900 ? 'Sin citas' : diasSinVisita,
+        'Semáforo': diasSinVisita > 45 ? 'Rojo (Inactivo)' : diasSinVisita > 21 ? 'Amarillo (En Riesgo)' : 'Verde (Activo)',
+        'Total Gastado ($ COP)': c.total_gastado || 0,
+        'Notas': c.notas || ''
+      };
+    });
+
+    exportarAExcel({
+      nombreArchivo: `Directorio_Clientes_${slug}`,
+      nombreHoja: 'Clientes EXAKTA',
+      datos: datosFilas
+    });
+  }
+
   return (
     <div className="space-y-5 animate-fadeIn">
       
@@ -238,13 +276,25 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
           </div>
         </div>
 
-        <button
-          onClick={abrirModalCrear}
-          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Agregar Cliente Preferencial</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportarClientesExcel}
+            className="py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95"
+            title="Descargar directorio completo a Microsoft Excel"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            <span>Exportar Excel</span>
+          </button>
+
+          <button
+            onClick={abrirModalCrear}
+            className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Agregar Cliente</span>
+          </button>
+        </div>
       </div>
 
       {/* FILTROS Y MOTOR DE BÚSQUEDA */}
