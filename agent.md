@@ -219,6 +219,25 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 10. Historial de Correcciones y Mantenimiento
 
+### [2026-11-13] — Auditoría Integral y Blindaje de Paneles Contables y Liquidaciones (Todos los Roles)
+* **Funcionalidad / Detalle Corregido:**
+  - **Falta de guardado real de liquidaciones:** Se implementó `POST /api/liquidaciones` con inserción en la tabla `liquidaciones` de Supabase y actualización atómica de `citas.liquidacion_id = ?` y `ventas_productos.liquidacion_id = ?`. Ya no se duplican pagos ni se pierden citas.
+  - **Detalle de Recibo Histórico:** Se implementó `GET /api/liquidaciones/:id` con citas y ventas asociadas, permitiendo que el dueño y el barbero puedan ver, reimprimir y reenviar por WhatsApp cualquier liquidación histórica (`AdminLiquidaciones.jsx`).
+  - **Anulación Protegida:** Se implementó `DELETE /api/liquidaciones/:id` protegido por contraseña del dueño para anular liquidaciones y liberar los turnos si hubo error contable.
+  - **Ventas de Inventario con Comisión:** Se implementó `POST /api/ventas-productos`, descontando stock real y calculando comisión al colaborador.
+  - **Auditoría Financiera Estricta:** Todas las operaciones de dinero (`liquidacion_creada`, `liquidacion_anulada`, `gasto_registrado`, `gasto_eliminado`, `cambio_comision_barbero`, `venta_producto`) invocan `registrarAuditoria()` registrando usuario, montos y detalles JSON inmutables.
+  - **Homologación Portal del Barbero:** Sincronizado `/api/barbero-portal/balance` con `BarberoPortal.jsx` para reflejar con precisión `ganancia_total_barbero`, `total_ya_cobrado` y `pendiente_por_cobrar`, además de agregar la tabla visual de historial de pagos recibidos.
+  - **Balance General Consolidado:** `/api/reportes/balance` ahora calcula de forma real los ingresos por servicios + productos, restando costos y liquidaciones pagadas para una caja neta exacta.
+  - **SuperAdmin:** Nuevo endpoint `/api/superadmin/auditoria-global` para supervisión unificada de eventos contables de todas las barberías.
+* **Archivos Intervenidos:**
+  - `server/server.js` y `client/server/server.js`: Endpoints `POST /api/liquidaciones`, `GET /api/liquidaciones/:id`, `DELETE /api/liquidaciones/:id`, `POST /api/ventas-productos`, `/api/superadmin/auditoria-global`, auditoría en costos y comisiones.
+  - `client/src/components/AdminLiquidaciones.jsx`: Modal de detalle histórico corregido y conectado para WhatsApp y comprobantes.
+  - `client/src/components/BarberoPortal.jsx`: Pestaña de Utilidad sincronizada y tabla histórica de pagos recibidos.
+  - `agent.md`: Documentación técnica.
+* **Verificación:**
+  - Compilación Vite de producción (`npm run build`) exitosa (6.1s).
+  - Regla del espejo `server/server.js` vs `client/server/server.js` 100% verificada sin diferencias.
+
 ### [2026-11-13] — Redes Sociales y Presencia Web en Ajustes del Local & Perfil Cliente
 * **Funcionalidad / Detalle Agregado:**
   - Se habilitaron los campos de configuración para `instagram_url`, `facebook_url` y `sitio_web` en la sección "Ajustes del Local & Marca" (`AdminConfig.jsx`).

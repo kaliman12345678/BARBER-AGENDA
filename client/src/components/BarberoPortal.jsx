@@ -836,6 +836,53 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
               </p>
             </div>
           </div>
+
+          {/* HISTORIAL DE LIQUIDACIONES RECIBIDAS POR EL BARBERO */}
+          {Array.isArray(balance.ultimas_liquidaciones) && balance.ultimas_liquidaciones.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-emerald-600" />
+                <span>Historial de Pagos Recibidos de la Barbería</span>
+              </h4>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-3">Fecha de Pago</th>
+                      <th className="py-2.5 px-3">Período</th>
+                      <th className="py-2.5 px-3">Servicios</th>
+                      <th className="py-2.5 px-3">Método</th>
+                      <th className="py-2.5 px-3 text-right">Monto Recibido</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {balance.ultimas_liquidaciones.map(liq => (
+                      <tr key={liq.id} className="hover:bg-slate-50/60">
+                        <td className="py-3 px-3 text-slate-700 font-medium">
+                          {liq.fecha_pago ? String(liq.fecha_pago).split('T')[0] : 'Hoy'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-600">
+                          {liq.fecha_inicio} al {liq.fecha_fin}
+                        </td>
+                        <td className="py-3 px-3 text-slate-800 font-bold">
+                          {liq.total_servicios} cortes ({liq.porcentaje_aplicado}%)
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-[11px]">
+                            {liq.metodo_pago || 'Efectivo'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right font-black text-emerald-600 text-sm">
+                          {formatCOP(liq.total_pagado)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

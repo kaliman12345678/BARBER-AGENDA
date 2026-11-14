@@ -849,8 +849,9 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-                  <h4 className="font-bold text-white text-base">
-                    Detalle de Liquidación N° {detalleHistorial.liquidacion.id}
+                  <h4 className="font-bold text-white text-base flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-amber-400" />
+                    <span>Recibo de Liquidación N° {detalleHistorial.id}</span>
                   </h4>
                   <button
                     onClick={() => setDetalleHistorial(null)}
@@ -860,36 +861,55 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   </button>
                 </div>
 
-                <div className="space-y-3 text-xs mb-4">
-                  <p><span className="text-slate-400">Barbero:</span> <strong className="text-white">{detalleHistorial.liquidacion.barbero_nombre}</strong></p>
-                  <p><span className="text-slate-400">Período:</span> {detalleHistorial.liquidacion.fecha_inicio} al {detalleHistorial.liquidacion.fecha_fin}</p>
-                  <p><span className="text-slate-400">Servicios:</span> {detalleHistorial.liquidacion.total_servicios}</p>
-                  <p><span className="text-slate-400">Total Facturado:</span> {formatCOP(detalleHistorial.liquidacion.total_bruto)}</p>
-                  <p><span className="text-slate-400">Comisión Aplicada:</span> {detalleHistorial.liquidacion.porcentaje_aplicado}%</p>
-                  <p><span className="text-slate-400">Deducciones:</span> -{formatCOP(detalleHistorial.liquidacion.deducciones)}</p>
-                  <p className="text-sm font-bold text-amber-400">
-                    Neto Pagado: {formatCOP(detalleHistorial.liquidacion.total_pagado)}
+                <div className="space-y-3 text-xs mb-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+                  <p><span className="text-slate-400">Barbero:</span> <strong className="text-white text-sm">{detalleHistorial.barbero_nombre || detalleHistorial.barbero?.nombre}</strong></p>
+                  <p><span className="text-slate-400">Período:</span> {detalleHistorial.fecha_inicio} al {detalleHistorial.fecha_fin}</p>
+                  <p><span className="text-slate-400">Fecha de Pago:</span> {detalleHistorial.fecha_pago}</p>
+                  <p><span className="text-slate-400">Método de Pago:</span> <span className="font-bold text-blue-400">{detalleHistorial.metodo_pago || 'Efectivo'}</span></p>
+                  <p><span className="text-slate-400">Servicios Realizados:</span> {detalleHistorial.total_servicios} cortes</p>
+                  <p><span className="text-slate-400">Total Facturado Bruto:</span> {formatCOP(detalleHistorial.total_bruto)}</p>
+                  <p><span className="text-slate-400">Comisión Aplicada:</span> {detalleHistorial.porcentaje_aplicado}%</p>
+                  {Number(detalleHistorial.deducciones || 0) > 0 && (
+                    <p className="text-rose-400"><span className="text-slate-400">Deducciones / Anticipos:</span> -{formatCOP(detalleHistorial.deducciones)}</p>
+                  )}
+                  <p className="text-base font-black text-emerald-400 pt-2 border-t border-slate-800">
+                    Neto Pagado al Barbero: {formatCOP(detalleHistorial.total_pagado)}
                   </p>
                 </div>
 
-                <div className="border-t border-slate-800 pt-3">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                    Cortes incluidos:
-                  </span>
-                  <div className="max-h-40 overflow-y-auto divide-y divide-slate-800/60 text-xs">
-                    {detalleHistorial.citas.map(c => (
-                      <div key={c.id} className="py-1.5 flex justify-between">
-                        <span>{c.fecha} • {c.cliente_nombre} ({c.servicio_nombre})</span>
-                        <span className="font-semibold text-white">{formatCOP(c.precio_cobrado)}</span>
-                      </div>
-                    ))}
+                {Array.isArray(detalleHistorial.citas) && detalleHistorial.citas.length > 0 && (
+                  <div className="border-t border-slate-800 pt-3">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+                      Cortes y Servicios Incluidos ({detalleHistorial.citas.length}):
+                    </span>
+                    <div className="max-h-40 overflow-y-auto divide-y divide-slate-800/60 text-xs">
+                      {detalleHistorial.citas.map(c => (
+                        <div key={c.id} className="py-1.5 flex justify-between items-center">
+                          <span className="text-slate-300">{c.fecha} • {c.cliente_nombre} <span className="text-slate-500">({c.servicio_nombre})</span></span>
+                          <span className="font-semibold text-white">{formatCOP(c.precio_cobrado)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+                <div className="mt-5 pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                  <button
+                    onClick={() => {
+                      compartirWhatsApp({
+                        ...detalleHistorial,
+                        barbero: detalleHistorial.barbero || { nombre: detalleHistorial.barbero_nombre, telefono: detalleHistorial.barbero_telefono }
+                      });
+                    }}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Reenviar a WhatsApp</span>
+                  </button>
+
                   <button
                     onClick={() => setDetalleHistorial(null)}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
+                    className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all"
                   >
                     Aceptar
                   </button>

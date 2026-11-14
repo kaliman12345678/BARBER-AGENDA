@@ -1681,6 +1681,30 @@ app.get('/api/superadmin/barberos-globales', requireSuperAdmin, async (req, res)
   }
 });
 
+// Logs de auditoría global para SuperAdmin (incluye todos los tenants)
+app.get('/api/superadmin/auditoria-global', requireSuperAdmin, async (req, res) => {
+  try {
+    const { tipo, limite = 100 } = req.query;
+    let sql = `
+      SELECT a.*, b.nombre as barberia_nombre, b.slug as barberia_slug
+      FROM auditoria a
+      LEFT JOIN barberias b ON a.barberia_id = b.id
+    `;
+    const params = [];
+    if (tipo) {
+      sql += ' WHERE a.tipo_evento = ?';
+      params.push(tipo);
+    }
+    sql += ' ORDER BY a.fecha_hora DESC LIMIT ?';
+    params.push(Number(limite));
+
+    const rows = await db.prepare(sql).all(...params);
+    res.json(rows || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------
 // 3. BARBEROS (EQUIPO)
 // ----------------------------------------------------
@@ -1853,7 +1877,15 @@ app.patch('/api/barberos/:id', requireAdminOrSuper, async (req, res) => {
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
     if (porcentaje_comision !== undefined) {
+      const viejoPct = barbero.porcentaje_comision;
       await db.prepare('UPDATE barberos SET porcentaje_comision = ? WHERE id = ? AND barberia_id = ?').run(Number(porcentaje_comision), id, tenantId);
+      await registrarAuditoria(
+        tenantId,
+        'cambio_comision_barbero',
+        `Porcentaje de comisión de ${barbero.nombre} modificado de ${viejoPct}% a ${porcentaje_comision}%`,
+        req.user?.nombre || 'Administración',
+        { barbero_id: id, barbero_nombre: barbero.nombre, porcentaje_anterior: viejoPct, porcentaje_nuevo: Number(porcentaje_comision) }
+      );
     }
     if (activo !== undefined) {
       await db.prepare('UPDATE barberos SET activo = ? WHERE id = ? AND barberia_id = ?').run(activo ? 1 : 0, id, tenantId);
@@ -2089,16 +2121,25 @@ app.get('/api/barbero-portal/balance', requireAnyOperator, async (req, res) => {
     const saldoPendienteProductos = pendientesLiquidarVentas.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
     const saldoPendienteCobrar = saldoPendienteServicios + saldoPendienteProductos;
 
+    const totalLiquidadoPagado = liquidaciones.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
+    const gananciaTotal = comisionServiciosEstimada + comisionProductos;
+
     res.json({
       barbero,
       total_citas_completadas: citasCompletadas.length,
+      total_servicios: citasCompletadas.length,
       total_bruto_servicios: totalBrutoServicios,
       porcentaje_comision: pct,
       comision_servicios_estimada: comisionServiciosEstimada,
       total_ventas_productos: ventasProductos.length,
       comision_productos: comisionProductos,
-      ganancia_total_estimada: comisionServiciosEstimada + comisionProductos,
+      // Propiedades unificadas y homologadas para BarberoPortal
+      ganancia_total_estimada: gananciaTotal,
+      ganancia_total_barbero: gananciaTotal,
+      total_ya_cobrado: totalLiquidadoPagado,
       saldo_pendiente_cobrar: saldoPendienteCobrar,
+      pendiente_por_cobrar: saldoPendienteCobrar,
+      servicios_pendientes_count: pendientesLiquidarCitas.length,
       citas_recientes: citasCompletadas.slice(0, 15),
       ventas_recientes: ventasProductos.slice(0, 15),
       ultimas_liquidaciones: liquidaciones
@@ -3382,6 +3423,16 @@ app.post('/api/costos', requireAdminOrSuper, async (req, res) => {
       barbero_id ? Number(barbero_id) : null,
       notas || ''
     );
+
+    // Auditoría de movimiento de caja
+    await registrarAuditoria(
+      tenantId,
+      'gasto_registrado',
+      `Movimiento (${tipo || 'egreso'}): $${Number(monto_cop).toLocaleString('es-CO')} en "${categoria}" - ${descripcion}`,
+      req.user?.nombre || 'Administración',
+      { tipo: tipo || 'egreso', categoria, monto_cop: Number(monto_cop), metodo_pago: metodo_pago || 'Efectivo', fecha }
+    );
+
     res.status(201).json({ id: result.lastInsertRowid, message: 'Movimiento registrado correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3392,7 +3443,19 @@ app.delete('/api/costos/:id', requireAdminOrSuper, async (req, res) => {
   const { id } = req.params;
   const tenantId = await getTenantId(req);
   try {
+    const costo = await db.prepare('SELECT * FROM costos WHERE id = ? AND barberia_id = ?').get(id, tenantId);
     await db.prepare('DELETE FROM costos WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+
+    if (costo) {
+      await registrarAuditoria(
+        tenantId,
+        'gasto_eliminado',
+        `Eliminado registro de costo #${id}: $${Number(costo.monto_cop).toLocaleString('es-CO')} (${costo.descripcion})`,
+        req.user?.nombre || 'Administración',
+        { costo_id: id, monto: costo.monto_cop, categoria: costo.categoria }
+      );
+    }
+
     res.json({ success: true, message: 'Registro eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3485,6 +3548,81 @@ app.get('/api/ventas-productos', requireAdminOrSuper, async (req, res) => {
   }
 });
 
+app.post('/api/ventas-productos', requireAdminOrSuper, async (req, res) => {
+  const { producto_id, barbero_id, cantidad, metodo_pago, notas, porcentaje_comision } = req.body;
+  const tenantId = await getTenantId(req);
+
+  if (!producto_id || !cantidad || Number(cantidad) <= 0) {
+    return res.status(400).json({ error: 'producto_id y cantidad válida son requeridos' });
+  }
+
+  try {
+    const prod = await db.prepare('SELECT * FROM productos WHERE id = ? AND barberia_id = ?').get(producto_id, tenantId);
+    if (!prod) return res.status(404).json({ error: 'Producto no encontrado' });
+
+    const cant = Number(cantidad);
+    const precioUnitario = Number(prod.precio_venta_cop);
+    const costoUnitario = Number(prod.costo_compra_cop || 0);
+    const totalVenta = precioUnitario * cant;
+
+    let barbero = null;
+    let pctComision = 0;
+    if (barbero_id) {
+      barbero = await db.prepare('SELECT id, nombre, porcentaje_comision FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+      pctComision = porcentaje_comision !== undefined && porcentaje_comision !== '' ? Number(porcentaje_comision) : 10.0; // 10% por defecto en ventas
+    }
+
+    const montoComision = Math.round(totalVenta * (pctComision / 100));
+    const gananciaNeta = totalVenta - (costoUnitario * cant) - montoComision;
+    const hoy = new Date().toISOString().split('T')[0];
+
+    const stmt = db.prepare(`
+      INSERT INTO ventas_productos (
+        barberia_id, producto_id, cantidad, precio_unitario, costo_unitario,
+        total_venta, porcentaje_comision, monto_comision, ganancia_neta,
+        barbero_id, metodo_pago, fecha, notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = await stmt.run(
+      tenantId,
+      producto_id,
+      cant,
+      precioUnitario,
+      costoUnitario,
+      totalVenta,
+      pctComision,
+      montoComision,
+      gananciaNeta,
+      barbero_id || null,
+      metodo_pago || 'Efectivo',
+      hoy,
+      notas || null
+    );
+
+    // Descontar inventario
+    await db.prepare('UPDATE productos SET stock_actual = MAX(0, stock_actual - ?) WHERE id = ? AND barberia_id = ?').run(cant, producto_id, tenantId);
+
+    // Auditoría
+    await registrarAuditoria(
+      tenantId,
+      'venta_producto',
+      `Venta de ${cant}x ${prod.nombre} por $${totalVenta.toLocaleString('es-CO')}${barbero ? ` (Comisión: $${montoComision.toLocaleString('es-CO')} a ${barbero.nombre})` : ''}`,
+      req.user?.nombre || 'Administración',
+      { producto_id, producto_nombre: prod.nombre, cantidad: cant, total_venta: totalVenta, barbero_id }
+    );
+
+    res.status(201).json({
+      success: true,
+      id: result.lastInsertRowid || result.id,
+      total_venta: totalVenta,
+      monto_comision: montoComision
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ----------------------------------------------------
 // 10. LIQUIDACIONES
 // ----------------------------------------------------
@@ -3571,9 +3709,248 @@ app.get('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
       sql += ' AND l.barbero_id = ?';
       params.push(barbero_id);
     }
+    if (desde && hasta) {
+      sql += ' AND l.fecha_pago BETWEEN ? AND ?';
+      params.push(desde, hasta);
+    }
     sql += ' ORDER BY l.id DESC';
     const liquidaciones = await db.prepare(sql).all(...params);
     res.json(liquidaciones);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Guardar Liquidación oficial a colaborador
+app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
+  const {
+    barbero_id,
+    fecha_inicio,
+    fecha_fin,
+    porcentaje_aplicado,
+    deducciones,
+    metodo_pago,
+    notas,
+    citas_ids = [],
+    ventas_ids = []
+  } = req.body;
+  const tenantId = await getTenantId(req);
+
+  if (!barbero_id || !fecha_inicio || !fecha_fin) {
+    return res.status(400).json({ error: 'barbero_id, fecha_inicio y fecha_fin son obligatorios' });
+  }
+
+  try {
+    const barbero = await db.prepare('SELECT id, nombre, telefono, porcentaje_comision FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+    if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
+
+    // 1. Obtener citas seleccionadas pertenecientes a este tenant y barbero que no estén liquidadas
+    let citas = [];
+    if (Array.isArray(citas_ids) && citas_ids.length > 0) {
+      const placeholders = citas_ids.map(() => '?').join(',');
+      citas = await db.prepare(`
+        SELECT id, precio_cobrado, fecha, hora_inicio, servicio_id 
+        FROM citas 
+        WHERE id IN (${placeholders}) 
+          AND barbero_id = ? 
+          AND barberia_id = ? 
+          AND estado = 'completada' 
+          AND liquidacion_id IS NULL
+      `).all(...citas_ids, barbero_id, tenantId);
+    }
+
+    // 2. Obtener ventas de productos seleccionadas
+    let ventas = [];
+    if (Array.isArray(ventas_ids) && ventas_ids.length > 0) {
+      const placeholdersVentas = ventas_ids.map(() => '?').join(',');
+      ventas = await db.prepare(`
+        SELECT id, total_venta, monto_comision 
+        FROM ventas_productos 
+        WHERE id IN (${placeholdersVentas}) 
+          AND barbero_id = ? 
+          AND barberia_id = ? 
+          AND liquidacion_id IS NULL
+      `).all(...ventas_ids, barbero_id, tenantId);
+    }
+
+    const totalServicios = citas.length;
+    const totalBrutoServicios = citas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+    const totalVentaProductos = ventas.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
+    const totalBruto = totalBrutoServicios + totalVentaProductos;
+
+    const pct = Number(porcentaje_aplicado || barbero.porcentaje_comision || 50);
+    const montoComisionServicios = Math.round(totalBrutoServicios * (pct / 100));
+    const montoComisionProductos = ventas.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
+    const montoComisionTotal = montoComisionServicios + montoComisionProductos;
+    const totalDeducciones = Number(deducciones || 0);
+    const totalPagado = Math.max(0, montoComisionTotal - totalDeducciones);
+
+    // 3. Insertar liquidación en tabla liquidaciones
+    const stmt = db.prepare(`
+      INSERT INTO liquidaciones (
+        barberia_id, barbero_id, fecha_inicio, fecha_fin, total_servicios,
+        total_bruto, porcentaje_aplicado, monto_comision, deducciones,
+        total_pagado, metodo_pago, notas, fecha_pago
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `);
+
+    const result = await stmt.run(
+      tenantId,
+      barbero_id,
+      fecha_inicio,
+      fecha_fin,
+      totalServicios,
+      totalBruto,
+      pct,
+      montoComisionTotal,
+      totalDeducciones,
+      totalPagado,
+      metodo_pago || 'Efectivo',
+      notas || null
+    );
+
+    const liquidacionId = result.lastInsertRowid || result.id || (await db.prepare('SELECT MAX(id) as id FROM liquidaciones WHERE barberia_id = ?').get(tenantId))?.id;
+
+    // 4. Vincular citas y ventas con el ID de la liquidación generada
+    if (citas.length > 0 && liquidacionId) {
+      const citasPlaceholders = citas.map(() => '?').join(',');
+      await db.prepare(`
+        UPDATE citas 
+        SET liquidacion_id = ? 
+        WHERE id IN (${citasPlaceholders}) AND barberia_id = ?
+      `).run(liquidacionId, ...citas.map(c => c.id), tenantId);
+    }
+
+    if (ventas.length > 0 && liquidacionId) {
+      const ventasPlaceholders = ventas.map(() => '?').join(',');
+      await db.prepare(`
+        UPDATE ventas_productos 
+        SET liquidacion_id = ? 
+        WHERE id IN (${ventasPlaceholders}) AND barberia_id = ?
+      `).run(liquidacionId, ...ventas.map(v => v.id), tenantId);
+    }
+
+    // 5. REGISTRO ESTRICTO EN TABLA DE AUDITORÍA
+    await registrarAuditoria(
+      tenantId,
+      'liquidacion_creada',
+      `Liquidación #${liquidacionId} pagada a ${barbero.nombre} por valor neto de $${totalPagado.toLocaleString('es-CO')} (${metodo_pago || 'Efectivo'})`,
+      req.user?.nombre || 'Administración',
+      {
+        liquidacion_id: liquidacionId,
+        barbero_id: barbero.id,
+        barbero_nombre: barbero.nombre,
+        periodo: `${fecha_inicio} a ${fecha_fin}`,
+        total_servicios: totalServicios,
+        total_bruto: totalBruto,
+        comision_pagada: montoComisionTotal,
+        deducciones: totalDeducciones,
+        total_pagado: totalPagado,
+        metodo_pago: metodo_pago || 'Efectivo'
+      }
+    );
+
+    res.status(201).json({
+      success: true,
+      id: liquidacionId,
+      message: 'Liquidación registrada con éxito',
+      total_pagado: totalPagado
+    });
+
+  } catch (error) {
+    console.error('Error procesando liquidacion:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Detalle completo de una liquidación histórica (para WhatsApp / Impresión de tirilla)
+app.get('/api/liquidaciones/:id', requireAdminOrSuper, async (req, res) => {
+  const { id } = req.params;
+  const tenantId = await getTenantId(req);
+
+  try {
+    const liquidacion = await db.prepare(`
+      SELECT l.*, b.nombre as barbero_nombre, b.foto_url as barbero_foto, b.telefono as barbero_telefono
+      FROM liquidaciones l
+      JOIN barberos b ON l.barbero_id = b.id
+      WHERE l.id = ? AND l.barberia_id = ?
+    `).get(id, tenantId);
+
+    if (!liquidacion) return res.status(404).json({ error: 'Liquidación no encontrada' });
+
+    const citas = await db.prepare(`
+      SELECT c.*, s.nombre as servicio_nombre
+      FROM citas c
+      JOIN servicios s ON c.servicio_id = s.id
+      WHERE c.liquidacion_id = ? AND c.barberia_id = ?
+      ORDER BY c.fecha ASC, c.hora_inicio ASC
+    `).all(id, tenantId);
+
+    const ventas = await db.prepare(`
+      SELECT v.*, p.nombre as producto_nombre
+      FROM ventas_productos v
+      JOIN productos p ON v.producto_id = p.id
+      WHERE v.liquidacion_id = ? AND v.barberia_id = ?
+      ORDER BY v.fecha ASC
+    `).all(id, tenantId);
+
+    res.json({
+      ...liquidacion,
+      barbero: {
+        id: liquidacion.barbero_id,
+        nombre: liquidacion.barbero_nombre,
+        foto_url: liquidacion.barbero_foto,
+        telefono: liquidacion.barbero_telefono
+      },
+      citas,
+      ventas_productos: ventas
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Anulación de liquidación con reversión de citas y auditoría protegida
+app.delete('/api/liquidaciones/:id', requireAdminOrSuper, async (req, res) => {
+  const { id } = req.params;
+  const tenant = await getTenant(req);
+  const tenantId = tenant ? tenant.id : 1;
+  const { password_admin } = req.body || {};
+
+  // Validar contraseña de autorización
+  const superConfig = await getSuperAdminConfig();
+  const inputPass = String(password_admin || req.headers['x-admin-password'] || req.headers['x-superadmin-password'] || '').trim();
+  const pinDueno = String(tenant?.pin_admin || '').trim();
+  const pinSuper = String(superConfig.pin || DEFAULT_SUPERADMIN_PASS).trim();
+
+  const isAuthorizedPass = (inputPass && (inputPass === pinDueno || inputPass === pinSuper || inputPass === DEFAULT_SUPERADMIN_PASS));
+  if (!isAuthorizedPass) {
+    return res.status(403).json({
+      error: 'Contraseña incorrecta. Debes ingresar tu contraseña de Dueño para anular esta liquidación.'
+    });
+  }
+
+  try {
+    const liquidacion = await db.prepare('SELECT * FROM liquidaciones WHERE id = ? AND barberia_id = ?').get(id, tenantId);
+    if (!liquidacion) return res.status(404).json({ error: 'Liquidación no encontrada' });
+
+    // Revertir citas y ventas vinculadas para que vuelvan a quedar pendientes
+    await db.prepare('UPDATE citas SET liquidacion_id = NULL WHERE liquidacion_id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('UPDATE ventas_productos SET liquidacion_id = NULL WHERE liquidacion_id = ? AND barberia_id = ?').run(id, tenantId);
+
+    // Eliminar liquidación
+    await db.prepare('DELETE FROM liquidaciones WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+
+    // Auditoría estricta de anulación
+    await registrarAuditoria(
+      tenantId,
+      'liquidacion_anulada',
+      `Liquidación #${id} anulada por valor de $${Number(liquidacion.total_pagado).toLocaleString('es-CO')}. Servicios liberados.`,
+      req.user?.nombre || 'Administración',
+      { liquidacion_id: id, barbero_id: liquidacion.barbero_id, total_revertido: liquidacion.total_pagado }
+    );
+
+    res.json({ success: true, message: 'Liquidación anulada y turnos liberados para recalcular' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3607,6 +3984,16 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
 
     const totalIngresosCitas = citasCompletadas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
 
+    // Ventas de productos en el periodo
+    const ventasProductos = await db.prepare(`
+      SELECT v.*, p.nombre as producto_nombre
+      FROM ventas_productos v
+      JOIN productos p ON v.producto_id = p.id
+      WHERE v.barberia_id = ? AND v.fecha BETWEEN ? AND ?
+    `).all(tenantId, fDesde, fHasta);
+    const totalIngresosProductos = ventasProductos.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
+    const totalIngresosBrutos = totalIngresosCitas + totalIngresosProductos;
+
     const movimientosCostos = await db.prepare(`
       SELECT c.*, b.nombre as barbero_nombre
       FROM costos c
@@ -3617,13 +4004,29 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
     const egresosCostos = movimientosCostos.filter(m => !m.tipo || m.tipo === 'egreso');
     const totalEgresos = egresosCostos.reduce((sum, e) => sum + Number(e.monto_cop || 0), 0);
 
+    // Liquidaciones pagadas a colaboradores en el periodo
+    const liquidacionesPeriodo = await db.prepare(`
+      SELECT l.*, b.nombre as barbero_nombre
+      FROM liquidaciones l
+      JOIN barberos b ON l.barbero_id = b.id
+      WHERE l.barberia_id = ? AND l.fecha_pago BETWEEN ? AND ?
+      ORDER BY l.fecha_pago DESC
+    `).all(tenantId, fDesde, fHasta);
+    const totalLiquidacionesPagadas = liquidacionesPeriodo.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
+
     const barberos = await db.prepare('SELECT id, nombre, porcentaje_comision, foto_url FROM barberos WHERE barberia_id = ?').all(tenantId);
     const balanceBarberos = barberos.map(b => {
       const citasDelBarbero = citasCompletadas.filter(c => c.barbero_id === b.id);
       const facturadoServicios = citasDelBarbero.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+      const ventasDelBarbero = ventasProductos.filter(v => v.barbero_id === b.id);
+      const facturadoProductos = ventasDelBarbero.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
+      const comisionProductos = ventasDelBarbero.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
+
       const pct = Number(b.porcentaje_comision || 50);
       const comisionServicios = Math.round(facturadoServicios * (pct / 100));
-      const utilidadParaNegocio = facturadoServicios - comisionServicios;
+      const comisionTotalEstimada = comisionServicios + comisionProductos;
+      const totalFacturadoTotal = facturadoServicios + facturadoProductos;
+      const utilidadParaNegocio = totalFacturadoTotal - comisionTotalEstimada;
 
       return {
         barbero_id: b.id,
@@ -3632,30 +4035,31 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
         porcentaje: pct,
         total_citas: citasDelBarbero.length,
         total_servicios_cop: facturadoServicios,
-        total_facturado_cop: facturadoServicios,
-        comision_estimada_cop: comisionServicios,
+        total_productos_cop: facturadoProductos,
+        total_facturado_cop: totalFacturadoTotal,
+        comision_estimada_cop: comisionTotalEstimada,
         utilidad_neta_negocio_cop: utilidadParaNegocio
       };
     });
 
-    const utilidadNetaOperativa = totalIngresosCitas - totalEgresos;
+    const utilidadNetaOperativa = totalIngresosBrutos - totalEgresos - totalLiquidacionesPagadas;
 
     res.json({
       periodo: { desde: fDesde, hasta: fHasta },
       metricas_globales: {
-        total_ingresos_brutos: totalIngresosCitas,
+        total_ingresos_brutos: totalIngresosBrutos,
         total_ingresos_servicios: totalIngresosCitas,
-        total_ingresos_productos: 0,
+        total_ingresos_productos: totalIngresosProductos,
         total_egresos: totalEgresos,
+        total_liquidaciones_pagadas: totalLiquidacionesPagadas,
         utilidad_neta: utilidadNetaOperativa,
         total_citas_completadas: citasCompletadas.length,
-        total_liquidaciones_pagadas: 0,
-        margen_rentabilidad_pct: totalIngresosCitas > 0 ? Math.round((utilidadNetaOperativa / totalIngresosCitas) * 100) : 0
+        margen_rentabilidad_pct: totalIngresosBrutos > 0 ? Math.round((utilidadNetaOperativa / totalIngresosBrutos) * 100) : 0
       },
       egresos_por_categoria: {},
       balance_barberos: balanceBarberos,
       citas_recientes: citasCompletadas.slice(0, 30),
-      ultimas_liquidaciones: []
+      ultimas_liquidaciones: liquidacionesPeriodo.slice(0, 10)
     });
 
   } catch (error) {
