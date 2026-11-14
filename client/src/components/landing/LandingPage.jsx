@@ -36,7 +36,10 @@ import {
   Sparkle,
   Layers,
   Smile,
-  Shield
+  Shield,
+  Play,
+  Pause,
+  Volume2
 } from 'lucide-react';
 
 export default function LandingPage({
@@ -52,6 +55,32 @@ export default function LandingPage({
   const [armaActiva, setArmaActiva] = useState(0); // 0 a 5 para el showcase interactivo
   const [sellosSimulados, setSellosSimulados] = useState(5);
   const [faqAbierta, setFaqAbierta] = useState(null);
+  const [reproduciendoAudio, setReproduciendoAudio] = useState(false);
+  const [audioElement, setAudioElement] = useState(null);
+
+  useEffect(() => {
+    const audio = new Audio('/audio/exakta_presentacion.wav');
+    audio.onended = () => setReproduciendoAudio(false);
+    audio.onerror = () => setReproduciendoAudio(false);
+    setAudioElement(audio);
+    return () => {
+      audio.pause();
+    };
+  }, []);
+
+  function toggleAudio() {
+    if (!audioElement) return;
+    if (reproduciendoAudio) {
+      audioElement.pause();
+      setReproduciendoAudio(false);
+    } else {
+      audioElement.play().then(() => {
+        setReproduciendoAudio(true);
+      }).catch(e => {
+        console.error('Audio play error:', e);
+      });
+    }
+  }
 
   useEffect(() => {
     if (configCMS) {
@@ -509,6 +538,58 @@ export default function LandingPage({
             <Store className="w-5 h-5 text-amber-400" />
             <span>Ver Demostración</span>
           </button>
+        </div>
+
+        {/* Reproductor de Audio Explicativo con IA (Gemini Voice) */}
+        <div className="max-w-xl mx-auto mb-10 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-amber-950/30 border border-amber-500/30 shadow-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleAudio}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                reproduciendoAudio
+                  ? 'bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/30 scale-105'
+                  : 'bg-slate-800 text-amber-400 hover:bg-slate-700 border border-slate-700'
+              }`}
+              title={reproduciendoAudio ? 'Pausar audio' : 'Escuchar explicación'}
+            >
+              {reproduciendoAudio ? (
+                <Pause className="w-5 h-5 fill-current" />
+              ) : (
+                <Play className="w-5 h-5 fill-current ml-0.5" />
+              )}
+            </button>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-white">Audio Explicativo con IA (30 seg)</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                  Google Gemini Voice
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {reproduciendoAudio
+                  ? '🔊 Reproduciendo voz oficial de EXAKTA...'
+                  : 'Toca el botón para escuchar cómo EXAKTA llena tus citas'}
+              </p>
+            </div>
+          </div>
+
+          {/* Animación de ondas de sonido */}
+          <div className="flex items-center gap-1 pr-2">
+            {[1, 2, 3, 4, 5].map((bar) => (
+              <span
+                key={bar}
+                className={`w-1 rounded-full transition-all ${
+                  reproduciendoAudio
+                    ? 'bg-amber-400 animate-pulse'
+                    : 'bg-slate-700'
+                }`}
+                style={{
+                  height: reproduciendoAudio ? `${10 + (bar * 5) % 18}px` : '8px',
+                  animationDelay: `${bar * 0.15}s`
+                }}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Barra de 4 Métricas de Confianza */}
