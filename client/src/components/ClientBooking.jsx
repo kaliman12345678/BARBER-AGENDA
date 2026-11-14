@@ -4,7 +4,8 @@ import {
   Scissors, 
   Calendar as CalendarIcon, 
   Clock, 
-  CheckCircle, 
+  CheckCircle,
+  Check, 
   ChevronRight, 
   ChevronLeft, 
   AlertCircle, 
@@ -791,17 +792,22 @@ export default function ClientBooking({ shopConfig }) {
                       key={idx}
                       type="button"
                       onClick={() => setSlotSeleccionado(s)}
-                      className={`py-2.5 px-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center ${
+                      className={`py-3 px-2 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                         isSelected
-                          ? 'font-bold shadow-md scale-105'
+                          ? 'font-black shadow-xl ring-4 ring-offset-2 ring-blue-500 scale-[1.04] z-10'
                           : t.slotAvailable
                       }`}
                       style={isSelected ? { backgroundColor: colorPrimario, borderColor: colorPrimario, color: '#ffffff' } : {}}
                     >
-                      <span className="text-sm font-bold">
+                      {isSelected && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white rounded-full p-0.5 shadow-md border-2 border-white flex items-center justify-center animate-bounce">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      )}
+                      <span className="text-sm font-extrabold tracking-tight">
                         {formatTime12(s.hora_inicio)}
                       </span>
-                      <span className="text-[10px] opacity-75 mt-0.5">
+                      <span className="text-[10px] opacity-80 mt-0.5 font-medium">
                         hasta {formatTime12(s.hora_fin)}
                       </span>
                     </button>
@@ -811,15 +817,41 @@ export default function ClientBooking({ shopConfig }) {
             )}
           </div>
 
+          {/* Banner de Confirmación Inmediata de Selección */}
+          {slotSeleccionado && (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-between gap-3 text-xs animate-fadeIn">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold shrink-0 shadow-sm">
+                  <Check className="w-4 h-4 stroke-[3]" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-wider block">
+                    ✓ Horario Seleccionado:
+                  </span>
+                  <span className="text-sm font-black text-slate-900 dark:text-white">
+                    {formatTime12(slotSeleccionado.hora_inicio)} - {formatTime12(slotSeleccionado.hora_fin)}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hidden sm:inline">
+                Barbero: {barberoSeleccionado?.nombre}
+              </span>
+            </div>
+          )}
+
           {/* Botón para continuar */}
           <div className="flex justify-end pt-2">
             <button
               disabled={!slotSeleccionado}
               onClick={() => setPaso(4)}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
               style={{ backgroundColor: colorPrimario }}
             >
-              <span>Continuar con mis datos</span>
+              <span>
+                {slotSeleccionado 
+                  ? `Continuar con mis datos (${formatTime12(slotSeleccionado.hora_inicio)})`
+                  : 'Selecciona una hora para continuar'}
+              </span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

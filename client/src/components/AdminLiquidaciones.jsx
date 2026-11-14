@@ -117,6 +117,9 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
       const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
       setFechaInicio(primerDia);
       setFechaFin(ultimoDia);
+    } else if (tipo === 'todas') {
+      setFechaInicio('2020-01-01');
+      setFechaFin('2099-12-31');
     }
   }
 
@@ -132,8 +135,13 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
     setResultadoPreview(null);
     setComprobanteGenerado(null);
 
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
+
     try {
-      const res = await fetch(`/api/liquidaciones/preview?barbero_id=${barberoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&porcentaje=${porcentaje}`);
+      const esTodas = (fechaInicio === '2020-01-01' && fechaFin === '2099-12-31') ? '&todas=1' : '';
+      const res = await fetch(`/api/liquidaciones/preview?barbero_id=${barberoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&porcentaje=${porcentaje}&b=${encodeURIComponent(slug)}${esTodas}`, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -170,10 +178,14 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
     if (citasIds.length === 0 && ventasIds.length === 0) return;
 
     setGuardando(true);
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch('/api/liquidaciones', {
+      const res = await fetch(`/api/liquidaciones?b=${encodeURIComponent(slug)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug
+        },
         body: JSON.stringify({
           barbero_id: barberoId,
           fecha_inicio: fechaInicio,
@@ -225,8 +237,11 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
   // Cargar historial
   async function cargarHistorial() {
     setCargandoHistorial(true);
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch('/api/liquidaciones');
+      const res = await fetch(`/api/liquidaciones?b=${encodeURIComponent(slug)}`, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
       setHistorial(data);
     } catch (err) {
@@ -238,8 +253,11 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
   // Ver detalle histórico
   async function verDetalleHistorial(id) {
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch(`/api/liquidaciones/${id}`);
+      const res = await fetch(`/api/liquidaciones/${id}?b=${encodeURIComponent(slug)}`, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
       setDetalleHistorial(data);
     } catch (err) {
@@ -424,6 +442,14 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
                 >
                   Este Mes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => aplicarRango('todas')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all shadow-xs"
+                  title="Cargar todas las citas completadas pendientes de liquidar sin importar la fecha"
+                >
+                  ⚡ Citas sin Liquidar
                 </button>
               </div>
 

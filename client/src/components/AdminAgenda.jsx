@@ -1314,6 +1314,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
           }}
           barberos={barberos}
           citaRelacionada={citaFichaSeleccionada}
+          shopConfig={shopConfig}
           onClose={() => setCitaFichaSeleccionada(null)}
         />
       )}

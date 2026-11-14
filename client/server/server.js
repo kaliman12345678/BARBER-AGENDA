@@ -3254,7 +3254,7 @@ app.post('/api/tarjeta-vip/sellar', requireAnyOperator, async (req, res) => {
   }
 
   const rawPhone = String(cliente_telefono).replace(/[^0-9]/g, '');
-  const cant = Math.max(1, Number(cantidad) || 1);
+  const cant = Number(cantidad) || 1;
 
   try {
     let cliente = await db.prepare(`
@@ -3270,7 +3270,7 @@ app.post('/api/tarjeta-vip/sellar', requireAnyOperator, async (req, res) => {
       `).get(tenantId, (cliente_nombre || 'Cliente VIP').trim(), rawPhone, `VIP-${tenantId}-${rawPhone}`);
     }
 
-    const nuevosSellos = Number(cliente.sellos_acumulados || 0) + cant;
+    const nuevosSellos = Math.max(0, Number(cliente.sellos_acumulados || 0) + cant);
     const meta = Number(cliente.sellos_meta || 10);
 
     let nivel = 'Bronce VIP';
@@ -3289,14 +3289,17 @@ app.post('/api/tarjeta-vip/sellar', requireAnyOperator, async (req, res) => {
       RETURNING *
     `).get(nuevosSellos, nivel, cliente_nombre ? cliente_nombre.trim() : null, `VIP-${tenantId}-${rawPhone}`, cliente.id, tenantId);
 
+    const tipoMov = cant >= 0 ? 'sello' : 'ajuste';
+    const notaMov = notas || (cant >= 0 ? `+${cant} sello(s) de corte registrado(s)` : `${Math.abs(cant)} sello(s) retirado(s) por corrección`);
+
     await db.prepare(`
       INSERT INTO movimientos_tarjeta_vip (barberia_id, cliente_id, tipo, cantidad, barbero_nombre, notas)
-      VALUES (?, ?, 'sello', ?, ?, ?)
-    `).run(tenantId, cliente.id, cant, barbero_nombre || 'Barbero', notas || `+${cant} sello(s) de corte registrado(s)`);
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(tenantId, cliente.id, tipoMov, Math.abs(cant), barbero_nombre || 'Barbero', notaMov);
 
     res.json({
       success: true,
-      message: `¡${cant} sello(s) añadido(s) con éxito!`,
+      message: cant >= 0 ? `¡+${cant} sello añadido con éxito!` : `¡${Math.abs(cant)} sello retirado por corrección!`,
       cliente: {
         id: clienteActualizado.id,
         nombre: clienteActualizado.cliente_nombre,
@@ -3311,8 +3314,8 @@ app.post('/api/tarjeta-vip/sellar', requireAnyOperator, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error al sellar tarjeta VIP:', err);
-    res.status(500).json({ error: 'Error al sellar tarjeta VIP' });
+    console.error('Error al sellar/descontar tarjeta VIP:', err);
+    res.status(500).json({ error: 'Error al actualizar sellos de la tarjeta VIP' });
   }
 });
 

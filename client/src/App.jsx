@@ -349,7 +349,7 @@ export default function App() {
   const estaSuspendida = shopConfig.activo === 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col max-w-full overflow-x-hidden selection:bg-blue-600 selection:text-white">
       
       {/* Barra de Auditoría y Navegación Rápida para SuperAdmin */}
       {isSuperAdminLoggedIn && activeView !== 'superadmin' && (

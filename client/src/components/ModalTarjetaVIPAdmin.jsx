@@ -4,6 +4,7 @@ import {
   Crown,
   Award,
   Plus,
+  Minus,
   CheckCircle2,
   Gift,
   Share2,
@@ -84,20 +85,22 @@ export default function ModalTarjetaVIPAdmin({
           cliente_nombre: nombreCliente,
           cantidad,
           barbero_nombre: barbero?.nombre || 'Administrador',
-          notas: `Corte registrado por ${barbero?.nombre || 'Admin'}`
+          notas: cantidad >= 0 
+            ? `Corte registrado por ${barbero?.nombre || 'Admin'}` 
+            : `Corrección de sellos (-${Math.abs(cantidad)}) por ${barbero?.nombre || 'Admin'}`
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setMensajeExito(data.message || `¡+${cantidad} corte sellado con éxito!`);
+        setMensajeExito(data.message || (cantidad >= 0 ? `¡+${cantidad} corte sellado con éxito!` : '¡Sello retirado por corrección!'));
         cargarDatosTarjeta();
         if (onSuccess) onSuccess(data.cliente);
       } else {
-        setError(data.error || 'Error al sellar corte');
+        setError(data.error || 'Error al actualizar sellos');
       }
     } catch (err) {
-      setError('Error de conexión al sellar corte');
+      setError('Error de conexión al actualizar sellos');
     } finally {
       setProcesando(false);
     }
@@ -281,22 +284,40 @@ export default function ModalTarjetaVIPAdmin({
             </div>
 
             {/* BOTONES DE ACCIÓN PARA EL ADMINISTRADOR / BARBERO */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                disabled={procesando}
-                onClick={() => handleSellarCorte(1)}
-                className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+1 Sello (Corte Realizado)</span>
-              </button>
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={procesando}
+                  onClick={() => handleSellarCorte(1)}
+                  className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-50"
+                  title="Sumar 1 sello por corte realizado"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+1 Sello (Corte)</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={procesando || sellos <= 0}
+                  onClick={() => handleSellarCorte(-1)}
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                    sellos > 0
+                      ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 shadow-xs active:scale-98'
+                      : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                  }`}
+                  title="Descontar 1 sello si se marcó por error"
+                >
+                  <Minus className="w-4 h-4" />
+                  <span>-1 Sello (Quitar)</span>
+                </button>
+              </div>
 
               <button
                 type="button"
                 disabled={procesando || !puedeCanjear}
                 onClick={handleCanjearPremio}
-                className={`py-2.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`w-full py-2.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   puedeCanjear
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 active:scale-98 text-slate-950 shadow-md shadow-amber-500/30'
                     : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
@@ -304,7 +325,7 @@ export default function ModalTarjetaVIPAdmin({
                 title={puedeCanjear ? 'Canjear premio ganado por el cliente' : 'Requiere completar los 10 cortes'}
               >
                 <Gift className="w-4 h-4" />
-                <span>{puedeCanjear ? '¡Canjear Premio VIP!' : `Faltan ${meta - sellos} sellos`}</span>
+                <span>{puedeCanjear ? '¡Canjear Premio VIP (Corte Gratis)!' : `Meta Recompensa: Faltan ${meta - sellos} sellos`}</span>
               </button>
             </div>
 

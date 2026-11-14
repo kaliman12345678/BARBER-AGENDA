@@ -46,7 +46,8 @@ export default function ModalFichaTecnica({
   barberos = [], 
   barberoActual = null, 
   onClose,
-  citaRelacionada = null
+  citaRelacionada = null,
+  shopConfig = null
 }) {
   const [tab, setTab] = useState('historial'); // 'historial' | 'nuevo'
   const [fichas, setFichas] = useState([]);
@@ -73,6 +74,7 @@ export default function ModalFichaTecnica({
   });
 
   const rawPhone = (cliente?.cliente_telefono || '').replace(/[^0-9]/g, '');
+  const activeSlug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
 
   useEffect(() => {
     cargarFichas();
@@ -85,7 +87,9 @@ export default function ModalFichaTecnica({
     }
     setCargando(true);
     try {
-      const res = await fetch(`/api/fichas-tecnicas?telefono=${rawPhone}`);
+      const res = await fetch(`/api/fichas-tecnicas?telefono=${encodeURIComponent(rawPhone)}&b=${encodeURIComponent(activeSlug)}`, {
+        headers: { 'x-barberia-slug': activeSlug }
+      });
       if (res.ok) {
         const data = await res.json();
         setFichas(Array.isArray(data) ? data : []);
@@ -135,9 +139,12 @@ export default function ModalFichaTecnica({
     setMensajeExito('');
 
     try {
-      const res = await fetch('/api/fichas-tecnicas', {
+      const res = await fetch(`/api/fichas-tecnicas?b=${encodeURIComponent(activeSlug)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-barberia-slug': activeSlug
+        },
         body: JSON.stringify({
           ...form,
           cliente_telefono: rawPhone,
@@ -166,7 +173,10 @@ export default function ModalFichaTecnica({
   async function handleEliminarFicha(id) {
     if (!window.confirm('¿Deseas eliminar este registro técnico del historial?')) return;
     try {
-      const res = await fetch(`/api/fichas-tecnicas/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/fichas-tecnicas/${id}?b=${encodeURIComponent(activeSlug)}`, { 
+        method: 'DELETE',
+        headers: { 'x-barberia-slug': activeSlug }
+      });
       if (res.ok) {
         setFichas(prev => prev.filter(f => f.id !== id));
       }

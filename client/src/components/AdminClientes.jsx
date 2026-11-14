@@ -535,6 +535,7 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
         <ModalFichaTecnica
           cliente={clienteFichaSeleccionado}
           barberos={barberos}
+          shopConfig={shopConfig}
           onClose={() => setClienteFichaSeleccionado(null)}
         />
       )}
