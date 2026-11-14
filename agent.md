@@ -409,3 +409,27 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 * **Archivo:** `client/src/components/ClientBooking.jsx`
 * **Campos de BBDD requeridos** para redes sociales: `instagram_url`, `facebook_url`, `sitio_web` en tabla `barberias`. Si no existen, los botones simplemente no se renderizan (renderizado condicional).
 * **Compilación:** ✅ Vite build exitoso. Commit `790412c` → push a `origin main`.
+
+---
+
+### [2026-11-14] — Corrección Integral de Fichas Técnicas, Selector de Horarios, Auditoría Contable y Overflow
+
+#### 1. Selector Visual de Horario en Cliente (`ClientBooking.jsx`)
+* **Mejora:** El turno escogido ahora muestra anillo activo `ring-4 ring-offset-2 ring-blue-500`, escala animada `scale-[1.04]`, insignia check circular flotante animada (`Check` en verde esmeralda) en la esquina superior del botón.
+* **Banner de Confirmación:** Se incorporó una tarjeta de confirmación arriba del botón de continuar: *"✓ Horario Seleccionado: [10:00 AM - 11:00 AM] con [Nombre del Barbero]"*, además de reflejar la hora en el texto del botón.
+
+#### 2. Migración DDL Supabase a BIGINT & Persistencia de Fichas Técnicas
+* **Causa Raíz:** Las columnas de `fichas_tecnicas` y `clientes` eran de tipo `INTEGER` (32 bits, máx. 2.147 millones). Al crear barberías con timestamp (`1794631242838`), PostgreSQL arrojaba `value "1794631242838" is out of range for type integer`, impidiendo guardar fichas técnicas.
+* **Solución:** Ejecutada migración DDL en Supabase PostgreSQL alterando a `BIGINT` en `fichas_tecnicas`, `clientes` y `movimientos_tarjeta_vip`.
+* **Buscador & Sanitización:** `GET /api/fichas-tecnicas` ahora limpia cualquier símbolo (`+`, espacios, guiones) y utiliza coincidencia en los últimos 10 dígitos y slug multi-tenant directo.
+
+#### 3. Auditoría y Exactitud Contable en Balance General y Liquidaciones
+* **Causa Raíz:** `AdminBalance.jsx` no recibía `shopConfig` en `AdminDashboard.jsx`. Además, el endpoint `/api/reportes/balance` retornaba objetos anidados mientras el componente leía campos planos (`total_ingresos`, `ganancia_neta`, `barberos_detalle`). Esto ocasionaba que `barberos_detalle` quedara como `[]` y mostrara *"No hay barberos registrados"*.
+* **Solución:** 
+  - `/api/reportes/balance` unificado para retornar tanto campos aplanados (`total_ingresos`, `ganancia_neta`, `barberos_detalle`, `total_servicios`, etc.) como estructuras anidadas para retrocompatibilidad.
+  - `AdminLiquidaciones.jsx` inicia por defecto con el primer día del mes actual (en lugar de solo hoy) y agrega el botón rápido *"⚡ Citas sin Liquidar"* para auditar inmediatamente cualquier cita completada sin liquidación.
+  - Inyección explícita del slug en todas las peticiones contables.
+
+#### 4. Corrección de Desbordamiento Horizontal en Móviles
+* **Causa:** Acumulación de botones en el Navbar y ausencia de contención en el viewport.
+* **Solución:** Agregado `overflow-x: hidden; max-width: 100vw;` en `html`, `body` y `#root`. En `Navbar.jsx`, los botones secundarios se adaptan en pantallas pequeñas para que el ancho nunca exceda el viewport móvil.
