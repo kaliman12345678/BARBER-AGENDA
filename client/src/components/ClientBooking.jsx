@@ -115,6 +115,7 @@ export default function ClientBooking({ shopConfig }) {
 
   // Formulario del cliente
   const [clienteNombre, setClienteNombre] = useState('');
+  const [prefijoPais, setPrefijoPais] = useState('+57');
   const [clienteTelefono, setClienteTelefono] = useState('');
   const [clienteNotas, setClienteNotas] = useState('');
 
@@ -197,10 +198,12 @@ export default function ClientBooking({ shopConfig }) {
       return;
     }
 
-    if (telLimpio.length !== 10) {
-      setErrorEnvio('El número de teléfono debe contener exactamente 10 dígitos numéricos (ej: 3001234567)');
+    if (telLimpio.length < 7 || telLimpio.length > 15) {
+      setErrorEnvio('Por favor ingresa un número de teléfono válido (entre 7 y 15 dígitos)');
       return;
     }
+
+    const telefonoCompleto = `${prefijoPais} ${telLimpio}`;
 
     setEnviando(true);
     setErrorEnvio('');
@@ -217,7 +220,7 @@ export default function ClientBooking({ shopConfig }) {
           barbero_id: barberoSeleccionado.id,
           servicio_id: servicioSeleccionado.id,
           cliente_nombre: clienteNombre.trim(),
-          cliente_telefono: telLimpio,
+          cliente_telefono: telefonoCompleto,
           fecha: fechaSeleccionada,
           hora_inicio: slotSeleccionado.hora_inicio,
           notas: clienteNotas.trim(),
@@ -244,7 +247,7 @@ export default function ClientBooking({ shopConfig }) {
         hora_inicio: slotSeleccionado.hora_inicio,
         hora_fin: slotSeleccionado.hora_fin,
         clienteNombre: clienteNombre.trim(),
-        clienteTelefono: clienteTelefono.trim(),
+        clienteTelefono: telefonoCompleto,
         precio: servicioSeleccionado.precio_cop
       });
 
@@ -901,28 +904,56 @@ export default function ClientBooking({ shopConfig }) {
 
             <div>
               <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${t.subtitle}`}>
-                Número de WhatsApp / Celular (10 dígitos) *
+                Número de WhatsApp / Celular *
               </label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  required
-                  placeholder="Ej. 3001234567"
-                  value={clienteTelefono}
-                  onChange={(e) => setClienteTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  onKeyDown={(e) => {
-                    if (!/[0-9]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  className={`w-full rounded-xl pl-11 pr-4 py-3 text-sm font-semibold focus:outline-none transition-colors border ${t.input}`}
-                />
-                <Phone className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 opacity-50" />
+              <div className="flex gap-2">
+                {/* Selector de Prefijo Internacional */}
+                <select
+                  value={prefijoPais}
+                  onChange={(e) => setPrefijoPais(e.target.value)}
+                  className={`w-32 rounded-xl px-2 py-3 text-xs font-bold focus:outline-none transition-colors border cursor-pointer shrink-0 ${t.input}`}
+                >
+                  <option value="+57">🇨🇴 +57 (Colombia)</option>
+                  <option value="+1">🇺🇸 +1 (USA / Canadá)</option>
+                  <option value="+34">🇪🇸 +34 (España)</option>
+                  <option value="+52">🇲🇽 +52 (México)</option>
+                  <option value="+58">🇻🇪 +58 (Venezuela)</option>
+                  <option value="+593">🇪🇨 +593 (Ecuador)</option>
+                  <option value="+51">🇵🇪 +51 (Perú)</option>
+                  <option value="+56">🇨🇱 +56 (Chile)</option>
+                  <option value="+54">🇦🇷 +54 (Argentina)</option>
+                  <option value="+507">🇵🇦 +507 (Panamá)</option>
+                  <option value="+506">🇨🇷 +506 (Costa Rica)</option>
+                  <option value="+502">🇬🇹 +502 (Guatemala)</option>
+                  <option value="+503">🇸🇻 +503 (El Salvador)</option>
+                  <option value="+504">🇭🇳 +504 (Honduras)</option>
+                  <option value="+505">🇳🇮 +505 (Nicaragua)</option>
+                  <option value="+591">🇧🇴 +591 (Bolivia)</option>
+                  <option value="+595">🇵🇾 +595 (Paraguay)</option>
+                  <option value="+598">🇺🇾 +598 (Uruguay)</option>
+                  <option value="+1">🇩🇴 +1 (Rep. Dominicana)</option>
+                  <option value="+1">🇵🇷 +1 (Puerto Rico)</option>
+                  <option value="+44">🇬🇧 +44 (Reino Unido)</option>
+                  <option value="+33">🇫🇷 +33 (Francia)</option>
+                  <option value="+49">🇩🇪 +49 (Alemania)</option>
+                  <option value="+39">🇮🇹 +39 (Italia)</option>
+                </select>
+
+                <div className="relative flex-1">
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    required
+                    placeholder="Ej. 3001234567"
+                    value={clienteTelefono}
+                    onChange={(e) => setClienteTelefono(e.target.value.replace(/\D/g, ''))}
+                    className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm font-semibold focus:outline-none transition-colors border ${t.input}`}
+                  />
+                  <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 opacity-50" />
+                </div>
               </div>
               <p className={`text-[11px] mt-1 ${t.subtitle}`}>
-                Ingresa exactamente tus 10 dígitos numéricos de contacto.
+                Elige el prefijo de tu país e ingresa tu número para enviar el recordatorio.
               </p>
             </div>
 

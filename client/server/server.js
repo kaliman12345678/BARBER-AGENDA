@@ -1302,7 +1302,7 @@ app.post('/api/superadmin/barberias', requireSuperAdmin, async (req, res) => {
         INSERT INTO barberias (
           id, slug, nombre, eslogan, logo_url, color_primario, color_secundario,
           telefono, direccion, plan, modulos_activos, pin_admin, activo, email, precio_mensual_cop
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `);
 
       const pinFinal = pin_admin && pin_admin.trim() ? pin_admin.trim() : generateAlphanumericPass('Admin');

@@ -219,6 +219,23 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 
 ## 10. Historial de Correcciones y Mantenimiento
 
+### [2026-11-13] — Selector de Prefijo Internacional de Teléfono & Corrección de Creación de Barberías
+* **Causa Raíz y Solución de Creación de Barberías (SuperAdmin):**
+  - **Causa Raíz:** En `server/server.js`, la sentencia SQL de inserción en `POST /api/superadmin/barberias` declaraba 15 columnas (`id, slug, nombre, eslogan, logo_url, color_primario, color_secundario, telefono, direccion, plan, modulos_activos, pin_admin, activo, email, precio_mensual_cop`) pero en la cláusula `VALUES` solo incluía 14 parámetros (faltaba un `?` para el campo `pin_admin`). En Supabase PostgreSQL esto generaba el error silencioso: `INSERT has more target columns than expressions`. La inserción fallaba en la base de datos sin mostrar error al usuario.
+  - **Corrección:** Se corrigió el mapeo de parámetros `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)` en `server/server.js`. Se probó y verificó la inserción directa en Supabase PostgreSQL, confirmando que ahora el SuperAdmin crea cualquier barbería a placer sin intermediarios.
+* **Prefijo Internacional para Clientes Extranjeros:**
+  - En `ClientBooking.jsx`, se agregó un selector desplegable con banderas y códigos de país (`+57 Colombia`, `+1 USA/Canadá`, `+34 España`, `+52 México`, `+58 Venezuela`, etc.).
+  - Se flexibilizó la validación estricta de 10 dígitos locales a un rango internacional de 7 a 15 dígitos numéricos.
+  - El número se guarda con el formato completo (ej: `+1 3051234567`) para envío directo a WhatsApp.
+* **Archivos Intervenidos:**
+  - `server/server.js` y `client/server/server.js`: Ajuste de parámetros en `POST /api/superadmin/barberias`.
+  - `client/src/components/ClientBooking.jsx`: Selector de prefijo internacional y validación flexible.
+  - `agent.md`: Documentación.
+* **Verificación:**
+  - Inserción y consulta en Supabase PostgreSQL probadas exitosamente.
+  - Compilación Vite de producción completada con éxito.
+  - Regla del espejo Vercel 100% cumplida.
+
 ### [2026-11-13] — Auditoría Integral y Blindaje de Paneles Contables y Liquidaciones (Todos los Roles)
 * **Funcionalidad / Detalle Corregido:**
   - **Falta de guardado real de liquidaciones:** Se implementó `POST /api/liquidaciones` con inserción en la tabla `liquidaciones` de Supabase y actualización atómica de `citas.liquidacion_id = ?` y `ventas_productos.liquidacion_id = ?`. Ya no se duplican pagos ni se pierden citas.
