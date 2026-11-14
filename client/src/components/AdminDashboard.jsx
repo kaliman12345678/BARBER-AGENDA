@@ -41,6 +41,7 @@ import AdminRentabilidad from './AdminRentabilidad';
 import AdminAuditoria from './AdminAuditoria';
 import AdminNotifications from './AdminNotifications';
 import AdminClientes from './AdminClientes';
+import AdminReactivacionIA from './AdminReactivacionIA';
 import AdminResenas from './AdminResenas';
 import ThemeSelector, { THEMES } from './ThemeSelector';
 
@@ -111,6 +112,7 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
   const allTabs = [
     { id: 'agenda', label: 'Agenda & Citas', icon: Calendar, visible: modulos.agenda !== false },
     { id: 'clientes', label: 'Clientes Preferenciales', icon: Award, badge: 'VIP & Fidelidad', visible: modulos.fidelizacion_clientes !== false },
+    { id: 'reactivacion', label: 'Reactivación IA', icon: Sparkles, badge: 'WhatsApp IA', visible: modulos.reactivacion_ia !== false },
     { id: 'bloqueos', label: 'Bloquear Horarios', icon: Ban, visible: modulos.agenda !== false },
     { id: 'liquidaciones', label: 'Plantilla de Pagos (%)', icon: Percent, badge: 'Principal', visible: modulos.liquidaciones !== false },
     { id: 'costos', label: 'Caja & Egresos', icon: DollarSign, visible: modulos.costos !== false },
@@ -437,6 +439,13 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
               <AdminClientes 
                 shopConfig={shopConfig} 
                 barberos={barberos.filter(b => b.activo)}
+              />
+            )}
+
+            {activeTab === 'reactivacion' && (
+              <AdminReactivacionIA 
+                shopConfig={shopConfig} 
+                barberos={barberos} 
               />
             )}
 

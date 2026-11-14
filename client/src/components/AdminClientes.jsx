@@ -20,7 +20,8 @@ import {
   Filter,
   Scissors,
   BookmarkCheck,
-  CreditCard
+  CreditCard,
+  Send
 } from 'lucide-react';
 import ModalFichaTecnica from './ModalFichaTecnica';
 import ModalTarjetaVIPAdmin from './ModalTarjetaVIPAdmin';
@@ -34,6 +35,11 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
   const [clienteEditando, setClienteEditando] = useState(null);
   const [clienteFichaSeleccionado, setClienteFichaSeleccionado] = useState(null);
   const [clienteTarjetaVIPSeleccionado, setClienteTarjetaVIPSeleccionado] = useState(null);
+  const [clienteReactivacionSeleccionado, setClienteReactivacionSeleccionado] = useState(null);
+  const [estrategiaIA, setEstrategiaIA] = useState('dias_muertos');
+  const [mensajeIA, setMensajeIA] = useState('');
+  const [incentivoIA, setIncentivoIA] = useState('');
+  const [generandoIA, setGenerandoIA] = useState(false);
 
   const [form, setForm] = useState({
     cliente_nombre: '',
@@ -171,6 +177,46 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
     }
   }
 
+  async function handleAbrirReactivacionCliente(c, estDefecto = null) {
+    setClienteReactivacionSeleccionado(c);
+    const dias = c.ultima_visita 
+      ? Math.max(0, Math.floor((new Date() - new Date(c.ultima_visita)) / (1000 * 60 * 60 * 24)))
+      : 999;
+    const est = estDefecto || (dias > 45 ? 'rescate_inactivo' : dias > 21 ? 'mantenimiento_preventivo' : 'dias_muertos');
+    setEstrategiaIA(est);
+    setIncentivoIA('');
+    await generarCopiaIA(c, est, '');
+  }
+
+  async function generarCopiaIA(c, est, inc) {
+    if (!c) return;
+    setGenerandoIA(true);
+    const dias = c.ultima_visita 
+      ? Math.max(0, Math.floor((new Date() - new Date(c.ultima_visita)) / (1000 * 60 * 60 * 24)))
+      : 999;
+    try {
+      const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'principal';
+      const res = await fetch(`/api/reactivacion/generar-mensaje?b=${encodeURIComponent(slug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-barberia-slug': slug },
+        body: JSON.stringify({
+          cliente_nombre: c.cliente_nombre,
+          cliente_telefono: c.cliente_telefono,
+          dias_sin_visita: dias,
+          barbero_nombre: 'nuestro equipo',
+          servicio_nombre: 'corte',
+          estrategia: est,
+          incentivo: inc
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMensajeIA(data.mensaje);
+      }
+    } catch (_) {}
+    setGenerandoIA(false);
+  }
+
   return (
     <div className="space-y-5 animate-fadeIn">
       
@@ -282,6 +328,11 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
             const BadgeIcon = badge.icon;
             const waUrl = getWhatsAppUrl(c);
 
+            const diasSinVisita = c.ultima_visita 
+              ? Math.max(0, Math.floor((new Date() - new Date(c.ultima_visita)) / (1000 * 60 * 60 * 24)))
+              : 999;
+            const semaforo = diasSinVisita > 45 ? 'rojo' : diasSinVisita > 21 ? 'amarillo' : 'verde';
+
             return (
               <div
                 key={c.id || c.cliente_telefono}
@@ -298,6 +349,16 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${badge.bg}`}>
                           <BadgeIcon className="w-3 h-3 shrink-0" />
                           <span>{badge.label}</span>
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          semaforo === 'rojo' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                          semaforo === 'amarillo' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            semaforo === 'rojo' ? 'bg-rose-500' : semaforo === 'amarillo' ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`} />
+                          <span>{diasSinVisita >= 900 ? 'Sin visitas' : `Hace ${diasSinVisita}d`}</span>
                         </span>
                       </div>
 
@@ -395,6 +456,18 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
                       >
                         <Scissors className="w-3.5 h-3.5 text-amber-600" />
                         <span>Ficha Técnica & Estilo</span>
+                      </button>
+                    )}
+
+                    {shopConfig?.modulos_activos?.reactivacion_ia !== false && (
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirReactivacionCliente(c)}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 text-indigo-950 border border-indigo-200 text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Generar copy persuasivo con IA y reactivar al cliente"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>🤖 Reactivar con IA</span>
                       </button>
                     )}
 
@@ -548,6 +621,118 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
           onClose={() => setClienteTarjetaVIPSeleccionado(null)}
           onSuccess={() => cargarClientes()}
         />
+      )}
+
+      {/* MODAL REACTIVACIÓN CON IA (FASE 5) */}
+      {clienteReactivacionSeleccionado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-serif">
+                    Reactivar a {clienteReactivacionSeleccionado.cliente_nombre}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {clienteReactivacionSeleccionado.cliente_telefono}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setClienteReactivacionSeleccionado(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Selector de Estrategia */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                1. Estrategia del Mensaje:
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'dias_muertos', label: '☕ Llenar Martes/Miérc.' },
+                  { id: 'rescate_inactivo', label: '🎁 Rescate Inactivo' },
+                  { id: 'mantenimiento_preventivo', label: '✂️ Mantenimiento Fade' },
+                  { id: 'vip_sellos', label: '👑 Beneficio VIP' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setEstrategiaIA(item.id);
+                      generarCopiaIA(clienteReactivacionSeleccionado, item.id, incentivoIA);
+                    }}
+                    className={`py-2 px-2.5 rounded-xl border text-center font-bold text-[11px] transition-all cursor-pointer ${
+                      estrategiaIA === item.id
+                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-xs'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Incentivo Opcional */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                2. Gancho u Obsequio Personalizado:
+              </label>
+              <input
+                type="text"
+                value={incentivoIA}
+                onChange={(e) => setIncentivoIA(e.target.value)}
+                onBlur={() => generarCopiaIA(clienteReactivacionSeleccionado, estrategiaIA, incentivoIA)}
+                placeholder="Ej: un café de cortesía, 15% de descuento, etc."
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 transition-colors"
+              />
+            </div>
+
+            {/* Preview Copy */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  3. Mensaje Generado (Editable):
+                </label>
+                {generandoIA && (
+                  <span className="text-[10px] text-indigo-400 animate-pulse font-bold">
+                    Generando...
+                  </span>
+                )}
+              </div>
+              <textarea
+                rows={6}
+                value={mensajeIA}
+                onChange={(e) => setMensajeIA(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-700 rounded-2xl text-slate-200 text-xs font-mono leading-relaxed focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+              ></textarea>
+            </div>
+
+            {/* Botón WhatsApp */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const rawPhone = String(clienteReactivacionSeleccionado.cliente_telefono || '').replace(/[^0-9]/g, '');
+                  const fullPhone = rawPhone.length === 10 ? `57${rawPhone}` : rawPhone;
+                  window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(mensajeIA)}`, '_blank');
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition-all cursor-pointer text-xs"
+              >
+                <Send className="w-4 h-4 text-emerald-200" />
+                <span>📲 Disparar por WhatsApp al Cliente</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

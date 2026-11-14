@@ -463,3 +463,28 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 * **Implementación:**
   - En `ModalTarjetaVIPAdmin.jsx`: se agregó el botón `-1 Sello (Quitar)` junto al botón `+1 Sello (Corte Realizado)`.
   - En `/api/tarjeta-vip/sellar`: soporte para cantidades negativas (`cantidad = -1`), aplicando `Math.max(0, sellos_actuales + cant)`, registrando el movimiento como `tipo: 'ajuste'` con nota explicativa de auditoría.
+
+---
+
+### [2026-11-14] — FASE 5: Asistente de Reactivación de Clientes con IA & Semáforo Predictivo
+
+#### 1. Semáforo Predictivo de Retención de Clientes
+* **Lógica de Clasificación:**
+  - 🟢 **Activo (Verde - Menos de 21 días):** Cliente frecuente con ciclo de corte óptimo.
+  - 🟡 **En Riesgo (Amarillo - 21 a 45 días):** Cliente que está posponiendo su corte. Momento ideal para preventivo de mantenimiento.
+  - 🔴 **Inactivo / Por Rescatar (Rojo - Más de 45 días o sin citas):** Cliente con alta probabilidad de fuga. Requiere oferta de choque para volver.
+* **Métricas Globales:** Total de clientes, desglose por semáforo y porcentaje de salud de cartera (% de clientes activos).
+
+#### 2. Generador de Mensajes Persuasivos con IA para WhatsApp
+* **Estrategias Soportadas:**
+  1. *Llenar Días Muertos (Martes & Miércoles):* Incentivo para asistir en días valle (ej: bebida de cortesía + perfilado de cejas).
+  2. *Rescate de Clientes Inactivos (Semáforo Rojo):* Mensaje cálido recordando su corte con su barbero habitual y oferta de bienvenida (ej: 15% de descuento).
+  3. *Mantenimiento Preventivo (Semáforo Amarillo):* Recordatorio para retocar fade y perfilar antes de perder la línea del corte.
+  4. *Beneficio Club VIP & Sellos:* Recordatorio de puntos acumulados para corte gratis.
+* **Disparo Directo a WhatsApp:** Enlace limpio `https://wa.me/...` que precarga el mensaje personalizado con el nombre del cliente, último barbero, servicio habitual y link de reserva directo de la barbería (`/b/:slug`).
+
+#### 3. Componentes y Módulo Conmutable
+* **Componente `AdminReactivacionIA.jsx`:** Dashboard interactivo con tarjetas de radar, barra de salud, selector de campañas, filtros por semáforo y modal editor de copy.
+* **Integración en `AdminClientes.jsx`:** Insignia del semáforo en cada ficha de cliente (`🟢 Hace Xd`, `🟡 Hace Xd`, `🔴 Inactivo`) y botón directo `🤖 Reactivar con IA`.
+* **Integración en `AdminDashboard.jsx`:** Pestaña dedicada con icono `Sparkles` y badge `WhatsApp IA`, condicionada a `modulos.reactivacion_ia !== false`.
+* **Gestión en SuperAdmin (`SuperAdminDashboard.jsx`):** Módulo conmutable por plan con la llave `reactivacion_ia`.

@@ -3473,6 +3473,258 @@ app.get('/api/tarjeta-vip/public/:slug/:telefono', async (req, res) => {
 });
 
 // ----------------------------------------------------
+// 6.1.3 ASISTENTE DE REACTIVACIÓN CON IA (FASE 5)
+// ----------------------------------------------------
+app.get('/api/reactivacion/analisis', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+
+  try {
+    let barberia = await db.prepare('SELECT id, nombre, slug, telefono, modulos_activos FROM barberias WHERE id = ?').get(tenantId);
+    let modulos = {};
+    try {
+      modulos = typeof barberia?.modulos_activos === 'string' ? JSON.parse(barberia.modulos_activos) : (barberia?.modulos_activos || {});
+    } catch (_) {}
+
+    if (modulos.reactivacion_ia === false) {
+      return res.status(403).json({ error: 'El módulo Asistente de Reactivación con IA no está habilitado para esta barbería' });
+    }
+
+    // Traer citas completadas agrupadas por cliente
+    let citasAgrupadas = [];
+    try {
+      citasAgrupadas = await db.prepare(`
+        SELECT 
+          c.cliente_nombre,
+          c.cliente_telefono,
+          COUNT(c.id) as total_citas,
+          MAX(c.fecha) as ultima_visita,
+          MIN(c.fecha) as primera_visita
+        FROM citas c
+        WHERE c.barberia_id = ? AND c.estado = 'completada'
+        GROUP BY c.cliente_nombre, c.cliente_telefono
+      `).all(tenantId) || [];
+    } catch (e) {
+      console.warn('Advertencia al consultar citas agrupadas:', e.message);
+    }
+
+    // Traer clientes registrados en la tabla clientes
+    let dbClientes = [];
+    try {
+      dbClientes = await db.prepare('SELECT * FROM clientes WHERE barberia_id = ?').all(tenantId) || [];
+    } catch (_) {}
+
+    // Traer detalle del último barbero y servicio completado por cliente
+    let ultimasCitasDetalle = [];
+    try {
+      ultimasCitasDetalle = await db.prepare(`
+        SELECT DISTINCT ON (c.cliente_telefono)
+          c.cliente_telefono,
+          b.nombre as barbero_nombre,
+          s.nombre as servicio_nombre,
+          c.fecha as fecha_cita
+        FROM citas c
+        LEFT JOIN barberos b ON c.barbero_id = b.id
+        LEFT JOIN servicios s ON c.servicio_id = s.id
+        WHERE c.barberia_id = ? AND c.estado = 'completada'
+        ORDER BY c.cliente_telefono, c.fecha DESC, c.hora_inicio DESC
+      `).all(tenantId) || [];
+    } catch (_) {
+      try {
+        ultimasCitasDetalle = await db.prepare(`
+          SELECT 
+            c.cliente_telefono,
+            b.nombre as barbero_nombre,
+            s.nombre as servicio_nombre,
+            MAX(c.fecha) as fecha_cita
+          FROM citas c
+          LEFT JOIN barberos b ON c.barbero_id = b.id
+          LEFT JOIN servicios s ON c.servicio_id = s.id
+          WHERE c.barberia_id = ? AND c.estado = 'completada'
+          GROUP BY c.cliente_telefono, b.nombre, s.nombre
+        `).all(tenantId) || [];
+      } catch (_) {}
+    }
+
+    const mapaDetalle = {};
+    ultimasCitasDetalle.forEach(det => {
+      const raw = (det.cliente_telefono || '').replace(/[^0-9]/g, '');
+      if (raw) mapaDetalle[raw.slice(-10)] = det;
+    });
+
+    const mapaClientesDb = {};
+    dbClientes.forEach(cli => {
+      const raw = (cli.cliente_telefono || '').replace(/[^0-9]/g, '');
+      if (raw) mapaClientesDb[raw.slice(-10)] = cli;
+    });
+
+    const hoy = new Date();
+    const hoyStr = hoy.toISOString().split('T')[0];
+    const mapaConsolidado = new Map();
+
+    for (const cita of citasAgrupadas) {
+      const rawPhone = (cita.cliente_telefono || '').replace(/[^0-9]/g, '');
+      const key = rawPhone ? rawPhone.slice(-10) : (cita.cliente_nombre || '').toLowerCase().trim();
+      const cliDb = mapaClientesDb[key] || {};
+      const det = mapaDetalle[key] || {};
+
+      let diasSinVisita = 999;
+      if (cita.ultima_visita) {
+        const diffMs = new Date(hoyStr) - new Date(cita.ultima_visita);
+        diasSinVisita = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      }
+
+      let semaforo = 'verde';
+      if (diasSinVisita > 45) semaforo = 'rojo';
+      else if (diasSinVisita > 21) semaforo = 'amarillo';
+
+      mapaConsolidado.set(key, {
+        id: cliDb.id || `c-${key}`,
+        nombre: cliDb.cliente_nombre || cita.cliente_nombre || 'Cliente VIP',
+        telefono: cliDb.cliente_telefono || cita.cliente_telefono || '',
+        categoria: cliDb.categoria || 'VIP',
+        nivel_vip: cliDb.nivel_vip || 'Bronce VIP',
+        sellos_acumulados: Number(cliDb.sellos_acumulados || 0),
+        sellos_meta: Number(cliDb.sellos_meta || 10),
+        premio_proximo: cliDb.premio_proximo || 'Corte o Barba Gratis',
+        total_citas: Number(cita.total_citas || 1),
+        ultima_visita: cita.ultima_visita || null,
+        dias_sin_visita: diasSinVisita,
+        semaforo,
+        ultimo_barbero_nombre: det.barbero_nombre || 'Tu barbero de confianza',
+        servicio_habitual: det.servicio_nombre || 'Corte de Cabello'
+      });
+    }
+
+    for (const cli of dbClientes) {
+      const rawPhone = (cli.cliente_telefono || '').replace(/[^0-9]/g, '');
+      const key = rawPhone ? rawPhone.slice(-10) : (cli.cliente_nombre || '').toLowerCase().trim();
+      if (!mapaConsolidado.has(key)) {
+        mapaConsolidado.set(key, {
+          id: cli.id,
+          nombre: cli.cliente_nombre || 'Cliente VIP',
+          telefono: cli.cliente_telefono || '',
+          categoria: cli.categoria || 'VIP',
+          nivel_vip: cli.nivel_vip || 'Bronce VIP',
+          sellos_acumulados: Number(cli.sellos_acumulados || 0),
+          sellos_meta: Number(cli.sellos_meta || 10),
+          premio_proximo: cli.premio_proximo || 'Corte o Barba Gratis',
+          total_citas: 0,
+          ultima_visita: null,
+          dias_sin_visita: 999,
+          semaforo: 'rojo',
+          ultimo_barbero_nombre: 'Equipo de Barberos',
+          servicio_habitual: 'Corte de Cabello'
+        });
+      }
+    }
+
+    const listaClientes = Array.from(mapaConsolidado.values()).sort((a, b) => b.dias_sin_visita - a.dias_sin_visita);
+    const total = listaClientes.length;
+    const activos = listaClientes.filter(c => c.semaforo === 'verde').length;
+    const enRiesgo = listaClientes.filter(c => c.semaforo === 'amarillo').length;
+    const inactivos = listaClientes.filter(c => c.semaforo === 'rojo').length;
+    const salud = total > 0 ? Math.round((activos / total) * 100) : 100;
+
+    res.json({
+      success: true,
+      barberia: {
+        nombre: barberia?.nombre || 'The Barber Club',
+        slug: barberia?.slug || 'principal'
+      },
+      resumen: {
+        total_clientes: total,
+        activos_count: activos,
+        en_riesgo_count: enRiesgo,
+        inactivos_count: inactivos,
+        porcentaje_salud: salud
+      },
+      clientes: listaClientes
+    });
+  } catch (error) {
+    console.error('Error al generar análisis de reactivación:', error);
+    res.status(500).json({ error: 'Error al generar análisis de clientes con IA' });
+  }
+});
+
+app.post('/api/reactivacion/generar-mensaje', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const {
+    cliente_nombre,
+    cliente_telefono,
+    dias_sin_visita,
+    barbero_nombre,
+    servicio_nombre,
+    estrategia = 'dias_muertos',
+    incentivo = '',
+    tono = 'amigable'
+  } = req.body;
+
+  try {
+    let barberia = await db.prepare('SELECT nombre, slug, telefono FROM barberias WHERE id = ?').get(tenantId);
+    if (!barberia) {
+      barberia = store.barberias.find(b => b.id === tenantId) || { nombre: 'The Barber Club', slug: 'principal' };
+    }
+
+    const host = req.get('host') || 'agenda-barberia.vercel.app';
+    const protocolo = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    const baseUrl = `${protocolo}://${host}/b/${barberia.slug}`;
+
+    const nombreLimpio = (cliente_nombre || 'amigo').trim().split(' ')[0];
+    const barbero = (barbero_nombre || 'nuestro equipo').trim();
+    const dias = Number(dias_sin_visita) || 30;
+    const diasTexto = dias >= 900 ? 'un buen tiempo' : `${dias} días`;
+
+    let mensaje = '';
+
+    switch (estrategia) {
+      case 'dias_muertos': {
+        const gancho = incentivo ? incentivo.trim() : 'una bebida de cortesía y perfilado de cejas gratis';
+        mensaje = `¡Hola ${nombreLimpio}! 💈 En *${barberia.nombre}* sabemos lo importante que es mantener tu estilo al 100%.\n\nHace ${diasTexto} que no nos visitas con *${barbero}*. Te tenemos una invitación especial: agenda tu turno este *martes o miércoles* y te obsequiamos ${gancho} ☕✨.\n\nElige tu horario en 1 minuto aquí:\n👉 ${baseUrl}\n\n¡Te esperamos con la mejor atención!`;
+        break;
+      }
+      case 'rescate_inactivo': {
+        const gancho = incentivo ? incentivo.trim() : 'un 15% de descuento especial en tu próximo servicio';
+        mensaje = `¡Hola ${nombreLimpio}! ✂️ ¿Cómo has estado? Te extrañamos en *${barberia.nombre}*.\n\nNotamos que hace ${diasTexto} no pasas por la barbería y tu corte con *${barbero}* siempre quedaba impecable 👌.\n\nQueremos darte la bienvenida de nuevo: reserva esta semana y recibe ${gancho} 🎁.\n\nAgenda tu espacio directo aquí:\n👉 ${baseUrl}\n\n¡Será un gusto tenerte de nuevo en la silla!`;
+        break;
+      }
+      case 'mantenimiento_preventivo': {
+        const servicio = servicio_nombre || 'corte';
+        mensaje = `Hola ${nombreLimpio} 👋 Ya van ${diasTexto} desde tu último ${servicio}.\n\nPara no perder la línea del fade y mantener tu estilo siempre pulido y fresco, *${barbero}* tiene algunos turnos disponibles esta semana.\n\nAparta tu hora favorita antes de que se llenen los cupos:\n👉 ${baseUrl}\n\n¡Quedamos atentos a tu visita! 💈`;
+        break;
+      }
+      case 'vip_sellos': {
+        const gancho = incentivo ? incentivo.trim() : 'seguir sumando sellos para tu próximo corte gratis';
+        mensaje = `¡Hola ${nombreLimpio}! 👑 Como cliente preferencial de *${barberia.nombre}*, queremos recordarte que tus beneficios VIP están activos.\n\nAprovecha esta semana para renovar tu imagen con *${barbero}* y ${gancho} 🎟️.\n\nReserva tu turno VIP aquí:\n👉 ${baseUrl}\n\n¡Gracias por tu fidelidad con nosotros!`;
+        break;
+      }
+      default: {
+        mensaje = `¡Hola ${nombreLimpio}! 💈 En *${barberia.nombre}* estamos listos para atenderte. Reserva tu turno con *${barbero}* aquí: ${baseUrl}`;
+      }
+    }
+
+    const rawPhone = String(cliente_telefono || '').replace(/[^0-9]/g, '');
+    const fullPhone = rawPhone.length === 10 ? `57${rawPhone}` : rawPhone;
+    const waUrl = fullPhone 
+      ? `https://wa.me/${fullPhone}?text=${encodeURIComponent(mensaje)}`
+      : `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+
+    res.json({
+      success: true,
+      mensaje,
+      wa_url: waUrl,
+      estrategia,
+      cliente: {
+        nombre: nombreLimpio,
+        telefono: fullPhone
+      }
+    });
+  } catch (err) {
+    console.error('Error al generar mensaje de reactivación:', err);
+    res.status(500).json({ error: 'Error al generar mensaje' });
+  }
+});
+
+// ----------------------------------------------------
 // 6.2 RESEÑAS & CALIFICACIONES DE CLIENTES (PÚBLICAS)
 // ----------------------------------------------------
 let memoryResenas = [
@@ -4057,6 +4309,22 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
     const comisionTotalBarbero = montoComisionServicios + totalComisionProductos + totalPropinas;
     const margenBarberia = (totalBrutoServicios - montoComisionServicios) + (totalVentaProductos - totalComisionProductos);
 
+    // Préstamos / Adelantos activos con saldo pendiente para amortizar
+    let prestamosActivos = [];
+    try {
+      prestamosActivos = await db.prepare(`
+        SELECT * 
+        FROM prestamos_colaboradores
+        WHERE barberia_id = ? AND barbero_id = ? AND estado = 'activo' AND saldo_pendiente > 0
+        ORDER BY fecha_prestamo ASC, id ASC
+      `).all(tenantId, barbero_id) || [];
+    } catch (_) {}
+
+    const cuotaPrestamosSugerida = prestamosActivos.reduce((sum, p) => {
+      const cuota = Math.min(Number(p.valor_cuota || 0), Number(p.saldo_pendiente || 0));
+      return sum + cuota;
+    }, 0);
+
     res.json({
       barbero,
       fecha_inicio: esTodas ? (citas[0]?.fecha || 'Inicio') : fecha_inicio,
@@ -4070,7 +4338,9 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
       total_comision_productos: totalComisionProductos,
       margen_barberia: margenBarberia,
       citas,
-      ventas_productos: ventasProductos
+      ventas_productos: ventasProductos,
+      prestamos_activos: prestamosActivos,
+      cuota_prestamos_sugerida: cuotaPrestamosSugerida
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4117,7 +4387,8 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
     metodo_pago,
     notas,
     citas_ids = [],
-    ventas_ids = []
+    ventas_ids = [],
+    prestamos_amortizados = []
   } = req.body;
   const tenantId = await getTenantId(req);
 
@@ -4218,7 +4489,56 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
       `).run(liquidacionId, ...ventas.map(v => v.id), tenantId);
     }
 
-    // 5. REGISTRO ESTRICTO EN TABLA DE AUDITORÍA
+    // 5. Amortización de préstamos / adelantos descontados en esta liquidación
+    if (Array.isArray(prestamos_amortizados) && prestamos_amortizados.length > 0 && liquidacionId) {
+      for (const item of prestamos_amortizados) {
+        const prestamoId = item.prestamo_id;
+        const montoAbono = Number(item.monto || 0);
+        if (!prestamoId || montoAbono <= 0) continue;
+
+        try {
+          const p = await db.prepare('SELECT * FROM prestamos_colaboradores WHERE id = ? AND barberia_id = ?').get(prestamoId, tenantId);
+          if (p) {
+            const saldoAnterior = Number(p.saldo_pendiente || 0);
+            const nuevoSaldo = Math.max(0, saldoAnterior - montoAbono);
+            const nuevasCuotas = Number(p.cuotas_pagadas || 0) + 1;
+            const nuevoEstado = nuevoSaldo <= 0 ? 'pagado' : 'activo';
+
+            await db.prepare(`
+              UPDATE prestamos_colaboradores
+              SET saldo_pendiente = ?,
+                  cuotas_pagadas = ?,
+                  estado = ?
+              WHERE id = ? AND barberia_id = ?
+            `).run(nuevoSaldo, nuevasCuotas, nuevoEstado, prestamoId, tenantId);
+
+            const abonoId = Date.now() + Math.floor(Math.random() * 1000);
+            await db.prepare(`
+              INSERT INTO abonos_prestamos_liquidaciones (
+                id, barberia_id, prestamo_id, liquidacion_id, barbero_id,
+                monto_abonado, numero_cuota, saldo_anterior, saldo_restante,
+                fecha_abono, origen
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'liquidacion')
+            `).run(
+              abonoId,
+              tenantId,
+              prestamoId,
+              liquidacionId,
+              barbero_id,
+              montoAbono,
+              nuevasCuotas,
+              saldoAnterior,
+              nuevoSaldo,
+              fecha_fin
+            );
+          }
+        } catch (eLoan) {
+          console.warn('⚠️ Error al amortizar préstamo en liquidación:', eLoan.message);
+        }
+      }
+    }
+
+    // 6. REGISTRO ESTRICTO EN TABLA DE AUDITORÍA
     await registrarAuditoria(
       tenantId,
       'liquidacion_creada',
@@ -4283,6 +4603,17 @@ app.get('/api/liquidaciones/:id', requireAdminOrSuper, async (req, res) => {
       ORDER BY v.fecha ASC
     `).all(id, tenantId);
 
+    let abonosPrestamos = [];
+    try {
+      abonosPrestamos = await db.prepare(`
+        SELECT a.*, p.tipo, p.descripcion, p.numero_cuotas
+        FROM abonos_prestamos_liquidaciones a
+        JOIN prestamos_colaboradores p ON a.prestamo_id = p.id
+        WHERE a.liquidacion_id = ? AND a.barberia_id = ?
+        ORDER BY a.id ASC
+      `).all(id, tenantId) || [];
+    } catch (_) {}
+
     res.json({
       ...liquidacion,
       barbero: {
@@ -4292,7 +4623,8 @@ app.get('/api/liquidaciones/:id', requireAdminOrSuper, async (req, res) => {
         telefono: liquidacion.barbero_telefono
       },
       citas,
-      ventas_productos: ventas
+      ventas_productos: ventas,
+      abonos_prestamos: abonosPrestamos
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4342,6 +4674,228 @@ app.delete('/api/liquidaciones/:id', requireAdminOrSuper, async (req, res) => {
     res.json({ success: true, message: 'Liquidación anulada y turnos liberados para recalcular' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ----------------------------------------------------
+// 10.1 ADELANTOS, PRÉSTAMOS Y CRÉDITOS A COLABORADORES
+// ----------------------------------------------------
+app.get('/api/prestamos', requireAdminOrSuper, async (req, res) => {
+  const { barbero_id, estado } = req.query;
+  const tenantId = await getTenantId(req);
+
+  try {
+    let sql = `
+      SELECT p.*, b.nombre as barbero_nombre, b.foto_url as barbero_foto
+      FROM prestamos_colaboradores p
+      JOIN barberos b ON p.barbero_id = b.id
+      WHERE p.barberia_id = ?
+    `;
+    const params = [tenantId];
+
+    if (barbero_id) {
+      sql += ' AND p.barbero_id = ?';
+      params.push(barbero_id);
+    }
+
+    if (estado && estado !== 'todos') {
+      sql += ' AND p.estado = ?';
+      params.push(estado);
+    }
+
+    sql += ' ORDER BY CASE WHEN p.estado = \'activo\' THEN 0 ELSE 1 END, p.id DESC';
+
+    const prestamos = await db.prepare(sql).all(...params);
+    res.json(prestamos);
+  } catch (err) {
+    console.error('Error consultando prestamos:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/prestamos', requireAdminOrSuper, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const {
+    barbero_id,
+    tipo,
+    descripcion,
+    monto_total,
+    numero_cuotas,
+    valor_cuota,
+    fecha_prestamo,
+    notas
+  } = req.body;
+
+  if (!barbero_id || !monto_total || Number(monto_total) <= 0) {
+    return res.status(400).json({ error: 'El barbero y el monto total son obligatorios y deben ser mayores a cero.' });
+  }
+
+  const monto = Number(monto_total);
+  const cuotas = Math.max(1, Number(numero_cuotas) || 1);
+  const cuotaValor = (valor_cuota && Number(valor_cuota) > 0) ? Number(valor_cuota) : Math.round(monto / cuotas);
+  const fecha = fecha_prestamo || new Date().toISOString().split('T')[0];
+  const prestamoId = Date.now();
+
+  try {
+    const barbero = await db.prepare('SELECT id, nombre FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
+    if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
+
+    await db.prepare(`
+      INSERT INTO prestamos_colaboradores (
+        id, barberia_id, barbero_id, tipo, descripcion, monto_total,
+        numero_cuotas, valor_cuota, saldo_pendiente, cuotas_pagadas,
+        estado, fecha_prestamo, notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'activo', ?, ?)
+    `).run(
+      prestamoId,
+      tenantId,
+      barbero_id,
+      tipo || 'adelanto_dinero',
+      descripcion || null,
+      monto,
+      cuotas,
+      cuotaValor,
+      monto,
+      fecha,
+      notas || null
+    );
+
+    // Si es adelanto o préstamo de dinero en efectivo, registrar egreso en costos para arqueo de caja
+    if (tipo === 'adelanto_dinero' || tipo === 'prestamo_dinero') {
+      try {
+        await db.prepare(`
+          INSERT INTO costos (
+            barberia_id, tipo, categoria, descripcion, monto_cop, fecha, barbero_id
+          ) VALUES (?, 'egreso', 'Adelanto / Préstamo Colaborador', ?, ?, ?, ?)
+        `).run(
+          tenantId,
+          `${tipo === 'adelanto_dinero' ? 'Adelanto' : 'Préstamo'} a ${barbero.nombre}: ${descripcion || 'Acuerdo de cuotas'}`,
+          monto,
+          fecha,
+          barbero_id
+        );
+      } catch (_) {}
+    }
+
+    const nuevoPrestamo = await db.prepare('SELECT p.*, b.nombre as barbero_nombre FROM prestamos_colaboradores p JOIN barberos b ON p.barbero_id = b.id WHERE p.id = ? AND p.barberia_id = ?').get(prestamoId, tenantId);
+
+    await registrarAuditoria(
+      tenantId,
+      'prestamo_creado',
+      `Registrado ${tipo} para ${barbero.nombre} por $${monto.toLocaleString('es-CO')} en ${cuotas} cuotas de $${cuotaValor.toLocaleString('es-CO')}`,
+      req.user?.nombre || 'Administración',
+      { prestamo_id: prestamoId, barbero_id, monto_total: monto, cuotas, valor_cuota: cuotaValor }
+    );
+
+    res.json({
+      success: true,
+      message: 'Préstamo / Adelanto registrado con éxito',
+      prestamo: nuevoPrestamo
+    });
+  } catch (err) {
+    console.error('Error creando prestamo:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/prestamos/:id/abono', requireAdminOrSuper, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+  const { monto, notas } = req.body;
+
+  if (!monto || Number(monto) <= 0) {
+    return res.status(400).json({ error: 'El monto del abono debe ser mayor a cero' });
+  }
+
+  const abono = Number(monto);
+
+  try {
+    const p = await db.prepare('SELECT p.*, b.nombre as barbero_nombre FROM prestamos_colaboradores p JOIN barberos b ON p.barbero_id = b.id WHERE p.id = ? AND p.barberia_id = ?').get(id, tenantId);
+    if (!p) return res.status(404).json({ error: 'Préstamo no encontrado' });
+
+    const saldoAnterior = Number(p.saldo_pendiente || 0);
+    const nuevoSaldo = Math.max(0, saldoAnterior - abono);
+    const nuevasCuotas = Number(p.cuotas_pagadas || 0) + 1;
+    const nuevoEstado = nuevoSaldo <= 0 ? 'pagado' : 'activo';
+
+    await db.prepare(`
+      UPDATE prestamos_colaboradores
+      SET saldo_pendiente = ?,
+          cuotas_pagadas = ?,
+          estado = ?
+      WHERE id = ? AND barberia_id = ?
+    `).run(nuevoSaldo, nuevasCuotas, nuevoEstado, id, tenantId);
+
+    const abonoId = Date.now();
+    const hoy = new Date().toISOString().split('T')[0];
+    await db.prepare(`
+      INSERT INTO abonos_prestamos_liquidaciones (
+        id, barberia_id, prestamo_id, barbero_id, monto_abonado,
+        numero_cuota, saldo_anterior, saldo_restante, fecha_abono, origen
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pago_directo')
+    `).run(abonoId, tenantId, id, p.barbero_id, abono, nuevasCuotas, saldoAnterior, nuevoSaldo, hoy);
+
+    await registrarAuditoria(
+      tenantId,
+      'prestamo_abono',
+      `Abono extraordinario de $${abono.toLocaleString('es-CO')} a préstamo #${id} de ${p.barbero_nombre}. Saldo restante: $${nuevoSaldo.toLocaleString('es-CO')}`,
+      req.user?.nombre || 'Administración',
+      { prestamo_id: id, barbero_id: p.barbero_id, abono, nuevoSaldo }
+    );
+
+    res.json({
+      success: true,
+      message: nuevoSaldo <= 0 ? '¡Préstamo pagado en su totalidad!' : `Abono de $${abono.toLocaleString('es-CO')} registrado con éxito`,
+      saldo_restante: nuevoSaldo,
+      estado: nuevoEstado
+    });
+  } catch (err) {
+    console.error('Error registrando abono:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/prestamos/:id', requireAdminOrSuper, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+
+  try {
+    const p = await db.prepare('SELECT p.*, b.nombre as barbero_nombre FROM prestamos_colaboradores p JOIN barberos b ON p.barbero_id = b.id WHERE p.id = ? AND p.barberia_id = ?').get(id, tenantId);
+    if (!p) return res.status(404).json({ error: 'Préstamo no encontrado' });
+
+    await db.prepare('DELETE FROM abonos_prestamos_liquidaciones WHERE prestamo_id = ? AND barberia_id = ?').run(id, tenantId);
+    await db.prepare('DELETE FROM prestamos_colaboradores WHERE id = ? AND barberia_id = ?').run(id, tenantId);
+
+    await registrarAuditoria(
+      tenantId,
+      'prestamo_eliminado',
+      `Eliminado préstamo #${id} de ${p.barbero_nombre} por valor de $${Number(p.monto_total).toLocaleString('es-CO')}`,
+      req.user?.nombre || 'Administración',
+      { prestamo_id: id, barbero_id: p.barbero_id, monto_total: p.monto_total }
+    );
+
+    res.json({ success: true, message: 'Préstamo eliminado correctamente' });
+  } catch (err) {
+    console.error('Error eliminando prestamo:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/prestamos/:id/historial', requireAdminOrSuper, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { id } = req.params;
+
+  try {
+    const abonos = await db.prepare(`
+      SELECT a.*, l.fecha_inicio as liq_fecha_inicio, l.fecha_fin as liq_fecha_fin
+      FROM abonos_prestamos_liquidaciones a
+      LEFT JOIN liquidaciones l ON a.liquidacion_id = l.id
+      WHERE a.prestamo_id = ? AND a.barberia_id = ?
+      ORDER BY a.id ASC
+    `).all(id, tenantId);
+    res.json(abonos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
