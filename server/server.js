@@ -1990,39 +1990,92 @@ app.get('/api/barberos/:id/record', requireAnyOperator, async (req, res) => {
     const liquidaciones = await db.prepare(`
       SELECT * FROM liquidaciones 
       WHERE barbero_id = ? AND barberia_id = ?
-      ORDER BY fecha_fin DESC LIMIT 15
-    `).all(id, tenantId);
+      ORDER BY fecha_fin DESC LIMIT 30
+    `).all(id, tenantId) || [];
 
     const totalCobradoHistorico = Number(citasCompletadas?.total || 0);
     const totalComisionesPagadas = liquidaciones.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
-    const utilidadGenerada = totalCobradoHistorico - totalComisionesPagadas;
     const totalCitas = Number(totalCitasRow?.count || 0);
+    const totalCompletadas = Number(citasCompletadas?.count || 0);
+    const totalCanceladas = Number(citasCanceladas?.count || 0);
+    const totalNoAsistio = Number(noAsistio?.count || 0);
 
-    const ultimasCitas = await db.prepare(`
+    const pctComision = Number(barbero.porcentaje_comision || 50);
+    const totalGanadoServicios = Math.round(totalCobradoHistorico * (pctComision / 100));
+
+    // Todas las citas del barbero para su historial
+    const citas = await db.prepare(`
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
       WHERE c.barbero_id = ? AND c.barberia_id = ?
       ORDER BY c.fecha DESC, c.hora_inicio DESC
-      LIMIT 20
-    `).all(id, tenantId);
+      LIMIT 100
+    `).all(id, tenantId) || [];
+
+    // Ventas de productos registradas a este barbero
+    let ventasProductos = [];
+    try {
+      ventasProductos = await db.prepare(`
+        SELECT v.*, p.nombre as producto_nombre
+        FROM ventas_productos v
+        JOIN productos p ON v.producto_id = p.id
+        WHERE v.barbero_id = ? AND v.barberia_id = ?
+        ORDER BY v.fecha DESC
+        LIMIT 50
+      `).all(id, tenantId) || [];
+    } catch (_) {}
+
+    const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
+    const totalGanadoVitalicio = totalGanadoServicios + totalComisionProductos;
+    const saldoPendientePorCobrar = Math.max(0, totalGanadoVitalicio - totalComisionesPagadas);
+    const utilidadGenerada = totalCobradoHistorico - totalComisionesPagadas;
+
+    // Publicaciones / portafolio del barbero
+    let publicaciones = [];
+    try {
+      publicaciones = await db.prepare(`
+        SELECT * FROM multimedia 
+        WHERE barbero_id = ? AND barberia_id = ?
+        ORDER BY id DESC LIMIT 50
+      `).all(id, tenantId) || [];
+    } catch (_) {}
+
+    // Auditoría histórica vinculada a este barbero
+    let auditoria = [];
+    try {
+      auditoria = await db.prepare(`
+        SELECT * FROM auditoria 
+        WHERE barberia_id = ? AND (detalles LIKE ? OR accion LIKE ?)
+        ORDER BY id DESC LIMIT 50
+      `).all(tenantId, `%${barbero.nombre}%`, `%${id}%`) || [];
+    } catch (_) {}
 
     const { password: _, pin: __, ...barberoLimpio } = barbero;
 
+    const resumen = {
+      total_citas_registradas: totalCitas,
+      total_citas_completadas: totalCompletadas,
+      total_citas_canceladas: totalCanceladas,
+      total_no_asistio: totalNoAsistio,
+      total_bruto_servicios: totalCobradoHistorico,
+      total_ganado_vitalicio: totalGanadoVitalicio,
+      total_liquidado_pagado: totalComisionesPagadas,
+      saldo_pendiente_por_cobrar: saldoPendientePorCobrar,
+      utilidad_neta_para_barberia: utilidadGenerada,
+      efectividad_pct: totalCitas > 0 ? Math.round((totalCompletadas / totalCitas) * 100) : 0
+    };
+
     res.json({
       barbero: barberoLimpio,
-      metricas: {
-        total_citas: totalCitas,
-        completadas: Number(citasCompletadas?.count || 0),
-        canceladas: Number(citasCanceladas?.count || 0),
-        no_asistio: Number(noAsistio?.count || 0),
-        total_facturado: totalCobradoHistorico,
-        total_comisiones_pagadas: totalComisionesPagadas,
-        utilidad_neta_para_barberia: utilidadGenerada,
-        efectividad_pct: totalCitas > 0 ? Math.round((Number(citasCompletadas?.count || 0) / totalCitas) * 100) : 0
-      },
+      resumen,
+      metricas: resumen,
+      citas,
+      ultimas_citas: citas,
       liquidaciones,
-      ultimas_citas: ultimasCitas
+      ventas_productos: ventasProductos,
+      publicaciones,
+      auditoria
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2513,10 +2566,22 @@ app.get('/api/citas', requireAnyOperator, async (req, res) => {
 });
 
 app.post('/api/citas', async (req, res) => {
-  const { barbero_id, servicio_id, cliente_nombre, cliente_telefono, fecha, hora_inicio, notas } = req.body;
+  const { 
+    barbero_id, 
+    servicio_id, 
+    cliente_nombre, 
+    cliente_telefono, 
+    fecha, 
+    hora_inicio, 
+    notas,
+    estado,
+    precio_cobrado,
+    propina,
+    origen
+  } = req.body;
   const tenantId = await getTenantId(req);
 
-  if (!barbero_id || !servicio_id || !cliente_nombre || !cliente_telefono || !fecha || !hora_inicio) {
+  if (!barbero_id || !servicio_id || !cliente_nombre || !fecha || !hora_inicio) {
     return res.status(400).json({ error: 'Todos los campos marcados son obligatorios' });
   }
 
@@ -2536,7 +2601,7 @@ app.post('/api/citas', async (req, res) => {
     `).all(barbero_id, tenantId, fecha);
 
     const hayConflictoCita = citasExistentes.some(c => checkOverlap(hora_inicio, hora_fin, c.hora_inicio, c.hora_fin));
-    if (hayConflictoCita) {
+    if (hayConflictoCita && estado !== 'completada') {
       return res.status(409).json({ 
         error: 'El horario seleccionado acaba de ser reservado por otro cliente. Por favor selecciona otro turno.' 
       });
@@ -2549,17 +2614,25 @@ app.post('/api/citas', async (req, res) => {
     `).all(barbero_id, tenantId, fecha);
 
     const hayConflictoBloqueo = bloqueos.some(b => checkOverlap(hora_inicio, hora_fin, b.hora_inicio, b.hora_fin));
-    if (hayConflictoBloqueo) {
+    if (hayConflictoBloqueo && estado !== 'completada') {
       return res.status(409).json({ 
         error: 'El barbero o la barbería tiene este horario bloqueado.' 
       });
     }
 
+    const estadoFinal = (estado === 'completada') ? 'completada' : 'confirmada';
+    const precioFinal = (precio_cobrado !== undefined && precio_cobrado !== '' && !isNaN(precio_cobrado))
+      ? Math.max(0, Number(precio_cobrado))
+      : Number(servicio.precio_cop || 0);
+    const propinaFinal = (propina !== undefined && propina !== '' && !isNaN(propina))
+      ? Math.max(0, Number(propina))
+      : 0;
+
     const stmt = db.prepare(`
       INSERT INTO citas (
         barberia_id, barbero_id, servicio_id, cliente_nombre, cliente_telefono, 
-        fecha, hora_inicio, hora_fin, estado, notas, precio_cobrado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)
+        fecha, hora_inicio, hora_fin, estado, notas, precio_cobrado, propina
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = await stmt.run(
@@ -2567,22 +2640,26 @@ app.post('/api/citas', async (req, res) => {
       Number(barbero_id),
       Number(servicio_id),
       cliente_nombre.trim(),
-      cliente_telefono.trim(),
+      (cliente_telefono || '').trim(),
       fecha,
       hora_inicio,
       hora_fin,
+      estadoFinal,
       notas || '',
-      servicio.precio_cop
+      precioFinal,
+      propinaFinal
     );
 
-    const nuevaCitaId = result.lastInsertRowid;
+    const nuevaCitaId = result.lastInsertRowid || result.id;
 
     await registrarAuditoria(
       tenantId,
       'cita_creada',
-      `Nueva cita agendada para ${cliente_nombre.trim()} el ${fecha} a las ${hora_inicio}`,
-      'Cliente Web',
-      { cita_id: nuevaCitaId, servicio: servicio.nombre, barbero_id }
+      estadoFinal === 'completada'
+        ? `Turno presencial completado y cobrado ($${precioFinal.toLocaleString('es-CO')}) para ${cliente_nombre.trim()} asignado a barbero #${barbero_id}`
+        : `Nueva cita agendada para ${cliente_nombre.trim()} el ${fecha} a las ${hora_inicio}`,
+      origen || (estadoFinal === 'completada' ? 'Admin Presencial' : 'Cliente Web'),
+      { cita_id: nuevaCitaId, servicio: servicio.nombre, barbero_id, estado: estadoFinal, precio: precioFinal, propina: propinaFinal }
     );
 
     const citaCreada = await db.prepare(`

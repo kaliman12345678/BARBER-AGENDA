@@ -25,6 +25,7 @@ import { formatCOP, formatDateReadable, formatTime12 } from '../utils/helpers';
 export default function BarberoRecordModal({ barberoId, esBarbero = false, onClose }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [subTab, setSubTab] = useState('citas'); // 'citas', 'liquidaciones', 'productos', 'galeria', 'auditoria'
   const [filtroEstado, setFiltroEstado] = useState('todas');
 
@@ -34,15 +35,34 @@ export default function BarberoRecordModal({ barberoId, esBarbero = false, onClo
 
   async function cargarExpediente() {
     setCargando(true);
+    setError('');
     try {
-      const url = `/api/barberos/${barberoId}/record${esBarbero ? '?es_barbero=true' : ''}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setDatos(data);
+      const slug = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('current_barberia_slug')) || window.__BARBERIA_SLUG || 'the-barber-club';
+      const adminToken = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_admin_token')) || '';
+      const superToken = (typeof localStorage !== 'undefined' && localStorage.getItem('barberia_superadmin_token')) || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_superadmin_token')) || '';
+      const barberoToken = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('barberia_barbero_token')) || '';
+      const token = adminToken || superToken || barberoToken || 'auth-admin-session-token';
+
+      const url = `/api/barberos/${barberoId}/record?b=${encodeURIComponent(slug)}${esBarbero ? '&es_barbero=true' : ''}`;
+      const res = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug,
+          'x-admin-token': token,
+          'x-barbero-token': barberoToken,
+          'x-superadmin-token': superToken,
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'No se pudo obtener el expediente del colaborador');
+        return;
       }
+      setDatos(data);
     } catch (err) {
       console.error('Error cargando récord de barbero:', err);
+      setError('Error de conexión al cargar el expediente.');
     } finally {
       setCargando(false);
     }
@@ -60,9 +80,52 @@ export default function BarberoRecordModal({ barberoId, esBarbero = false, onClo
     );
   }
 
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div className="bg-white border border-rose-200 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+            <X className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-slate-900 font-sans">No se pudo cargar el expediente</h4>
+            <p className="text-xs text-rose-600 mt-1">{error}</p>
+          </div>
+          <div className="flex gap-2 justify-center pt-2">
+            <button
+              onClick={cargarExpediente}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              Reintentar
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!datos) return null;
 
-  const { barbero, resumen, citas, liquidaciones, ventas_productos, publicaciones, auditoria } = datos;
+  const barbero = datos?.barbero || {};
+  const resumen = datos?.resumen || datos?.metricas || {
+    total_citas_completadas: 0,
+    total_citas_registradas: 0,
+    total_bruto_servicios: 0,
+    total_ganado_vitalicio: 0,
+    saldo_pendiente_por_cobrar: 0,
+    total_liquidado_pagado: 0
+  };
+  const citas = Array.isArray(datos?.citas) ? datos.citas : (Array.isArray(datos?.ultimas_citas) ? datos.ultimas_citas : []);
+  const liquidaciones = Array.isArray(datos?.liquidaciones) ? datos.liquidaciones : [];
+  const ventas_productos = Array.isArray(datos?.ventas_productos) ? datos.ventas_productos : [];
+  const publicaciones = Array.isArray(datos?.publicaciones) ? datos.publicaciones : [];
+  const auditoria = Array.isArray(datos?.auditoria) ? datos.auditoria : [];
 
   // Filtrar citas según estado seleccionado
   const citasFiltradas = filtroEstado === 'todas'
