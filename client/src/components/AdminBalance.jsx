@@ -21,7 +21,7 @@ import {
 import { formatCOP, getTodayStr } from '../utils/helpers';
 import BarberoRecordModal from './BarberoRecordModal';
 
-export default function AdminBalance() {
+export default function AdminBalance({ shopConfig }) {
   const [balance, setBalance] = useState({
     total_ingresos: 0,
     total_ingresos_servicios: 0,
@@ -42,7 +42,7 @@ export default function AdminBalance() {
 
   useEffect(() => {
     aplicarPreset('mes');
-  }, []);
+  }, [shopConfig?.slug]);
 
   function aplicarPreset(tipo) {
     setFiltroRango(tipo);
@@ -78,11 +78,17 @@ export default function AdminBalance() {
   async function cargarBalance(desde = fechaDesde, hasta = fechaHasta) {
     setCargando(true);
     try {
-      let url = '/api/reportes/balance';
-      if (desde && hasta) {
-        url += `?desde=${desde}&hasta=${hasta}`;
+      const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
+      const params = new URLSearchParams();
+      params.set('b', slug);
+      if (desde !== undefined && hasta !== undefined) {
+        params.set('desde', desde);
+        params.set('hasta', hasta);
       }
-      const res = await fetch(url);
+      const url = `/api/reportes/balance?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
       setBalance(data);
     } catch (err) {
@@ -100,7 +106,7 @@ export default function AdminBalance() {
     }
   }
 
-  const barberosDetalle = balance.barberos_detalle || [];
+  const barberosDetalle = balance.barberos_detalle || balance.balance_barberos || [];
 
   return (
     <div className="space-y-7">

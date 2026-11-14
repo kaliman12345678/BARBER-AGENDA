@@ -46,7 +46,7 @@ export default function ModalTarjetaVIPAdmin({
     setCargando(true);
     setError('');
     try {
-      const res = await fetch(`/api/tarjeta-vip/cliente/${encodeURIComponent(telefonoCliente)}`);
+      const res = await fetch(`/api/tarjeta-vip/cliente/${encodeURIComponent(telefonoCliente)}?nombre=${encodeURIComponent(nombreCliente)}`);
       if (res.ok) {
         const data = await res.json();
         setDatosCard(data.cliente);

@@ -3023,6 +3023,7 @@ app.get('/api/fichas-tecnicas', requireAnyOperator, async (req, res) => {
   }
 
   const rawPhone = String(telefono).replace(/[^0-9]/g, '');
+  const searchPattern = rawPhone.length > 7 ? `%${rawPhone.slice(-10)}%` : `%${rawPhone}%`;
 
   try {
     const sql = `
@@ -3036,10 +3037,10 @@ app.get('/api/fichas-tecnicas', requireAnyOperator, async (req, res) => {
       LEFT JOIN citas c ON ft.cita_id = c.id
       LEFT JOIN servicios s ON c.servicio_id = s.id
       WHERE ft.barberia_id = ? 
-        AND (REPLACE(REPLACE(ft.cliente_telefono, ' ', ''), '-', '') LIKE ?)
+        AND (REPLACE(REPLACE(REPLACE(ft.cliente_telefono, ' ', ''), '-', ''), '+', '') LIKE ? OR ft.cliente_telefono LIKE ?)
       ORDER BY ft.fecha DESC, ft.id DESC
     `;
-    const fichas = await db.prepare(sql).all(tenantId, `%${rawPhone.slice(-10)}%`) || [];
+    const fichas = await db.prepare(sql).all(tenantId, searchPattern, `%${rawPhone}%`) || [];
     res.json(fichas);
   } catch (err) {
     console.error('Error al consultar fichas tecnicas:', err);
@@ -3150,6 +3151,7 @@ app.get('/api/tarjeta-vip/cliente/:telefono', requireAnyOperator, async (req, re
   const tenantId = await getTenantId(req);
   const { telefono } = req.params;
   const rawPhone = String(telefono).replace(/[^0-9]/g, '');
+  const nombreQuery = (req.query.nombre || '').trim();
 
   if (!rawPhone) {
     return res.status(400).json({ error: 'Teléfono inválido' });
@@ -3163,14 +3165,17 @@ app.get('/api/tarjeta-vip/cliente/:telefono', requireAnyOperator, async (req, re
 
     if (!cliente) {
       // Buscar citas históricas para auto-calcular sellos iniciales
-      const cita = await db.prepare(`
-        SELECT cliente_nombre, COUNT(id) as conteo 
-        FROM citas 
-        WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
-        GROUP BY cliente_nombre
-      `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+      let cita = null;
+      try {
+        cita = await db.prepare(`
+          SELECT cliente_nombre, COUNT(id) as conteo 
+          FROM citas 
+          WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+          GROUP BY cliente_nombre
+        `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+      } catch (_) {}
 
-      const nombre = cita?.cliente_nombre || 'Cliente VIP';
+      const nombre = nombreQuery || cita?.cliente_nombre || 'Cliente VIP';
       const cortes = Number(cita?.conteo || 0);
 
       try {
@@ -3187,18 +3192,36 @@ app.get('/api/tarjeta-vip/cliente/:telefono', requireAnyOperator, async (req, re
           cortes >= 15 ? 'Black VIP' : cortes >= 8 ? 'Oro VIP' : cortes >= 4 ? 'Plata VIP' : 'Bronce VIP',
           `VIP-${tenantId}-${rawPhone}`
         );
-      } catch (_) {}
+      } catch (errInsert) {
+        console.warn('Advertencia al auto-crear cliente VIP:', errInsert.message);
+      }
     }
 
     if (!cliente) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
+      cliente = {
+        id: `c-${rawPhone}`,
+        cliente_nombre: nombreQuery || 'Cliente VIP',
+        cliente_telefono: rawPhone,
+        categoria: 'VIP',
+        nivel_vip: 'Bronce VIP',
+        sellos_acumulados: 0,
+        sellos_meta: 10,
+        premio_proximo: 'Corte o Barba Gratis',
+        premios_redimidos: 0,
+        codigo_qr_vip: `VIP-${tenantId}-${rawPhone}`
+      };
     }
 
-    const movimientos = await db.prepare(`
-      SELECT * FROM movimientos_tarjeta_vip 
-      WHERE barberia_id = ? AND cliente_id = ? 
-      ORDER BY created_at DESC LIMIT 20
-    `).all(tenantId, cliente.id) || [];
+    let movimientos = [];
+    if (cliente.id && !String(cliente.id).startsWith('c-')) {
+      try {
+        movimientos = await db.prepare(`
+          SELECT * FROM movimientos_tarjeta_vip 
+          WHERE barberia_id = ? AND cliente_id = ? 
+          ORDER BY created_at DESC LIMIT 20
+        `).all(tenantId, cliente.id) || [];
+      } catch (_) {}
+    }
 
     res.json({
       success: true,
@@ -3962,10 +3985,16 @@ app.post('/api/ventas-productos', requireAdminOrSuper, async (req, res) => {
 // 10. LIQUIDACIONES
 // ----------------------------------------------------
 app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
-  const { barbero_id, fecha_inicio, fecha_fin, porcentaje } = req.query;
+  const { barbero_id, fecha_inicio, fecha_fin, porcentaje, todas } = req.query;
   const tenantId = await getTenantId(req);
 
-  if (!barbero_id || !fecha_inicio || !fecha_fin) {
+  if (!barbero_id) {
+    return res.status(400).json({ error: 'barbero_id es requerido' });
+  }
+
+  const esTodas = todas === '1' || todas === 'true' || fecha_inicio === 'todas';
+
+  if (!esTodas && (!fecha_inicio || !fecha_fin)) {
     return res.status(400).json({ error: 'barbero_id, fecha_inicio y fecha_fin son requeridos' });
   }
 
@@ -3973,28 +4002,38 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
     const barbero = await db.prepare('SELECT * FROM barberos WHERE id = ? AND barberia_id = ?').get(barbero_id, tenantId);
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
-    const citas = await db.prepare(`
+    let sqlCitas = `
       SELECT c.*, s.nombre as servicio_nombre
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
       WHERE c.barbero_id = ? 
         AND c.barberia_id = ?
-        AND c.fecha BETWEEN ? AND ? 
         AND c.estado = 'completada'
         AND c.liquidacion_id IS NULL
-      ORDER BY c.fecha ASC, c.hora_inicio ASC
-    `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
+    `;
+    const paramsCitas = [barbero_id, tenantId];
+    if (!esTodas) {
+      sqlCitas += ` AND c.fecha BETWEEN ? AND ? `;
+      paramsCitas.push(fecha_inicio, fecha_fin);
+    }
+    sqlCitas += ` ORDER BY c.fecha ASC, c.hora_inicio ASC`;
+    const citas = await db.prepare(sqlCitas).all(...paramsCitas);
 
-    const ventasProductos = await db.prepare(`
+    let sqlVentas = `
       SELECT v.*, p.nombre as producto_nombre
       FROM ventas_productos v
       JOIN productos p ON v.producto_id = p.id
       WHERE v.barbero_id = ? 
         AND v.barberia_id = ?
-        AND v.fecha BETWEEN ? AND ?
         AND v.liquidacion_id IS NULL
-      ORDER BY v.fecha ASC
-    `).all(barbero_id, tenantId, fecha_inicio, fecha_fin);
+    `;
+    const paramsVentas = [barbero_id, tenantId];
+    if (!esTodas) {
+      sqlVentas += ` AND v.fecha BETWEEN ? AND ? `;
+      paramsVentas.push(fecha_inicio, fecha_fin);
+    }
+    sqlVentas += ` ORDER BY v.fecha ASC`;
+    const ventasProductos = await db.prepare(sqlVentas).all(...paramsVentas);
 
     const totalBrutoServicios = citas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
     const porcentajeAplicado = (porcentaje !== undefined && porcentaje !== '' && !isNaN(porcentaje))
@@ -4010,8 +4049,8 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
 
     res.json({
       barbero,
-      fecha_inicio,
-      fecha_fin,
+      fecha_inicio: esTodas ? (citas[0]?.fecha || 'Inicio') : fecha_inicio,
+      fecha_fin: esTodas ? (citas[citas.length - 1]?.fecha || 'Hoy') : fecha_fin,
       total_servicios: citas.length,
       total_bruto: totalBrutoServicios,
       porcentaje_aplicado: porcentajeAplicado,
@@ -4303,8 +4342,9 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
     const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().split('T')[0];
     const hoyStr = ahora.toISOString().split('T')[0];
 
-    const fDesde = desde || primerDiaMes;
-    const fHasta = hasta || hoyStr;
+    // Si 'desde' viene explícitamente vacío (filtro 'todo'), abarcar histórico completo
+    const fDesde = (desde !== undefined && desde !== null) ? (desde === '' ? '2000-01-01' : desde) : primerDiaMes;
+    const fHasta = (hasta !== undefined && hasta !== null) ? (hasta === '' ? '2099-12-31' : hasta) : hoyStr;
 
     const citasCompletadas = await db.prepare(`
       SELECT c.id, c.barbero_id, c.servicio_id, c.fecha, c.precio_cobrado,
@@ -4351,9 +4391,9 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
 
     const barberos = await db.prepare('SELECT id, nombre, porcentaje_comision, foto_url FROM barberos WHERE barberia_id = ?').all(tenantId);
     const balanceBarberos = barberos.map(b => {
-      const citasDelBarbero = citasCompletadas.filter(c => c.barbero_id === b.id);
+      const citasDelBarbero = citasCompletadas.filter(c => String(c.barbero_id) === String(b.id));
       const facturadoServicios = citasDelBarbero.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
-      const ventasDelBarbero = ventasProductos.filter(v => v.barbero_id === b.id);
+      const ventasDelBarbero = ventasProductos.filter(v => String(v.barbero_id) === String(b.id));
       const facturadoProductos = ventasDelBarbero.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
       const comisionProductos = ventasDelBarbero.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
 
@@ -4363,24 +4403,56 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
       const totalFacturadoTotal = facturadoServicios + facturadoProductos;
       const utilidadParaNegocio = totalFacturadoTotal - comisionTotalEstimada;
 
+      const liqsBarbero = liquidacionesPeriodo.filter(l => String(l.barbero_id) === String(b.id));
+      const totalPagadoLiq = liqsBarbero.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
+      const citasSinLiquidar = citasDelBarbero.filter(c => !c.liquidacion_id);
+      const facturadoSinLiquidar = citasSinLiquidar.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+      const comisionesPendientes = Math.round(facturadoSinLiquidar * (pct / 100));
+      const margenRetenidoPct = totalFacturadoTotal > 0 ? Math.round((utilidadParaNegocio / totalFacturadoTotal) * 100) : (100 - pct);
+
       return {
+        id: b.id,
         barbero_id: b.id,
         nombre: b.nombre,
         foto_url: b.foto_url,
+        porcentaje_comision: pct,
         porcentaje: pct,
+        servicios_realizados: citasDelBarbero.length,
         total_citas: citasDelBarbero.length,
+        ventas_productos_count: ventasDelBarbero.length,
+        total_bruto_servicios: facturadoServicios,
         total_servicios_cop: facturadoServicios,
+        total_bruto_productos: facturadoProductos,
         total_productos_cop: facturadoProductos,
+        total_bruto_generado: totalFacturadoTotal,
         total_facturado_cop: totalFacturadoTotal,
+        total_ganado_barbero: comisionTotalEstimada,
         comision_estimada_cop: comisionTotalEstimada,
-        utilidad_neta_negocio_cop: utilidadParaNegocio
+        total_pagado_liquidaciones: totalPagadoLiq,
+        comisiones_pendientes: comisionesPendientes,
+        retenido_barberia: utilidadParaNegocio,
+        utilidad_neta_negocio_cop: utilidadParaNegocio,
+        porcentaje_retenido_barberia: margenRetenidoPct
       };
     });
 
     const utilidadNetaOperativa = totalIngresosBrutos - totalEgresos - totalLiquidacionesPagadas;
+    const margenNegocioPct = totalIngresosBrutos > 0 ? Math.round((utilidadNetaOperativa / totalIngresosBrutos) * 100) : 0;
 
     res.json({
       periodo: { desde: fDesde, hasta: fHasta },
+      // Campos aplanados para compatibilidad total con AdminBalance.jsx
+      total_ingresos: totalIngresosBrutos,
+      total_ingresos_servicios: totalIngresosCitas,
+      total_ventas_productos: totalIngresosProductos,
+      total_ingresos_extras: 0,
+      total_servicios: citasCompletadas.length,
+      total_comisiones_pagadas: totalLiquidacionesPagadas,
+      total_costos_operativos: totalEgresos,
+      margen_barberia: margenNegocioPct,
+      ganancia_neta: utilidadNetaOperativa,
+      barberos_detalle: balanceBarberos,
+      // Estructura anidada para retrocompatibilidad
       metricas_globales: {
         total_ingresos_brutos: totalIngresosBrutos,
         total_ingresos_servicios: totalIngresosCitas,
@@ -4389,7 +4461,7 @@ app.get('/api/reportes/balance', requireAdminOrSuper, async (req, res) => {
         total_liquidaciones_pagadas: totalLiquidacionesPagadas,
         utilidad_neta: utilidadNetaOperativa,
         total_citas_completadas: citasCompletadas.length,
-        margen_rentabilidad_pct: totalIngresosBrutos > 0 ? Math.round((utilidadNetaOperativa / totalIngresosBrutos) * 100) : 0
+        margen_rentabilidad_pct: margenNegocioPct
       },
       egresos_por_categoria: {},
       balance_barberos: balanceBarberos,

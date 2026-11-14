@@ -303,6 +303,17 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
   - El SuperAdmin puede saltar de una barbería a otra directamente desde el selector de la barra superior.
   - Compilación exitosa en Vite y sincronización con el repositorio oficial.
 
+### [2026-11-14] — Hotfix Crítico: Soporte BIGINT en IDs de Barberías (Kaliman Barber) y Auto-Provisioning de Tarjeta VIP
+* **Causa Raíz Identificada:**
+  - Las barberías creadas dinámicamente desde el SuperAdmin generan IDs basados en marcas de tiempo `Date.now()` (ejemplo: `Kaliman Barber` con ID `1794631242838`).
+  - Las tablas `clientes`, `fichas_tecnicas` y `movimientos_tarjeta_vip` tenían sus columnas `barberia_id`, `id`, `cita_id` y `cliente_id` como `INTEGER` (firmado de 32 bits, límite 2,147,483,647).
+  - Al consultar o sellar para `Kaliman Barber`, PostgreSQL lanzaba el error fatal: `value "1794631242838" is out of range for type integer`, provocando los mensajes en rojo "Cliente no encontrado" y "Error al sellar tarjeta VIP".
+* **Solución Implementada:**
+  1. **Migración en Supabase PostgreSQL:** Se convirtieron a tipo `BIGINT` todas las columnas numéricas de referencia en `clientes` (`id`, `barberia_id`), `fichas_tecnicas` (`id`, `barberia_id`, `barbero_id`, `cita_id`) y `movimientos_tarjeta_vip` (`id`, `barberia_id`, `cliente_id`).
+  2. **Auto-Provisioning Resiliente:** En `GET /api/tarjeta-vip/cliente/:telefono` se agregó auto-creación del registro de cliente si aún no existía en la base de datos (con soporte de `nombre` pasado desde el frontend), evitando que el modal jamás arroje "Cliente no encontrado".
+  3. **Verificación Directa:** Se probó exitosamente la consulta e inserción de `+1 Sello` para el cliente de prueba en `Kaliman Barber`, retornando `sellos_acumulados: 1` y registrando el movimiento de auditoría sin error.
+  4. **Compilación y Paridad:** `npm run build` completado sin errores y paridad SHA-256 exacta entre `server/server.js` y `client/server/server.js`.
+
 ### [2026-11-14] — Fase 4: Tarjeta Digital VIP con Código QR & Sistema Modular de Beneficios en SuperAdmin
 * **Funcionalidad Implementada:**
   1. **Modularización Completa de Beneficios en SuperAdmin (`modulos_activos`):**

@@ -466,7 +466,9 @@ export default function AdminDashboard({ shopConfig, onConfigActualizada }) {
             )}
 
             {activeTab === 'balance' && (
-              <AdminBalance />
+              <AdminBalance 
+                shopConfig={shopConfig} 
+              />
             )}
 
             {activeTab === 'rentabilidad' && (

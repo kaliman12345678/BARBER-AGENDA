@@ -24,7 +24,10 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
   // Filtros de cálculo
   const [barberoId, setBarberoId] = useState(barberos[0]?.id || '');
-  const [fechaInicio, setFechaInicio] = useState(getTodayStr());
+  const [fechaInicio, setFechaInicio] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+  });
   const [fechaFin, setFechaFin] = useState(getTodayStr());
 
   // Estado del cálculo
