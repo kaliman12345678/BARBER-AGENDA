@@ -498,71 +498,73 @@ export default function AdminConfig({ shopConfig, onConfigActualizada }) {
           </div>
         </div>
 
-        {/* SECCIÓN GOOGLE REVIEWS 5★ (POSICIONAMIENTO & CRECIMIENTO) */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/90 via-yellow-50/50 to-amber-50/90 border border-amber-200/90 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-amber-600 shrink-0">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+        {/* SECCIÓN GOOGLE REVIEWS 5★ (POSICIONAMIENTO & CRECIMIENTO - GATED POR MÓDULO) */}
+        {shopConfig?.modulos_activos?.google_reviews !== false && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/90 via-yellow-50/50 to-amber-50/90 border border-amber-200/90 space-y-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-amber-600 shrink-0">
+                  <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                </div>
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                    Google Reviews 5★ (Crecimiento en Google Maps)
+                  </span>
+                  <p className="text-[11px] text-amber-800/80">
+                    Pide reseñas automáticamente por WhatsApp al cobrar cada cita en 1 clic
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                  Google Reviews 5★ (Crecimiento en Google Maps)
-                </span>
-                <p className="text-[11px] text-amber-800/80">
-                  Pide reseñas automáticamente por WhatsApp al cobrar cada cita en 1 clic
-                </p>
-              </div>
-            </div>
-            <span className="text-[10px] bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black border border-amber-300 hidden sm:inline-block">
-              5.0 ★★★★★
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
-              <span>Enlace Directo de Opiniones de Google Maps</span>
-              <span className="text-[10px] text-amber-700 font-semibold">¿Dónde lo consigo? Perfil de Negocio Google &gt; Solicitar opiniones</span>
-            </label>
-            <input
-              type="url"
-              placeholder="Ej: https://g.page/r/CdABC123/review o https://maps.app.goo.gl/..."
-              value={form.google_reviews_url}
-              onChange={(e) => setForm({ ...form, google_reviews_url: e.target.value })}
-              className="w-full p-2.5 rounded-xl border border-amber-200 bg-white font-mono text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-inner"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">
-              Cuando el cliente toque este enlace desde su celular, Google Maps abrirá directamente la ventana de 5 estrellas para calificar tu negocio.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">
-              Plantilla de Mensaje por WhatsApp
-            </label>
-            <textarea
-              rows={3}
-              value={form.google_reviews_mensaje}
-              onChange={(e) => setForm({ ...form, google_reviews_mensaje: e.target.value })}
-              placeholder="Mensaje a enviar por WhatsApp..."
-              className="w-full p-2.5 rounded-xl border border-amber-200 bg-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none leading-relaxed"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
-              <span className="text-[10px] text-slate-500">
-                Variables disponibles: <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{cliente}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{barbero}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{barberia}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{enlace_google}'}</code>
+              <span className="text-[10px] bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black border border-amber-300 hidden sm:inline-block">
+                5.0 ★★★★★
               </span>
-              <button
-                type="button"
-                onClick={handleProbarWhatsAppResena}
-                className="py-1 px-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-300"
-                title="Abre WhatsApp con un mensaje de ejemplo para verificar cómo lo verá tu cliente"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-amber-700" />
-                <span>Probar Mensaje en WhatsApp</span>
-              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                <span>Enlace Directo de Opiniones de Google Maps</span>
+                <span className="text-[10px] text-amber-700 font-semibold">¿Dónde lo consigo? Perfil de Negocio Google &gt; Solicitar opiniones</span>
+              </label>
+              <input
+                type="url"
+                placeholder="Ej: https://g.page/r/CdABC123/review o https://maps.app.goo.gl/..."
+                value={form.google_reviews_url}
+                onChange={(e) => setForm({ ...form, google_reviews_url: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-amber-200 bg-white font-mono text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-inner"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Cuando el cliente toque este enlace desde su celular, Google Maps abrirá directamente la ventana de 5 estrellas para calificar tu negocio.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Plantilla de Mensaje por WhatsApp
+              </label>
+              <textarea
+                rows={3}
+                value={form.google_reviews_mensaje}
+                onChange={(e) => setForm({ ...form, google_reviews_mensaje: e.target.value })}
+                placeholder="Mensaje a enviar por WhatsApp..."
+                className="w-full p-2.5 rounded-xl border border-amber-200 bg-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none leading-relaxed"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
+                <span className="text-[10px] text-slate-500">
+                  Variables disponibles: <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{cliente}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{barbero}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{barberia}'}</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-bold">{'{enlace_google}'}</code>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleProbarWhatsAppResena}
+                  className="py-1 px-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-300"
+                  title="Abre WhatsApp con un mensaje de ejemplo para verificar cómo lo verá tu cliente"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Probar Mensaje en WhatsApp</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* PERSONALIZACIÓN DE TEMA Y COLOR PARA EL CLIENTE */}
         <div className="pt-4 border-t border-slate-200 space-y-4">

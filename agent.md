@@ -303,6 +303,33 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
   - El SuperAdmin puede saltar de una barbería a otra directamente desde el selector de la barra superior.
   - Compilación exitosa en Vite y sincronización con el repositorio oficial.
 
+### [2026-11-14] — Fase 4: Tarjeta Digital VIP con Código QR & Sistema Modular de Beneficios en SuperAdmin
+* **Funcionalidad Implementada:**
+  1. **Modularización Completa de Beneficios en SuperAdmin (`modulos_activos`):**
+     - Se integraron formalmente las 5 llaves de beneficios competitivos en `getDefaultModulesForPlan(plan)`:
+       * `google_reviews`: Google Reviews Flex (Reseñas 5★ automáticas vía WhatsApp).
+       * `tirilla_pos`: Tirilla Digital / Recibo POS con Código QR.
+       * `ficha_tecnica`: Ficha Técnica & Historial de Estilo del Cliente.
+       * `tarjeta_vip`: Tarjeta Digital VIP con Código QR (Monedero de fidelización móvil).
+       * `reactivacion_ia`: Asistente de Reactivación de Clientes con IA.
+     - Disponibles en `SuperAdminDashboard.jsx` tanto al configurar planes personalizados como en el panel de detalle por inquilino/barbería (interruptores de 1 clic).
+     - Gating / Protección global en frontend (`AdminAgenda`, `BarberoPortal`, `AdminConfig`, `AdminClientes`) respetando `shopConfig.modulos_activos`.
+  2. **Paso 4: Tarjeta Digital VIP con Código QR:**
+     - **Base de Datos en Supabase:**
+       * Columnas en `clientes`: `sellos_acumulados`, `sellos_meta` (10), `premio_proximo` ('Corte o Barba Gratis'), `nivel_vip` ('Bronce VIP', 'Plata VIP', 'Oro VIP', 'Black VIP'), `premios_redimidos`, `codigo_qr_vip`.
+       * Tabla `movimientos_tarjeta_vip`: auditoría de sellos y canjes (`id`, `barberia_id`, `cliente_id`, `tipo`, `cantidad`, `barbero_nombre`, `notas`, `created_at`).
+     - **Backend Endpoints:**
+       * `GET /api/tarjeta-vip/cliente/:telefono`: Datos del cliente, sellos, meta y movimientos recientes.
+       * `POST /api/tarjeta-vip/sellar`: Incrementa sellos (+1), actualiza nivel VIP e inserta movimiento.
+       * `POST /api/tarjeta-vip/canjear`: Canjea premio gratis, descuenta meta y registra auditoría.
+       * `GET /api/tarjeta-vip/public/:slug/:telefono`: Endpoint público seguro para el pass digital del cliente (valida que `tarjeta_vip` esté activo).
+     - **Frontend:**
+       * `client/src/components/TarjetaVIPPass.jsx`: Vista móvil cliente estilo Apple Wallet / Google Pay (`/?b=:slug&vip=1&tel=:telefono`), barra de progreso, cuadrícula de 10 sellos con brillos, código QR único de cliente y guía de instalación para iPhone (Safari) y Android (Chrome).
+       * `client/src/components/ModalTarjetaVIPAdmin.jsx`: Modal para barbero y administrador con 1-clic "+1 Sello", "Canjear Premio", historial y botón "Enviar Pase VIP por WhatsApp".
+* **Compilación & Sincronización:**
+  - `npm --prefix client run build` completado con cero errores.
+  - Regla del espejo `server/server.js` <-> `client/server/server.js` 100% idéntica (SHA-256 verificado).
+
 ### [2026-11-13] — Fase 2: Ficha Técnica & Historial de Estilo del Cliente
 * **Funcionalidad Implementada:**
   - Persistencia de clientes y fórmulas técnicas de corte en Supabase PostgreSQL (`clientes` y `fichas_tecnicas`).

@@ -19,9 +19,11 @@ import {
   Award,
   Filter,
   Scissors,
-  BookmarkCheck
+  BookmarkCheck,
+  CreditCard
 } from 'lucide-react';
 import ModalFichaTecnica from './ModalFichaTecnica';
+import ModalTarjetaVIPAdmin from './ModalTarjetaVIPAdmin';
 
 export default function AdminClientes({ shopConfig, barberos = [] }) {
   const [clientes, setClientes] = useState([]);
@@ -31,6 +33,7 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [clienteEditando, setClienteEditando] = useState(null);
   const [clienteFichaSeleccionado, setClienteFichaSeleccionado] = useState(null);
+  const [clienteTarjetaVIPSeleccionado, setClienteTarjetaVIPSeleccionado] = useState(null);
 
   const [form, setForm] = useState({
     cliente_nombre: '',
@@ -369,17 +372,31 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
                     </div>
                   </div>
 
-                  {/* BOTÓN FICHA TÉCNICA Y BOTÓN WHATSAPP */}
+                  {/* BOTÓN FICHA TÉCNICA, TARJETA VIP Y BOTÓN WHATSAPP */}
                   <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setClienteFichaSeleccionado(c)}
-                      className="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                      title="Ver o registrar fórmula de corte, degradado y fotos del cliente"
-                    >
-                      <Scissors className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Ficha Técnica & Estilo</span>
-                    </button>
+                    {shopConfig?.modulos_activos?.tarjeta_vip !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setClienteTarjetaVIPSeleccionado(c)}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 hover:from-amber-500/20 hover:to-yellow-500/20 text-amber-950 border border-amber-300/80 text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Ver tarjeta VIP, sellar cortes y consultar pase digital del cliente"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Tarjeta VIP & Sellos ({c.sellos_acumulados || 0}/10)</span>
+                      </button>
+                    )}
+
+                    {shopConfig?.modulos_activos?.ficha_tecnica !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setClienteFichaSeleccionado(c)}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Ver o registrar fórmula de corte, degradado y fotos del cliente"
+                      >
+                        <Scissors className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Ficha Técnica & Estilo</span>
+                      </button>
+                    )}
 
                     <a
                       href={waUrl}
@@ -519,6 +536,16 @@ export default function AdminClientes({ shopConfig, barberos = [] }) {
           cliente={clienteFichaSeleccionado}
           barberos={barberos}
           onClose={() => setClienteFichaSeleccionado(null)}
+        />
+      )}
+
+      {/* MODAL TARJETA DIGITAL VIP & SELLOS (FASE 4) */}
+      {clienteTarjetaVIPSeleccionado && (
+        <ModalTarjetaVIPAdmin
+          cliente={clienteTarjetaVIPSeleccionado}
+          shopConfig={shopConfig}
+          onClose={() => setClienteTarjetaVIPSeleccionado(null)}
+          onSuccess={() => cargarClientes()}
         />
       )}
 

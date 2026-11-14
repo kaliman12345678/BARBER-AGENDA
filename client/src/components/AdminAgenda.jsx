@@ -26,13 +26,15 @@ import {
   DollarSign,
   Sparkles,
   Star,
-  Receipt
+  Receipt,
+  CreditCard
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 import ModalFichaTecnica from './ModalFichaTecnica';
 import ModalTirillaPOS from './ModalTirillaPOS';
+import ModalTarjetaVIPAdmin from './ModalTarjetaVIPAdmin';
 
 export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   // Filtro de tiempo universal y buscador de cliente
@@ -45,6 +47,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   const [cargando, setCargando] = useState(false);
   const [citaFichaSeleccionada, setCitaFichaSeleccionada] = useState(null);
   const [citaTirillaSeleccionada, setCitaTirillaSeleccionada] = useState(null);
+  const [citaVIPSeleccionada, setCitaVIPSeleccionada] = useState(null);
 
   // Selector de Tipo de Vista: 'tablero' | 'lista' | 'barberos' | 'cuadricula'
   const [tipoVista, setTipoVista] = useState(() => localStorage.getItem('barberia_agenda_vista') || 'tablero');
@@ -459,6 +462,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       <TarjetaKanbanCita 
                         key={cita.id} 
                         cita={cita}
+                        shopConfig={shopConfig}
                         onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
                         onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
                         onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
@@ -470,6 +474,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
                         onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
+                        onVerVIP={() => setCitaVIPSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -505,6 +510,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       <TarjetaKanbanCita 
                         key={cita.id} 
                         cita={cita}
+                        shopConfig={shopConfig}
                         onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
                         onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
                         onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
@@ -516,6 +522,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
                         onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
+                        onVerVIP={() => setCitaVIPSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -546,6 +553,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       <TarjetaKanbanCita 
                         key={cita.id} 
                         cita={cita}
+                        shopConfig={shopConfig}
                         onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
                         onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
                         onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
@@ -557,6 +565,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                         onPedirResena={() => handlePedirResenaGoogle(cita)}
                         onVerFicha={() => setCitaFichaSeleccionada(cita)}
                         onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
+                        onVerVIP={() => setCitaVIPSeleccionada(cita)}
                       />
                     ))
                   )}
@@ -747,6 +756,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                           <TarjetaKanbanCita 
                             key={cita.id} 
                             cita={cita}
+                            shopConfig={shopConfig}
                             onCompletar={() => cambiarEstadoCita(cita.id, 'completada')}
                             onCancelar={() => cambiarEstadoCita(cita.id, 'cancelada')}
                             onNoAsistio={() => cambiarEstadoCita(cita.id, 'no_asistio')}
@@ -758,6 +768,7 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                             onPedirResena={() => handlePedirResenaGoogle(cita)}
                             onVerFicha={() => setCitaFichaSeleccionada(cita)}
                             onVerTirilla={() => setCitaTirillaSeleccionada(cita)}
+                            onVerVIP={() => setCitaVIPSeleccionada(cita)}
                           />
                         ))
                       )}
@@ -816,15 +827,17 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                           <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
                           <span className="truncate">{cita.cliente_nombre}</span>
                         </h4>
-                        <button
-                          type="button"
-                          onClick={() => setCitaFichaSeleccionada(cita)}
-                          className="py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                          title="Consultar o registrar fórmula de corte de este cliente"
-                        >
-                          <Scissors className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Ficha de Estilo</span>
-                        </button>
+                        {shopConfig?.modulos_activos?.ficha_tecnica !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setCitaFichaSeleccionada(cita)}
+                            className="py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                            title="Consultar o registrar fórmula de corte de este cliente"
+                          >
+                            <Scissors className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Ficha de Estilo</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
@@ -923,28 +936,43 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       )}
 
                       {cita.estado === 'completada' && (
-                        <div className="flex items-center gap-2 ml-auto">
-                          <button
-                            type="button"
-                            onClick={() => setCitaTirillaSeleccionada(cita)}
-                            className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-slate-200"
-                            title="Ver o emitir tirilla digital térmica POS con código QR"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Recibo POS</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePedirResenaGoogle(cita)}
-                            className="py-1 px-2.5 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                            title="Enviar WhatsApp al cliente para pedir reseña de 5 estrellas en Google Maps"
-                          >
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
-                            <span>Pedir Reseña 5★</span>
-                          </button>
+                        <div className="flex items-center gap-2 ml-auto flex-wrap">
+                          {shopConfig?.modulos_activos?.tarjeta_vip !== false && (
+                            <button
+                              type="button"
+                              onClick={() => setCitaVIPSeleccionada(cita)}
+                              className="py-1 px-2.5 rounded-lg bg-gradient-to-r from-amber-500/10 to-yellow-500/10 hover:from-amber-500/20 hover:to-yellow-500/20 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition-all shadow-xs cursor-pointer border border-amber-300"
+                              title="Ver o sellar tarjeta VIP del cliente"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Sellar VIP</span>
+                            </button>
+                          )}
+                          {shopConfig?.modulos_activos?.tirilla_pos !== false && (
+                            <button
+                              type="button"
+                              onClick={() => setCitaTirillaSeleccionada(cita)}
+                              className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-slate-200"
+                              title="Ver o emitir tirilla digital térmica POS con código QR"
+                            >
+                              <Receipt className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Recibo POS</span>
+                            </button>
+                          )}
+                          {shopConfig?.modulos_activos?.google_reviews !== false && (
+                            <button
+                              type="button"
+                              onClick={() => handlePedirResenaGoogle(cita)}
+                              className="py-1 px-2.5 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                              title="Enviar WhatsApp al cliente para pedir reseña de 5 estrellas en Google Maps"
+                            >
+                              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                              <span>Pedir Reseña 5★</span>
+                            </button>
+                          )}
                           <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            Listo para liquidación
+                            Listo
                           </span>
                         </div>
                       )}
@@ -1300,12 +1328,22 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
         />
       )}
 
+      {/* MODAL TARJETA DIGITAL VIP & SELLOS (FASE 4) */}
+      {citaVIPSeleccionada && (
+        <ModalTarjetaVIPAdmin
+          cliente={citaVIPSeleccionada}
+          shopConfig={shopConfig}
+          onClose={() => setCitaVIPSeleccionada(null)}
+          onSuccess={cargarCitas}
+        />
+      )}
+
     </div>
   );
 }
 
 // Subcomponente de Tarjeta para Tablero Kanban & Vista por Barbero
-function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena, onVerFicha, onVerTirilla }) {
+function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasignar, onEnviar, onPedirResena, onVerFicha, onVerTirilla, onVerVIP, shopConfig }) {
   const isCompletada = cita.estado === 'completada';
   const isCancelada = cita.estado === 'cancelada';
   const isNoAsistio = cita.estado === 'no_asistio';
@@ -1336,15 +1374,17 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
           <span className="font-extrabold text-slate-900 block text-xs truncate">
             {cita.cliente_nombre}
           </span>
-          <button
-            type="button"
-            onClick={onVerFicha}
-            className="text-[9px] text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
-            title="Ver o registrar fórmula de estilo de este cliente"
-          >
-            <Scissors className="w-2.5 h-2.5 text-amber-600" />
-            <span>Ficha</span>
-          </button>
+          {shopConfig?.modulos_activos?.ficha_tecnica !== false && (
+            <button
+              type="button"
+              onClick={onVerFicha}
+              className="text-[9px] text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+              title="Ver o registrar fórmula de estilo de este cliente"
+            >
+              <Scissors className="w-2.5 h-2.5 text-amber-600" />
+              <span>Ficha</span>
+            </button>
+          )}
         </div>
         {cita.cliente_telefono && (
           <a
@@ -1430,24 +1470,39 @@ function TarjetaKanbanCita({ cita, onCompletar, onCancelar, onNoAsistio, onReasi
 
         {isCompletada && (
           <div className="flex items-center justify-between w-full gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={onVerTirilla}
-              className="py-1 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer border border-slate-200"
-              title="Ver tirilla digital POS con QR o enviar por WhatsApp"
-            >
-              <Receipt className="w-3 h-3 text-slate-600" />
-              <span>Recibo</span>
-            </button>
-            <button
-              type="button"
-              onClick={onPedirResena}
-              className="py-1 px-2 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
-              title="Enviar WhatsApp pidiendo reseña 5★ en Google Maps"
-            >
-              <Star className="w-3 h-3 text-amber-500 fill-amber-400 shrink-0" />
-              <span>Pedir 5★</span>
-            </button>
+            {shopConfig?.modulos_activos?.tarjeta_vip !== false && (
+              <button
+                type="button"
+                onClick={onVerVIP}
+                className="py-1 px-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+                title="Ver o sellar tarjeta VIP del cliente"
+              >
+                <CreditCard className="w-3 h-3 text-amber-600" />
+                <span>VIP</span>
+              </button>
+            )}
+            {shopConfig?.modulos_activos?.tirilla_pos !== false && (
+              <button
+                type="button"
+                onClick={onVerTirilla}
+                className="py-1 px-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer border border-slate-200"
+                title="Ver tirilla digital POS con QR o enviar por WhatsApp"
+              >
+                <Receipt className="w-3 h-3 text-slate-600" />
+                <span>Recibo</span>
+              </button>
+            )}
+            {shopConfig?.modulos_activos?.google_reviews !== false && (
+              <button
+                type="button"
+                onClick={onPedirResena}
+                className="py-1 px-1.5 rounded-lg bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+                title="Enviar WhatsApp pidiendo reseña 5★ en Google Maps"
+              >
+                <Star className="w-3 h-3 text-amber-500 fill-amber-400 shrink-0" />
+                <span>5★</span>
+              </button>
+            )}
             <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 ml-auto">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               <span>Cobrada</span>

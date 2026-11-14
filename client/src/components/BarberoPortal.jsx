@@ -25,7 +25,8 @@ import {
   RotateCw,
   ArrowLeft,
   Star,
-  Receipt
+  Receipt,
+  CreditCard
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
 import InstagramIcon from './InstagramIcon';
@@ -33,6 +34,7 @@ import DateRangeFilter from './DateRangeFilter';
 import { generarUrlWhatsAppResena } from '../utils/googleReviews';
 import ModalFichaTecnica from './ModalFichaTecnica';
 import ModalTirillaPOS from './ModalTirillaPOS';
+import ModalTarjetaVIPAdmin from './ModalTarjetaVIPAdmin';
 
 export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [tab, setTab] = useState('citas'); // 'citas', 'record', 'balance', 'calculadora', 'portafolio'
@@ -42,6 +44,7 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
   const [cargando, setCargando] = useState(false);
   const [clienteFichaModal, setClienteFichaModal] = useState(null);
   const [citaTirillaModal, setCitaTirillaModal] = useState(null);
+  const [citaVIPModal, setCitaVIPModal] = useState(null);
   const [filtroFecha, setFiltroFecha] = useState('todas'); // 'todas', 'hoy', 'ayer', '7d', 'rango'
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -406,15 +409,17 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                           <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
                           <span className="truncate">{c.cliente_nombre}</span>
                         </h4>
-                        <button
-                          type="button"
-                          onClick={() => setClienteFichaModal(c)}
-                          className="px-2 py-0.5 rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 transition-colors flex items-center gap-1 text-[10px] font-bold shrink-0 cursor-pointer"
-                          title="Consultar estilo o guardar foto y fórmula de corte"
-                        >
-                          <Scissors className="w-3 h-3 text-amber-600" />
-                          <span>Ficha</span>
-                        </button>
+                        {shopConfig?.modulos_activos?.ficha_tecnica !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setClienteFichaModal(c)}
+                            className="px-2 py-0.5 rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 transition-colors flex items-center gap-1 text-[10px] font-bold shrink-0 cursor-pointer"
+                            title="Consultar estilo o guardar foto y fórmula de corte"
+                          >
+                            <Scissors className="w-3 h-3 text-amber-600" />
+                            <span>Ficha</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="mt-3 space-y-1.5 text-xs text-slate-600">
@@ -443,37 +448,57 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
                     </div>
 
                     <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setClienteFichaModal(c)}
-                        className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        title="Ver o guardar notas técnicas y foto de este corte"
-                      >
-                        <Scissors className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Fórmula & Foto del Corte</span>
-                      </button>
+                      {shopConfig?.modulos_activos?.ficha_tecnica !== false && (
+                        <button
+                          type="button"
+                          onClick={() => setClienteFichaModal(c)}
+                          className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                          title="Ver o guardar notas técnicas y foto de este corte"
+                        >
+                          <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Fórmula & Foto del Corte</span>
+                        </button>
+                      )}
 
                       {isCompletada && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCitaTirillaModal(c)}
-                            className="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
-                            title="Ver o enviar tirilla térmica con QR"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Recibo POS</span>
-                          </button>
+                        <div className="space-y-2">
+                          {shopConfig?.modulos_activos?.tarjeta_vip !== false && (
+                            <button
+                              type="button"
+                              onClick={() => setCitaVIPModal(c)}
+                              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 hover:from-amber-500/20 hover:to-yellow-500/20 text-amber-950 border border-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                              title="Sellar corte o consultar tarjeta VIP del cliente"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Sellar Tarjeta VIP (Pase Móvil)</span>
+                            </button>
+                          )}
 
-                          <button
-                            type="button"
-                            onClick={() => handlePedirResenaGoogle(c)}
-                            className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer hover:shadow-sm"
-                            title="Enviar WhatsApp al cliente pidiendo reseña de 5 estrellas en Google"
-                          >
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
-                            <span>Pedir 5★</span>
-                          </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            {shopConfig?.modulos_activos?.tirilla_pos !== false && (
+                              <button
+                                type="button"
+                                onClick={() => setCitaTirillaModal(c)}
+                                className="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+                                title="Ver o enviar tirilla térmica con QR"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Recibo POS</span>
+                              </button>
+                            )}
+
+                            {shopConfig?.modulos_activos?.google_reviews !== false && (
+                              <button
+                                type="button"
+                                onClick={() => handlePedirResenaGoogle(c)}
+                                className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer hover:shadow-sm"
+                                title="Enviar WhatsApp al cliente pidiendo reseña de 5 estrellas en Google"
+                              >
+                                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                                <span>Pedir 5★</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1014,6 +1039,17 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
           shopConfig={shopConfig}
           onActualizarCita={cargarDatos}
           onClose={() => setCitaTirillaModal(null)}
+        />
+      )}
+
+      {/* MODAL TARJETA DIGITAL VIP & SELLOS (FASE 4) */}
+      {citaVIPModal && (
+        <ModalTarjetaVIPAdmin
+          cliente={citaVIPModal}
+          shopConfig={shopConfig}
+          barbero={barbero}
+          onClose={() => setCitaVIPModal(null)}
+          onSuccess={cargarDatos}
         />
       )}
 

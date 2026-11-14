@@ -279,7 +279,12 @@ function getDefaultModulesForPlan(plan) {
       rentabilidad: false,
       galeria: false,
       auditoria: false,
-      fidelizacion_clientes: false
+      fidelizacion_clientes: false,
+      google_reviews: false,
+      tirilla_pos: true,
+      ficha_tecnica: false,
+      tarjeta_vip: false,
+      reactivacion_ia: false
     };
   } else if (plan === 'pro') {
     return {
@@ -293,7 +298,12 @@ function getDefaultModulesForPlan(plan) {
       rentabilidad: false,
       galeria: true,
       auditoria: false,
-      fidelizacion_clientes: false
+      fidelizacion_clientes: true,
+      google_reviews: true,
+      tirilla_pos: true,
+      ficha_tecnica: true,
+      tarjeta_vip: false,
+      reactivacion_ia: false
     };
   } else {
     return {
@@ -307,7 +317,12 @@ function getDefaultModulesForPlan(plan) {
       rentabilidad: true,
       galeria: true,
       auditoria: true,
-      fidelizacion_clientes: true
+      fidelizacion_clientes: true,
+      google_reviews: true,
+      tirilla_pos: true,
+      ficha_tecnica: true,
+      tarjeta_vip: true,
+      reactivacion_ia: true
     };
   }
 }
@@ -2788,7 +2803,13 @@ app.get('/api/clientes', requireAnyOperator, async (req, res) => {
         categoria: dbC.categoria,
         fecha_cumpleanos: dbC.fecha_cumpleanos,
         beneficio_fidelidad: dbC.beneficio_fidelidad,
-        notas: dbC.notas_generales || dbC.notas || ''
+        notas: dbC.notas_generales || dbC.notas || '',
+        sellos_acumulados: Number(dbC.sellos_acumulados || 0),
+        sellos_meta: Number(dbC.sellos_meta || 10),
+        premio_proximo: dbC.premio_proximo || 'Corte o Barba Gratis',
+        nivel_vip: dbC.nivel_vip || 'Bronce VIP',
+        premios_redimidos: Number(dbC.premios_redimidos || 0),
+        codigo_qr_vip: dbC.codigo_qr_vip || `VIP-${tenantId}-${tel}`
       };
       if (tel) mapaFidelidad[tel] = item;
       if (dbC.cliente_nombre) mapaFidelidad[dbC.cliente_nombre.toLowerCase().trim()] = item;
@@ -2807,6 +2828,10 @@ app.get('/api/clientes', requireAnyOperator, async (req, res) => {
         cat = n >= 8 ? 'VIP' : (n >= 4 ? 'Preferencial' : (n >= 2 ? 'Frecuente' : 'Nuevo'));
       }
 
+      const totalC = Number(c.total_citas || 1);
+      const sellosCalc = fid.sellos_acumulados !== undefined ? fid.sellos_acumulados : (totalC % 10);
+      const nivelCalc = fid.nivel_vip || (totalC >= 15 ? 'Black VIP' : totalC >= 8 ? 'Oro VIP' : totalC >= 4 ? 'Plata VIP' : 'Bronce VIP');
+
       resultadoMap.set(telLimpio || nombreKey, {
         id: fid.id || `c-${telLimpio || Math.random().toString().slice(2, 7)}`,
         barberia_id: tenantId,
@@ -2817,7 +2842,13 @@ app.get('/api/clientes', requireAnyOperator, async (req, res) => {
         fecha_cumpleanos: fid.fecha_cumpleanos || null,
         beneficio_fidelidad: fid.beneficio_fidelidad || '',
         notas: fid.notas || '',
-        total_citas: Number(c.total_citas || 1),
+        sellos_acumulados: sellosCalc,
+        sellos_meta: fid.sellos_meta || 10,
+        premio_proximo: fid.premio_proximo || 'Corte o Barba Gratis',
+        nivel_vip: nivelCalc,
+        premios_redimidos: fid.premios_redimidos || Math.floor(totalC / 10),
+        codigo_qr_vip: fid.codigo_qr_vip || `VIP-${tenantId}-${telLimpio}`,
+        total_citas: totalC,
         ultima_visita: c.ultima_visita,
         primera_visita: c.primera_visita,
         total_gastado: Number(c.total_gastado || 0)
@@ -2841,6 +2872,12 @@ app.get('/api/clientes', requireAnyOperator, async (req, res) => {
             fecha_cumpleanos: m.fecha_cumpleanos || null,
             beneficio_fidelidad: m.beneficio_fidelidad || '',
             notas: m.notas_generales || m.notas || '',
+            sellos_acumulados: Number(m.sellos_acumulados || 0),
+            sellos_meta: Number(m.sellos_meta || 10),
+            premio_proximo: m.premio_proximo || 'Corte o Barba Gratis',
+            nivel_vip: m.nivel_vip || 'Bronce VIP',
+            premios_redimidos: Number(m.premios_redimidos || 0),
+            codigo_qr_vip: m.codigo_qr_vip || `VIP-${tenantId}-${telLimpio}`,
             total_citas: 0,
             ultima_visita: null,
             primera_visita: null,
@@ -3103,6 +3140,304 @@ app.delete('/api/fichas-tecnicas/:id', requireAnyOperator, async (req, res) => {
     res.json({ success: true, message: 'Ficha técnica eliminada' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// 6.1.2 TARJETA DIGITAL VIP CON CÓDIGO QR & SELLOS (FASE 4)
+// ----------------------------------------------------
+app.get('/api/tarjeta-vip/cliente/:telefono', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { telefono } = req.params;
+  const rawPhone = String(telefono).replace(/[^0-9]/g, '');
+
+  if (!rawPhone) {
+    return res.status(400).json({ error: 'Teléfono inválido' });
+  }
+
+  try {
+    let cliente = await db.prepare(`
+      SELECT * FROM clientes 
+      WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+    `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+
+    if (!cliente) {
+      // Buscar citas históricas para auto-calcular sellos iniciales
+      const cita = await db.prepare(`
+        SELECT cliente_nombre, COUNT(id) as conteo 
+        FROM citas 
+        WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+        GROUP BY cliente_nombre
+      `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+
+      const nombre = cita?.cliente_nombre || 'Cliente VIP';
+      const cortes = Number(cita?.conteo || 0);
+
+      try {
+        cliente = await db.prepare(`
+          INSERT INTO clientes (barberia_id, cliente_nombre, cliente_telefono, categoria, sellos_acumulados, sellos_meta, premio_proximo, nivel_vip, codigo_qr_vip)
+          VALUES (?, ?, ?, 'VIP', ?, 10, 'Corte o Barba Gratis', ?, ?)
+          ON CONFLICT (barberia_id, cliente_telefono) DO UPDATE SET updated_at = NOW()
+          RETURNING *
+        `).get(
+          tenantId, 
+          nombre, 
+          rawPhone, 
+          cortes % 10, 
+          cortes >= 15 ? 'Black VIP' : cortes >= 8 ? 'Oro VIP' : cortes >= 4 ? 'Plata VIP' : 'Bronce VIP',
+          `VIP-${tenantId}-${rawPhone}`
+        );
+      } catch (_) {}
+    }
+
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const movimientos = await db.prepare(`
+      SELECT * FROM movimientos_tarjeta_vip 
+      WHERE barberia_id = ? AND cliente_id = ? 
+      ORDER BY created_at DESC LIMIT 20
+    `).all(tenantId, cliente.id) || [];
+
+    res.json({
+      success: true,
+      cliente: {
+        id: cliente.id,
+        nombre: cliente.cliente_nombre,
+        telefono: cliente.cliente_telefono,
+        categoria: cliente.categoria || 'VIP',
+        nivel_vip: cliente.nivel_vip || 'Bronce VIP',
+        sellos_acumulados: Number(cliente.sellos_acumulados || 0),
+        sellos_meta: Number(cliente.sellos_meta || 10),
+        premio_proximo: cliente.premio_proximo || 'Corte o Barba Gratis',
+        premios_redimidos: Number(cliente.premios_redimidos || 0),
+        codigo_qr_vip: cliente.codigo_qr_vip || `VIP-${tenantId}-${rawPhone}`
+      },
+      movimientos
+    });
+  } catch (err) {
+    console.error('Error al consultar tarjeta VIP:', err);
+    res.status(500).json({ error: 'Error al consultar tarjeta VIP' });
+  }
+});
+
+app.post('/api/tarjeta-vip/sellar', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { cliente_telefono, cliente_nombre, cantidad = 1, barbero_nombre, notas } = req.body;
+
+  if (!cliente_telefono) {
+    return res.status(400).json({ error: 'El teléfono es obligatorio' });
+  }
+
+  const rawPhone = String(cliente_telefono).replace(/[^0-9]/g, '');
+  const cant = Math.max(1, Number(cantidad) || 1);
+
+  try {
+    let cliente = await db.prepare(`
+      SELECT * FROM clientes 
+      WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+    `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+
+    if (!cliente) {
+      cliente = await db.prepare(`
+        INSERT INTO clientes (barberia_id, cliente_nombre, cliente_telefono, categoria, sellos_acumulados, sellos_meta, premio_proximo, nivel_vip, codigo_qr_vip)
+        VALUES (?, ?, ?, 'VIP', 0, 10, 'Corte o Barba Gratis', 'Bronce VIP', ?)
+        RETURNING *
+      `).get(tenantId, (cliente_nombre || 'Cliente VIP').trim(), rawPhone, `VIP-${tenantId}-${rawPhone}`);
+    }
+
+    const nuevosSellos = Number(cliente.sellos_acumulados || 0) + cant;
+    const meta = Number(cliente.sellos_meta || 10);
+
+    let nivel = 'Bronce VIP';
+    if (nuevosSellos >= 20) nivel = 'Black VIP';
+    else if (nuevosSellos >= 10) nivel = 'Oro VIP';
+    else if (nuevosSellos >= 5) nivel = 'Plata VIP';
+
+    const clienteActualizado = await db.prepare(`
+      UPDATE clientes
+      SET sellos_acumulados = ?,
+          nivel_vip = ?,
+          cliente_nombre = COALESCE(?, cliente_nombre),
+          codigo_qr_vip = COALESCE(codigo_qr_vip, ?),
+          updated_at = NOW()
+      WHERE id = ? AND barberia_id = ?
+      RETURNING *
+    `).get(nuevosSellos, nivel, cliente_nombre ? cliente_nombre.trim() : null, `VIP-${tenantId}-${rawPhone}`, cliente.id, tenantId);
+
+    await db.prepare(`
+      INSERT INTO movimientos_tarjeta_vip (barberia_id, cliente_id, tipo, cantidad, barbero_nombre, notas)
+      VALUES (?, ?, 'sello', ?, ?, ?)
+    `).run(tenantId, cliente.id, cant, barbero_nombre || 'Barbero', notas || `+${cant} sello(s) de corte registrado(s)`);
+
+    res.json({
+      success: true,
+      message: `¡${cant} sello(s) añadido(s) con éxito!`,
+      cliente: {
+        id: clienteActualizado.id,
+        nombre: clienteActualizado.cliente_nombre,
+        telefono: clienteActualizado.cliente_telefono,
+        categoria: clienteActualizado.categoria,
+        nivel_vip: clienteActualizado.nivel_vip,
+        sellos_acumulados: Number(clienteActualizado.sellos_acumulados || 0),
+        sellos_meta: meta,
+        premio_proximo: clienteActualizado.premio_proximo,
+        premios_redimidos: Number(clienteActualizado.premios_redimidos || 0),
+        premio_disponible: nuevosSellos >= meta
+      }
+    });
+  } catch (err) {
+    console.error('Error al sellar tarjeta VIP:', err);
+    res.status(500).json({ error: 'Error al sellar tarjeta VIP' });
+  }
+});
+
+app.post('/api/tarjeta-vip/canjear', requireAnyOperator, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  const { cliente_telefono, barbero_nombre, premio_canjeado, notas } = req.body;
+
+  if (!cliente_telefono) {
+    return res.status(400).json({ error: 'El teléfono es obligatorio' });
+  }
+
+  const rawPhone = String(cliente_telefono).replace(/[^0-9]/g, '');
+
+  try {
+    const cliente = await db.prepare(`
+      SELECT * FROM clientes 
+      WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+    `).get(tenantId, `%${rawPhone.slice(-10)}%`);
+
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const sellosActuales = Number(cliente.sellos_acumulados || 0);
+    const meta = Number(cliente.sellos_meta || 10);
+
+    if (sellosActuales < meta) {
+      return res.status(400).json({
+        error: `No tiene suficientes sellos. Cuenta con ${sellosActuales} de ${meta} necesarios para el premio.`
+      });
+    }
+
+    const restantes = Math.max(0, sellosActuales - meta);
+    const redimidos = Number(cliente.premios_redimidos || 0) + 1;
+
+    const clienteActualizado = await db.prepare(`
+      UPDATE clientes
+      SET sellos_acumulados = ?,
+          premios_redimidos = ?,
+          updated_at = NOW()
+      WHERE id = ? AND barberia_id = ?
+      RETURNING *
+    `).get(restantes, redimidos, cliente.id, tenantId);
+
+    await db.prepare(`
+      INSERT INTO movimientos_tarjeta_vip (barberia_id, cliente_id, tipo, cantidad, barbero_nombre, notas)
+      VALUES (?, ?, 'canje', ?, ?, ?)
+    `).run(tenantId, cliente.id, meta, barbero_nombre || 'Barbero', notas || `Canje de premio: ${premio_canjeado || cliente.premio_proximo || 'Corte Gratis'}`);
+
+    res.json({
+      success: true,
+      message: '¡Premio canjeado exitosamente! Sellos descontados de la tarjeta.',
+      cliente: {
+        id: clienteActualizado.id,
+        nombre: clienteActualizado.cliente_nombre,
+        telefono: clienteActualizado.cliente_telefono,
+        categoria: clienteActualizado.categoria,
+        nivel_vip: clienteActualizado.nivel_vip,
+        sellos_acumulados: restantes,
+        sellos_meta: meta,
+        premio_proximo: clienteActualizado.premio_proximo,
+        premios_redimidos: redimidos
+      }
+    });
+  } catch (err) {
+    console.error('Error al canjear premio VIP:', err);
+    res.status(500).json({ error: 'Error al canjear premio VIP' });
+  }
+});
+
+app.get('/api/tarjeta-vip/public/:slug/:telefono', async (req, res) => {
+  const { slug, telefono } = req.params;
+  const rawPhone = String(telefono).replace(/[^0-9]/g, '');
+
+  try {
+    let barberia = await db.prepare('SELECT * FROM barberias WHERE LOWER(slug) = ?').get(slug.toLowerCase());
+    if (!barberia) {
+      barberia = store.barberias.find(b => b.slug.toLowerCase() === slug.toLowerCase()) || store.barberias[0];
+    }
+
+    let modulos = {};
+    try {
+      modulos = typeof barberia.modulos_activos === 'string' ? JSON.parse(barberia.modulos_activos) : (barberia.modulos_activos || {});
+    } catch (_) {}
+
+    if (modulos.tarjeta_vip === false) {
+      return res.status(403).json({ error: 'El beneficio de Tarjeta VIP no está habilitado para esta barbería' });
+    }
+
+    let cliente = null;
+    try {
+      cliente = await db.prepare(`
+        SELECT * FROM clientes 
+        WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+      `).get(barberia.id, `%${rawPhone.slice(-10)}%`);
+    } catch (_) {}
+
+    if (!cliente) {
+      const cita = await db.prepare(`
+        SELECT cliente_nombre, COUNT(id) as total_citas 
+        FROM citas 
+        WHERE barberia_id = ? AND REPLACE(REPLACE(cliente_telefono, ' ', ''), '-', '') LIKE ?
+        GROUP BY cliente_nombre
+      `).get(barberia.id, `%${rawPhone.slice(-10)}%`);
+
+      const nombre = cita?.cliente_nombre || 'Cliente VIP';
+      const citasCount = Number(cita?.total_citas || 0);
+
+      cliente = {
+        cliente_nombre: nombre,
+        cliente_telefono: rawPhone,
+        categoria: 'VIP',
+        nivel_vip: citasCount >= 10 ? 'Oro VIP' : citasCount >= 5 ? 'Plata VIP' : 'Bronce VIP',
+        sellos_acumulados: citasCount % 10,
+        sellos_meta: 10,
+        premio_proximo: 'Corte o Barba Gratis',
+        premios_redimidos: Math.floor(citasCount / 10),
+        codigo_qr_vip: `VIP-${barberia.id}-${rawPhone}`
+      };
+    }
+
+    res.json({
+      success: true,
+      barberia: {
+        nombre: barberia.nombre,
+        eslogan: barberia.eslogan,
+        logo_url: barberia.logo_url,
+        color_primario: barberia.color_primario || '#2563eb',
+        color_secundario: barberia.color_secundario || '#1e293b',
+        telefono: barberia.telefono,
+        direccion: barberia.direccion,
+        slug: barberia.slug
+      },
+      cliente: {
+        nombre: cliente.cliente_nombre,
+        telefono: cliente.cliente_telefono,
+        categoria: cliente.categoria || 'VIP',
+        nivel_vip: cliente.nivel_vip || 'Bronce VIP',
+        sellos_acumulados: Number(cliente.sellos_acumulados || 0),
+        sellos_meta: Number(cliente.sellos_meta || 10),
+        premio_proximo: cliente.premio_proximo || 'Corte o Barba Gratis',
+        premios_redimidos: Number(cliente.premios_redimidos || 0),
+        codigo_qr_vip: cliente.codigo_qr_vip || `VIP-${barberia.id}-${rawPhone}`
+      }
+    });
+  } catch (err) {
+    console.error('Error en pass público VIP:', err);
+    res.status(500).json({ error: 'Error al consultar pase VIP' });
   }
 });
 

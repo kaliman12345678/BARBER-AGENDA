@@ -7,6 +7,7 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
 import UnifiedLoginModal from './components/UnifiedLoginModal';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import LandingPage from './components/landing/LandingPage';
+import TarjetaVIPPass from './components/TarjetaVIPPass';
 import { Lock, AlertTriangle, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 function getInitialSlug() {
@@ -35,6 +36,9 @@ function getInitialView() {
   }
   if (path.includes('/superadmin') || urlParams.get('superadmin') !== null) {
     return 'superadmin';
+  }
+  if (path.includes('/vip') || urlParams.get('vip') !== null) {
+    return 'vip';
   }
   return 'client';
 }
@@ -114,6 +118,7 @@ export default function App() {
                            urlParams.get('landing') !== null || 
                            urlParams.get('presentacion') !== null;
     const isSuperRoute = window.location.pathname.includes('/superadmin') || urlParams.get('superadmin') !== null;
+    const isVipRoute = window.location.pathname.includes('/vip') || urlParams.get('vip') !== null;
     const isAdminRoute = window.location.pathname.includes('/admin') || window.location.hash.includes('admin') || urlParams.get('admin') !== null;
     const isBarberoRoute = window.location.pathname.includes('/barbero') || window.location.hash.includes('barbero') || urlParams.get('barbero') !== null;
 
@@ -124,6 +129,11 @@ export default function App() {
 
     if (isSuperRoute) {
       setActiveView('superadmin');
+      return;
+    }
+
+    if (isVipRoute) {
+      setActiveView('vip');
       return;
     }
 
@@ -319,6 +329,19 @@ export default function App() {
           onSeleccionarBarberia={cambiarBarberia}
         />
       </div>
+    );
+  }
+
+  // Vista Púbica de Tarjeta Digital VIP Móvil (Apple Wallet / Google Pay Pass)
+  if (activeView === 'vip') {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const tel = urlParams.get('tel') || urlParams.get('telefono') || '';
+    return (
+      <TarjetaVIPPass
+        slug={tenantSlug}
+        telefono={tel}
+        onIrAgendar={() => handleSwitchView('client')}
+      />
     );
   }
 
