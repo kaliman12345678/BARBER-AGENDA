@@ -5164,6 +5164,79 @@ app.get('/api/reportes/rentabilidad-stats', requireAdminOrSuper, async (req, res
 });
 
 // ----------------------------------------------------
+// 11.1 RESPALDO Y EXPORTACIÓN COMPLETA A EXCEL
+// ----------------------------------------------------
+app.get('/api/reportes/backup-completo', requireAdminOrSuper, async (req, res) => {
+  const tenantId = await getTenantId(req);
+  try {
+    const barberia = await db.prepare('SELECT id, nombre, slug, telefono, direccion, eslogan FROM barberias WHERE id = ?').get(tenantId);
+    
+    let clientes = [];
+    try {
+      clientes = await db.prepare('SELECT id, cliente_nombre, cliente_telefono, categoria, nivel_vip, sellos_acumulados, sellos_meta, premio_proximo, premios_redimidos FROM clientes WHERE barberia_id = ?').all(tenantId) || [];
+    } catch (_) {}
+
+    let citas = [];
+    try {
+      citas = await db.prepare(`
+        SELECT c.id, c.fecha, c.hora_inicio, c.hora_fin, c.cliente_nombre, c.cliente_telefono, s.nombre as servicio, b.nombre as barbero, c.precio_cobrado, c.propina, c.metodo_pago, c.estado
+        FROM citas c
+        LEFT JOIN servicios s ON c.servicio_id = s.id
+        LEFT JOIN barberos b ON c.barbero_id = b.id
+        WHERE c.barberia_id = ?
+        ORDER BY c.fecha DESC, c.hora_inicio DESC
+      `).all(tenantId) || [];
+    } catch (_) {}
+
+    let liquidaciones = [];
+    try {
+      liquidaciones = await db.prepare(`
+        SELECT l.id, l.fecha_pago, b.nombre as barbero, l.fecha_inicio, l.fecha_fin, l.total_servicios, l.total_bruto, l.porcentaje_aplicado, l.monto_comision, l.deducciones, l.total_propinas, l.total_pagado, l.metodo_pago, l.notas
+        FROM liquidaciones l
+        LEFT JOIN barberos b ON l.barbero_id = b.id
+        WHERE l.barberia_id = ?
+        ORDER BY l.fecha_pago DESC
+      `).all(tenantId) || [];
+    } catch (_) {}
+
+    let gastos = [];
+    try {
+      gastos = await db.prepare('SELECT id, fecha, categoria, descripcion, monto_cop as monto, metodo_pago FROM costos WHERE barberia_id = ? ORDER BY fecha DESC').all(tenantId) || [];
+    } catch (_) {}
+
+    let barberos = [];
+    try {
+      barberos = await db.prepare('SELECT id, nombre, telefono, email, especialidad, porcentaje_comision, activo FROM barberos WHERE barberia_id = ?').all(tenantId) || [];
+    } catch (_) {}
+
+    let prestamos = [];
+    try {
+      prestamos = await db.prepare(`
+        SELECT p.id, p.fecha_prestamo, b.nombre as barbero, p.tipo, p.descripcion, p.monto_total, p.numero_cuotas, p.valor_cuota, p.cuotas_pagadas, p.saldo_pendiente, p.estado
+        FROM prestamos_colaboradores p
+        LEFT JOIN barberos b ON p.barbero_id = b.id
+        WHERE p.barberia_id = ?
+        ORDER BY p.fecha_prestamo DESC
+      `).all(tenantId) || [];
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      barberia: barberia || {},
+      clientes,
+      citas,
+      liquidaciones,
+      gastos,
+      barberos,
+      prestamos
+    });
+  } catch (err) {
+    console.error('Error generando backup completo:', err);
+    res.status(500).json({ error: 'Error al generar respaldo de datos' });
+  }
+});
+
+// ----------------------------------------------------
 // 12. GALERÍA MULTIMEDIA & REDES
 // ----------------------------------------------------
 app.get('/api/multimedia', async (req, res) => {
