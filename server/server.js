@@ -2091,7 +2091,7 @@ app.get('/api/barbero-portal/balance', requireAnyOperator, async (req, res) => {
     if (!barbero) return res.status(404).json({ error: 'Barbero no encontrado' });
 
     let sqlCitas = `
-      SELECT c.id, c.fecha, c.hora_inicio, c.precio_cobrado, s.nombre as servicio_nombre, c.liquidacion_id
+      SELECT c.id, c.fecha, c.hora_inicio, c.precio_cobrado, c.propina, s.nombre as servicio_nombre, c.liquidacion_id
       FROM citas c
       JOIN servicios s ON c.servicio_id = s.id
       WHERE c.barbero_id = ? AND c.barberia_id = ? AND c.estado = 'completada'
@@ -2126,6 +2126,7 @@ app.get('/api/barbero-portal/balance', requireAnyOperator, async (req, res) => {
     `).all(barbero_id, tenantId);
 
     const totalBrutoServicios = citasCompletadas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+    const totalPropinas = citasCompletadas.reduce((sum, c) => sum + Number(c.propina || 0), 0);
     const pct = Number(barbero.porcentaje_comision || 50);
     const comisionServiciosEstimada = Math.round(totalBrutoServicios * (pct / 100));
     const comisionProductos = ventasProductos.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
@@ -2134,16 +2135,20 @@ app.get('/api/barbero-portal/balance', requireAnyOperator, async (req, res) => {
     const pendientesLiquidarVentas = ventasProductos.filter(v => !v.liquidacion_id);
     const saldoPendienteServicios = Math.round(pendientesLiquidarCitas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0) * (pct / 100));
     const saldoPendienteProductos = pendientesLiquidarVentas.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
-    const saldoPendienteCobrar = saldoPendienteServicios + saldoPendienteProductos;
+    const pendientesPropinas = pendientesLiquidarCitas.reduce((sum, c) => sum + Number(c.propina || 0), 0);
+    // Propinas son 100% del colaborador
+    const saldoPendienteCobrar = saldoPendienteServicios + saldoPendienteProductos + pendientesPropinas;
 
     const totalLiquidadoPagado = liquidaciones.reduce((sum, l) => sum + Number(l.total_pagado || 0), 0);
-    const gananciaTotal = comisionServiciosEstimada + comisionProductos;
+    const gananciaTotal = comisionServiciosEstimada + comisionProductos + totalPropinas;
 
     res.json({
       barbero,
       total_citas_completadas: citasCompletadas.length,
       total_servicios: citasCompletadas.length,
       total_bruto_servicios: totalBrutoServicios,
+      total_propinas: totalPropinas,
+      propinas_pendientes: pendientesPropinas,
       porcentaje_comision: pct,
       comision_servicios_estimada: comisionServiciosEstimada,
       total_ventas_productos: ventasProductos.length,
@@ -4039,6 +4044,7 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
     const ventasProductos = await db.prepare(sqlVentas).all(...paramsVentas);
 
     const totalBrutoServicios = citas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+    const totalPropinas = citas.reduce((sum, c) => sum + Number(c.propina || 0), 0);
     const porcentajeAplicado = (porcentaje !== undefined && porcentaje !== '' && !isNaN(porcentaje))
       ? Number(porcentaje)
       : Number(barbero.porcentaje_comision || 50.0);
@@ -4047,7 +4053,8 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
     const totalComisionProductos = ventasProductos.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
     const totalVentaProductos = ventasProductos.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
 
-    const comisionTotalBarbero = montoComisionServicios + totalComisionProductos;
+    // Propinas son 100% para el colaborador (sin retención de barbería)
+    const comisionTotalBarbero = montoComisionServicios + totalComisionProductos + totalPropinas;
     const margenBarberia = (totalBrutoServicios - montoComisionServicios) + (totalVentaProductos - totalComisionProductos);
 
     res.json({
@@ -4056,6 +4063,7 @@ app.get('/api/liquidaciones/preview', requireAdminOrSuper, async (req, res) => {
       fecha_fin: esTodas ? (citas[citas.length - 1]?.fecha || 'Hoy') : fecha_fin,
       total_servicios: citas.length,
       total_bruto: totalBrutoServicios,
+      total_propinas: totalPropinas,
       porcentaje_aplicado: porcentajeAplicado,
       monto_comision: comisionTotalBarbero,
       monto_comision_servicios: montoComisionServicios,
@@ -4126,7 +4134,7 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
     if (Array.isArray(citas_ids) && citas_ids.length > 0) {
       const placeholders = citas_ids.map(() => '?').join(',');
       citas = await db.prepare(`
-        SELECT id, precio_cobrado, fecha, hora_inicio, servicio_id 
+        SELECT id, precio_cobrado, propina, fecha, hora_inicio, servicio_id 
         FROM citas 
         WHERE id IN (${placeholders}) 
           AND barbero_id = ? 
@@ -4152,13 +4160,15 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
 
     const totalServicios = citas.length;
     const totalBrutoServicios = citas.reduce((sum, c) => sum + Number(c.precio_cobrado || 0), 0);
+    const totalPropinas = citas.reduce((sum, c) => sum + Number(c.propina || 0), 0);
     const totalVentaProductos = ventas.reduce((sum, v) => sum + Number(v.total_venta || 0), 0);
     const totalBruto = totalBrutoServicios + totalVentaProductos;
 
     const pct = Number(porcentaje_aplicado || barbero.porcentaje_comision || 50);
     const montoComisionServicios = Math.round(totalBrutoServicios * (pct / 100));
     const montoComisionProductos = ventas.reduce((sum, v) => sum + Number(v.monto_comision || 0), 0);
-    const montoComisionTotal = montoComisionServicios + montoComisionProductos;
+    // Propinas son 100% para el colaborador
+    const montoComisionTotal = montoComisionServicios + montoComisionProductos + totalPropinas;
     const totalDeducciones = Number(deducciones || 0);
     const totalPagado = Math.max(0, montoComisionTotal - totalDeducciones);
 
@@ -4167,8 +4177,8 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
       INSERT INTO liquidaciones (
         barberia_id, barbero_id, fecha_inicio, fecha_fin, total_servicios,
         total_bruto, porcentaje_aplicado, monto_comision, deducciones,
-        total_pagado, metodo_pago, notas, fecha_pago
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        total_pagado, metodo_pago, notas, total_propinas, fecha_pago
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `);
 
     const result = await stmt.run(
@@ -4183,7 +4193,8 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
       totalDeducciones,
       totalPagado,
       metodo_pago || 'Efectivo',
-      notas || null
+      notas || null,
+      totalPropinas
     );
 
     const liquidacionId = result.lastInsertRowid || result.id || (await db.prepare('SELECT MAX(id) as id FROM liquidaciones WHERE barberia_id = ?').get(tenantId))?.id;
@@ -4220,6 +4231,7 @@ app.post('/api/liquidaciones', requireAdminOrSuper, async (req, res) => {
         periodo: `${fecha_inicio} a ${fecha_fin}`,
         total_servicios: totalServicios,
         total_bruto: totalBruto,
+        total_propinas: totalPropinas,
         comision_pagada: montoComisionTotal,
         deducciones: totalDeducciones,
         total_pagado: totalPagado,

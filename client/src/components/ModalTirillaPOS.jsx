@@ -117,7 +117,7 @@ export default function ModalTirillaPOS({
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🧾 *DESGLOSE DEL SERVICIO:*
 • ${cita?.servicio_nombre || 'Servicio de Barbería'}: ${formatCOP(precioBase)}
-${propina > 0 ? `• Propina voluntaria: ${formatCOP(propina)}\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━
+${propina > 0 ? `• Propina voluntaria (100% Barbero): ${formatCOP(propina)}\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━
 💰 *TOTAL PAGADO:* ${formatCOP(total)} COP
 💳 *Método de Pago:* ${metodoPago}
 
@@ -284,7 +284,7 @@ Puedes volver a agendar en línea o recomendar nuestra barbería aquí:
 
                   {propina > 0 && (
                     <div className="flex justify-between text-slate-600">
-                      <span>Propina voluntaria:</span>
+                      <span>Propina (100% Barbero):</span>
                       <span>{formatCOP(propina)}</span>
                     </div>
                   )}
@@ -369,24 +369,49 @@ Puedes volver a agendar en línea o recomendar nuestra barbería aquí:
                 </div>
               </div>
 
-              {/* PROPINA OPCIONAL */}
-              <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 space-y-2">
-                <label className="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
-                  Propina para el Barbero (Opcional):
-                </label>
+              {/* PROPINA LIBRE / OPCIONAL */}
+              <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-slate-300 font-bold text-[11px] uppercase tracking-wider">
+                    Propina para el Barbero:
+                  </label>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    100% del Colaborador
+                  </span>
+                </div>
+
+                {/* Input de monto libre */}
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-400 font-black text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    value={propina === 0 ? '' : propina}
+                    onChange={(e) => {
+                      const val = Math.max(0, Number(e.target.value) || 0);
+                      setPropina(val);
+                    }}
+                    onBlur={() => sincronizarCobro(metodoPago, propina)}
+                    placeholder="0 (Monto libre de propina)"
+                    className="w-full pl-7 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all placeholder:text-slate-500"
+                  />
+                </div>
+
+                {/* Botones de sugerencia rápida */}
                 <div className="flex items-center gap-1.5">
-                  {[0, 2000, 5000, 10000].map(val => (
+                  {[0, 2000, 5000, 10000, 20000].map(val => (
                     <button
                       key={val}
                       type="button"
                       onClick={() => handleCambiarPropina(val)}
-                      className={`flex-1 py-1 px-1.5 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                      className={`flex-1 py-1 px-1 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
                         propina === val
-                          ? 'bg-amber-500 border-amber-400 text-slate-950 font-black'
+                          ? 'bg-amber-500 border-amber-400 text-slate-950 font-black shadow-xs'
                           : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'
                       }`}
                     >
-                      {val === 0 ? 'Sin propina' : `+$${val / 1000}k`}
+                      {val === 0 ? '$0' : `+$${val >= 1000 ? `${val / 1000}k` : val}`}
                     </button>
                   ))}
                 </div>

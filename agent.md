@@ -433,3 +433,33 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 #### 4. Corrección de Desbordamiento Horizontal en Móviles
 * **Causa:** Acumulación de botones en el Navbar y ausencia de contención en el viewport.
 * **Solución:** Agregado `overflow-x: hidden; max-width: 100vw;` en `html`, `body` y `#root`. En `Navbar.jsx`, los botones secundarios se adaptan en pantallas pequeñas para que el ancho nunca exceda el viewport móvil.
+
+---
+
+### [2026-11-14] — Propinas Libres en Recibo POS, Integración 100% al Liquidador y Corrección Tarjeta VIP
+
+#### 1. Propinas Libres & Flexibles en Tirilla POS (`ModalTirillaPOS.jsx`)
+* **Requerimiento:** Las propinas en el recibo POS no deben ser valores fijos rígidos. El dueño/cajero debe tener la libertad de escribir cualquier monto de propina que el cliente deje para el barbero/colaborador, además de contar con atajos rápidos.
+* **Implementación:**
+  - Se implementó un campo de entrada numérico (`<input type="number" ... />`) con prefijo `$` y placeholder para ingreso de montos libres (ej: $1.500, $3.000, $7.500, $50.000, etc.).
+  - Se incluyeron botones de sugerencia rápida (`$0`, `+$2k`, `+$5k`, `+$10k`, `+$20k`) para agilizar el cobro en caja con un solo toque.
+  - Insignia destacada: `100% del Colaborador`.
+  - En la tirilla visual, en la impresión térmica y en el comprobante enviado por WhatsApp al cliente, se desglosa claramente como `Propina (100% Barbero)`.
+
+#### 2. Integración de Propinas 100% al Motor de Liquidaciones (`AdminLiquidaciones.jsx` y Backend)
+* **Requerimiento:** Las propinas son 100% del colaborador (sin retención ni comisión de la barbería). Todas las propinas registradas en turnos completados deben fluir directamente al liquidador oficial.
+* **Implementación Backend (`server/server.js` y `client/server/server.js`):**
+  - En `GET /api/liquidaciones/preview`: se extrae `propina` de las citas completadas y se calcula `totalPropinas = citas.reduce(...)`. Se suma íntegramente al `monto_comision` a pagar al colaborador (`montoComisionServicios + montoComisionProductos + totalPropinas`) sin afectar el margen de la barbería.
+  - En `POST /api/liquidaciones`: se selecciona `propina` en la consulta SQL de citas a liquidar, se calcula `totalPropinas` y se inserta en la columna `total_propinas` de la tabla `liquidaciones` en Supabase PostgreSQL.
+  - En `GET /api/barbero-portal/balance`: el portal del barbero ahora suma y discrimina `total_propinas` y `propinas_pendientes` en su balance personal.
+* **Implementación Frontend (`AdminLiquidaciones.jsx` & `BarberoPortal.jsx`):**
+  - Métrica dedicada de Propinas: tarjeta en esmeralda *"Propinas (100% Barbero)"* en el panel de liquidación.
+  - Columna *"Propina (100%)"* en la tabla de citas detalladas a liquidar con badge verde para turnos que recibieron propina voluntaria.
+  - Inclusión en el comprobante oficial y en el texto de liquidación para WhatsApp: `🎁 Propinas Clientes (100%): $X COP`.
+  - Tarjeta en `BarberoPortal.jsx` en la pestaña de Utilidad: *"🎁 Propinas (100% Tuyas)"* para total transparencia con el equipo de barberos.
+
+#### 3. Soporte de Corrección de Sellos en Tarjeta VIP (-1 Sello)
+* **Requerimiento:** Si por error un barbero o dueño otorga más sellos de los correspondientes, debe poder retirar sellos fácilmente.
+* **Implementación:**
+  - En `ModalTarjetaVIPAdmin.jsx`: se agregó el botón `-1 Sello (Quitar)` junto al botón `+1 Sello (Corte Realizado)`.
+  - En `/api/tarjeta-vip/sellar`: soporte para cantidades negativas (`cantidad = -1`), aplicando `Math.max(0, sellos_actuales + cant)`, registrando el movimiento como `tipo: 'ajuste'` con nota explicativa de auditoría.

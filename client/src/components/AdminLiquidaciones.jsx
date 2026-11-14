@@ -162,9 +162,11 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
   // Cálculos dinámicos con porcentaje o deducciones ajustadas
   const subtotalBruto = resultadoPreview?.total_bruto || 0;
+  const totalPropinas = resultadoPreview?.total_propinas || 0;
   const comisionServicios = Math.round(subtotalBruto * (Number(porcentaje) / 100));
   const comisionProductos = resultadoPreview?.total_comision_productos || 0;
-  const comisionCalculada = comisionServicios + comisionProductos;
+  // Propinas son 100% del colaborador (sin retención del local)
+  const comisionCalculada = comisionServicios + comisionProductos + totalPropinas;
   const totalNetoAPagar = Math.max(0, comisionCalculada - Number(deducciones || 0));
   const margenBarberia = resultadoPreview?.margen_barberia !== undefined 
     ? resultadoPreview.margen_barberia 
@@ -213,6 +215,7 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
         fecha_fin: fechaFin,
         total_servicios: resultadoPreview.citas.length,
         total_bruto: subtotalBruto,
+        total_propinas: totalPropinas,
         porcentaje: Number(porcentaje),
         monto_comision: comisionCalculada,
         comision_servicios: comisionServicios,
@@ -268,6 +271,9 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
   // Compartir por WhatsApp
   function compartirWhatsApp(comprobante) {
     const telefono = (comprobante.barbero.telefono || '').replace(/[^0-9]/g, '');
+    const propinasMsg = Number(comprobante.total_propinas || 0) > 0 
+      ? `🎁 Propinas Clientes (100%): ${formatCOP(comprobante.total_propinas)}\n`
+      : '';
     const mensaje = encodeURIComponent(
       `💈 *COMPROBANTE DE PAGO Y LIQUIDACIÓN*\n` +
       `Barbería: *${shopConfig?.nombre_barberia || 'The Barber Club'}*\n` +
@@ -275,7 +281,8 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
       `Período: ${comprobante.fecha_inicio} al ${comprobante.fecha_fin}\n\n` +
       `✂️ Servicios Realizados: ${comprobante.total_servicios}\n` +
       `💰 Total Facturado: ${formatCOP(comprobante.total_bruto)}\n` +
-      `📊 Comisión Aplicada: ${comprobante.porcentaje || comprobante.porcentaje_aplicado}%\n` +
+      `📊 Comisión Servicios (${comprobante.porcentaje || comprobante.porcentaje_aplicado}%): ${formatCOP(comprobante.comision_servicios || Math.round((comprobante.total_bruto || 0) * ((comprobante.porcentaje || comprobante.porcentaje_aplicado || 50) / 100)))}\n` +
+      propinasMsg +
       `📉 Deducciones/Adelantos: -${formatCOP(comprobante.deducciones)}\n\n` +
       `💵 *TOTAL NETO PAGADO: ${formatCOP(comprobante.total_pagado)}*\n` +
       `Método: ${comprobante.metodo_pago}\n\n` +
@@ -476,7 +483,7 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
             <div className="space-y-6 animate-fadeIn">
               
               {/* Tarjetas de Métricas de la Liquidación */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
                   <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
                     Servicios Atendidos
@@ -484,7 +491,7 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   <span className="text-2xl font-black text-white mt-1 block">
                     {resultadoPreview.total_servicios} cortes
                   </span>
-                  <span className="text-[11px] text-slate-500">Citas completadas y sin liquidar</span>
+                  <span className="text-[11px] text-slate-500">Citas sin liquidar</span>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
@@ -497,21 +504,32 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   <span className="text-[11px] text-slate-500">Recaudado en el local</span>
                 </div>
 
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl">
+                  <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block flex items-center justify-between">
+                    <span>Propinas</span>
+                    <span className="text-[10px] bg-emerald-500/20 px-1.5 py-0.2 rounded text-emerald-300">100% Barbero</span>
+                  </span>
+                  <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                    {formatCOP(totalPropinas)}
+                  </span>
+                  <span className="text-[11px] text-emerald-300/70">Sin retención del local</span>
+                </div>
+
                 <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl">
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider block">
-                    Comisión del Barbero ({porcentaje}%)
+                    Comisión Total ({porcentaje}%)
                   </span>
                   <span className="text-2xl font-black text-amber-400 mt-1 block">
                     {formatCOP(comisionCalculada)}
                   </span>
-                  <span className="text-[11px] text-amber-300/70">Monto antes de deducciones</span>
+                  <span className="text-[11px] text-amber-300/70">Servicios + Propinas</span>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block">
+                  <span className="text-xs font-semibold text-sky-400 uppercase tracking-wider block">
                     Margen Barbería
                   </span>
-                  <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                  <span className="text-2xl font-black text-sky-400 mt-1 block">
                     {formatCOP(margenBarberia)}
                   </span>
                   <span className="text-[11px] text-slate-500">Retención del negocio</span>
@@ -544,12 +562,15 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                             <th className="py-2.5 px-3 font-semibold">Cliente</th>
                             <th className="py-2.5 px-3 font-semibold">Servicio</th>
                             <th className="py-2.5 px-3 font-semibold text-right">Valor Servicio</th>
-                            <th className="py-2.5 px-3 font-semibold text-right">Comisión ({porcentaje}%)</th>
+                            <th className="py-2.5 px-3 font-semibold text-right">Propina (100%)</th>
+                            <th className="py-2.5 px-3 font-semibold text-right">Comisión Total</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/80">
                           {resultadoPreview.citas.map((cita) => {
                             const comisionCorte = Math.round((cita.precio_cobrado || 0) * (Number(porcentaje) / 100));
+                            const propinaCita = Number(cita.propina || 0);
+                            const totalBarberoCita = comisionCorte + propinaCita;
                             return (
                               <tr key={cita.id} className="hover:bg-slate-800/40">
                                 <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">
@@ -564,8 +585,17 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                                 <td className="py-2.5 px-3 text-right text-white font-semibold whitespace-nowrap">
                                   {formatCOP(cita.precio_cobrado)}
                                 </td>
+                                <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                  {propinaCita > 0 ? (
+                                    <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                      +{formatCOP(propinaCita)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 font-mono">$0</span>
+                                  )}
+                                </td>
                                 <td className="py-2.5 px-3 text-right text-amber-400 font-bold whitespace-nowrap">
-                                  {formatCOP(comisionCorte)}
+                                  {formatCOP(totalBarberoCita)}
                                 </td>
                               </tr>
                             );
@@ -772,6 +802,12 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                 <span className="text-slate-400">Comisión bruta:</span>
                 <span className="font-bold text-white print:text-black">{formatCOP(comprobanteGenerado.monto_comision)}</span>
               </div>
+              {Number(comprobanteGenerado.total_propinas || 0) > 0 && (
+                <div className="flex justify-between text-emerald-400 print:text-black">
+                  <span>🎁 Propinas voluntarias (100% Barbero):</span>
+                  <span className="font-bold">+{formatCOP(comprobanteGenerado.total_propinas)}</span>
+                </div>
+              )}
               {comprobanteGenerado.deducciones > 0 && (
                 <div className="flex justify-between text-rose-400">
                   <span>Deducciones / Adelantos:</span>
@@ -898,6 +934,9 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                   <p><span className="text-slate-400">Servicios Realizados:</span> {detalleHistorial.total_servicios} cortes</p>
                   <p><span className="text-slate-400">Total Facturado Bruto:</span> {formatCOP(detalleHistorial.total_bruto)}</p>
                   <p><span className="text-slate-400">Comisión Aplicada:</span> {detalleHistorial.porcentaje_aplicado}%</p>
+                  {Number(detalleHistorial.total_propinas || 0) > 0 && (
+                    <p className="text-emerald-400"><span className="text-slate-400">🎁 Propinas Clientes (100%):</span> +{formatCOP(detalleHistorial.total_propinas)}</p>
+                  )}
                   {Number(detalleHistorial.deducciones || 0) > 0 && (
                     <p className="text-rose-400"><span className="text-slate-400">Deducciones / Anticipos:</span> -{formatCOP(detalleHistorial.deducciones)}</p>
                   )}

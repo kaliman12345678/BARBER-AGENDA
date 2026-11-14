@@ -824,7 +824,7 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
       {/* ======================================================== */}
       {tab === 'balance' && balance && (
         <div className="space-y-6 animate-fadeIn">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-6 rounded-3xl bg-blue-50/70 border border-blue-200">
               <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest block">
                 Total Ganado en Comisiones
@@ -834,6 +834,19 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
               </h4>
               <p className="text-xs text-blue-600 mt-2">
                 {balance.total_servicios} cortes completados • {miComision}% de comisión
+              </p>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-amber-50/80 border border-amber-200">
+              <span className="text-[11px] font-bold text-amber-800 uppercase tracking-widest block flex items-center justify-between">
+                <span>🎁 Propinas (100% Tuyas)</span>
+                <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-black">Directas</span>
+              </span>
+              <h4 className="text-3xl font-black text-amber-950 font-sans mt-2">
+                {formatCOP(balance.total_propinas || 0)}
+              </h4>
+              <p className="text-xs text-amber-700 mt-2">
+                {Number(balance.propinas_pendientes || 0) > 0 ? `+${formatCOP(balance.propinas_pendientes)} pendientes por cobrar` : '100% sin descuento de barbería'}
               </p>
             </div>
 
@@ -849,14 +862,14 @@ export default function BarberoPortal({ barbero, shopConfig, onLogout }) {
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-amber-50/70 border border-amber-200">
-              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest block">
+            <div className="p-6 rounded-3xl bg-indigo-50/70 border border-indigo-200">
+              <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-widest block">
                 Saldo Pendiente por Liquidar
               </span>
-              <h4 className="text-3xl font-black text-amber-900 font-sans mt-2">
+              <h4 className="text-3xl font-black text-indigo-900 font-sans mt-2">
                 {formatCOP(balance.pendiente_por_cobrar)}
               </h4>
-              <p className="text-xs text-amber-700 mt-2">
+              <p className="text-xs text-indigo-700 mt-2">
                 {balance.servicios_pendientes_count} cortes listos para la próxima liquidación
               </p>
             </div>
