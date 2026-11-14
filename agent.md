@@ -524,3 +524,31 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
   - Selector interactivo de cuotas activas a amortizar con checkboxes y campos editables de valor a descontar.
   - Deducciones totales compuestas (cuotas seleccionadas + otras deducciones manuales).
   - Comprobante impreso y mensaje de WhatsApp con desglose pormenorizado de abonos a préstamos y saldo restante.
+
+---
+
+### [2026-11-14] — Corrección de Expediente & Récords, Turnos Presenciales al Liquidador y Responsividad Móvil
+
+#### 1. Expediente Vitalicio y Récords de Barbero (`BarberoRecordModal.jsx` y Backend)
+* **Causa del bloqueo:** El backend `/api/barberos/:id/record` retornaba únicamente `metricas` y `ultimas_citas`, omitiendo `resumen`, `citas`, `ventas_productos`, `publicaciones` y `auditoria`. Adicionalmente, la petición en frontend no enviaba cabeceras de autorización ni slug multi-tenant, causando `401 Unauthorized` o `TypeError` al desestructurar.
+* **Solución aplicada:**
+  - El endpoint `/api/barberos/:id/record` ahora computa y retorna todos los datos consolidados: `resumen`, `metricas`, `citas`, `liquidaciones`, `ventas_productos`, `publicaciones` y `auditoria`.
+  - [BarberoRecordModal.jsx](file:///c:/Users/h/OneDrive%20-%20logigho.com/Documentos/APPS/agenda%20barberia/client/src/components/BarberoRecordModal.jsx) envía cabeceras de autorización (`x-admin-token`, `x-barbero-token`, `x-superadmin-token`) y el slug activo (`x-barberia-slug` y `?b=...`), con fallbacks defensivos para evitar bloqueos.
+
+#### 2. Turnos Presenciales Directos al Liquidador (`AdminAgenda.jsx` y `POST /api/citas`)
+* **Problema:** Los turnos agregados de manera presencial o manual no transmitían el slug multi-tenant en [AdminAgenda.jsx](file:///c:/Users/h/OneDrive%20-%20logigho.com/Documentos/APPS/agenda%20barberia/client/src/components/AdminAgenda.jsx), guardándose en el Tenant #1 por defecto, y quedaban en estado `confirmada` sin sumar al liquidador del barbero.
+* **Solución aplicada:**
+  - Todas las operaciones de citas (`cargarCitas`, `cambiarEstadoCita`, `handleCrearCitaManual`, `handleGuardarReasignacion`) ahora transmiten estrictamente `?b=${slug}` y `'x-barberia-slug': slug`.
+  - En el modal de *"Agendar Turno Presencial"*:
+    - Campo editable de `precio_cobrado` prellenado según el servicio.
+    - Campo opcional de `propina` (100% colaborador).
+    - Selector de `metodo_pago`.
+    - Casilla activada por defecto: `✅ Marcar como Turno ya Atendido y Pagado (Completar de inmediato)`. Al guardarse, se registra como `completada` y entra de inmediato al liquidador del barbero seleccionado.
+
+#### 3. Rediseño y Responsividad Móvil del Liquidador (`AdminLiquidaciones.jsx` y `AdminPrestamosColaboradores.jsx`)
+* **Problema:** En pantallas móviles, la cabecera flex comprimía el título a la izquierda y la botonera de pestañas desbordaba la pantalla horizontalmente, cortando textos (`Histor... de Pag...`).
+* **Solución aplicada:**
+  - Cabecera adaptable con `flex-col lg:flex-row`.
+  - Segmented control responsivo: en móviles muestra `⚡ Liquidar` | `🤝 Préstamos` | `📜 Historial` en una grilla de 3 columnas ajustada al 100% de la pantalla sin scroll horizontal.
+  - Métricas adaptadas a `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`.
+  - Margen inferior de seguridad `pb-28` en ambos componentes para que el botón flotante de WhatsApp no tape los botones de acción.

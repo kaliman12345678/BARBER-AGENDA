@@ -353,49 +353,53 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       
-      {/* Selector de pestañas */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      {/* Selector de pestañas adaptable a móviles */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <h3 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-            <Percent className="w-5 h-5 text-amber-400" />
-            Plantilla de Pagos por Porcentaje a Barberos
+          <h3 className="text-lg sm:text-xl font-bold text-white font-serif flex items-center gap-2">
+            <Percent className="w-5 h-5 text-amber-400 shrink-0" />
+            <span>Plantilla de Liquidación & Comisiones</span>
           </h3>
-          <p className="text-xs text-slate-400">
-            Calcula automáticamente las comisiones generadas por los turnos completados y gestiona préstamos y deducciones.
+          <p className="text-xs text-slate-400 mt-0.5">
+            Calcula comisiones por corte, amortiza préstamos/adelantos y genera comprobantes de pago.
           </p>
         </div>
 
-        <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1">
+        <div className="w-full sm:w-auto grid grid-cols-3 sm:flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 text-center">
           <button
             onClick={() => setTab('calcular')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              tab === 'calcular' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+            className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              tab === 'calcular' ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Nueva Liquidación
+            <DollarSign className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Nueva Liquidación</span>
+            <span className="sm:hidden">Liquidar</span>
           </button>
           <button
             onClick={() => setTab('prestamos')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tab === 'prestamos' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+            className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              tab === 'prestamos' ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold' : 'text-slate-400 hover:text-white'
             }`}
           >
-            <HandCoins className="w-3.5 h-3.5" />
-            <span>Adelantos & Préstamos</span>
+            <HandCoins className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Adelantos & Préstamos</span>
+            <span className="sm:hidden">Préstamos</span>
           </button>
           <button
             onClick={() => {
               setTab('historial');
               cargarHistorial();
             }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tab === 'historial' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+            className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              tab === 'historial' ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold' : 'text-slate-400 hover:text-white'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            <span>Historial de Pagos</span>
+            <History className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Historial de Pagos</span>
+            <span className="sm:hidden">Historial</span>
           </button>
         </div>
       </div>
@@ -553,7 +557,7 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
             <div className="space-y-6 animate-fadeIn">
               
               {/* Tarjetas de Métricas de la Liquidación */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
                   <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
                     Servicios Atendidos

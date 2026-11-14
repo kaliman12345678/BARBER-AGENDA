@@ -232,10 +232,10 @@ export default function AdminPrestamosColaboradores({ barberos = [], shopConfig,
   const prestamosActivosCount = prestamos.filter(p => p.estado === 'activo').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       
       {/* Tarjetas de Resumen de Créditos */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-semibold text-slate-400 uppercase">Total Financiado</span>
@@ -271,13 +271,13 @@ export default function AdminPrestamosColaboradores({ barberos = [], shopConfig,
       </div>
 
       {/* Barra de Acciones y Filtros */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           {/* Filtro Barbero */}
           <select
             value={filtroBarbero}
             onChange={(e) => setFiltroBarbero(e.target.value)}
-            className="bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-amber-500"
+            className="bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 sm:py-1.5 text-xs font-semibold focus:outline-none focus:border-amber-500 w-full sm:w-auto"
           >
             <option value="todos">Todos los Colaboradores</option>
             {barberos.map(b => (
@@ -286,25 +286,25 @@ export default function AdminPrestamosColaboradores({ barberos = [], shopConfig,
           </select>
 
           {/* Filtro Estado */}
-          <div className="flex bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs font-bold">
+          <div className="grid grid-cols-3 sm:flex bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs font-bold w-full sm:w-auto text-center">
             <button
               type="button"
               onClick={() => setFiltroEstado('activos')}
-              className={`px-3 py-1 rounded-lg transition-all ${filtroEstado === 'activos' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1.5 sm:py-1 rounded-lg transition-all ${filtroEstado === 'activos' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
             >
               Pendientes
             </button>
             <button
               type="button"
               onClick={() => setFiltroEstado('pagados')}
-              className={`px-3 py-1 rounded-lg transition-all ${filtroEstado === 'pagados' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1.5 sm:py-1 rounded-lg transition-all ${filtroEstado === 'pagados' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
             >
               Completados
             </button>
             <button
               type="button"
               onClick={() => setFiltroEstado('todos')}
-              className={`px-3 py-1 rounded-lg transition-all ${filtroEstado === 'todos' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1.5 sm:py-1 rounded-lg transition-all ${filtroEstado === 'todos' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
             >
               Todos
             </button>
@@ -315,7 +315,7 @@ export default function AdminPrestamosColaboradores({ barberos = [], shopConfig,
         <button
           type="button"
           onClick={() => setMostrarModalNuevo(true)}
-          className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
           <span>Registrar Préstamo o Adelanto</span>

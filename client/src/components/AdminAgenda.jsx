@@ -66,7 +66,11 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
     cliente_telefono: '',
     fecha: getTodayStr(),
     hora_inicio: '10:00',
-    notas: ''
+    notas: '',
+    precio_cobrado: '',
+    propina: '',
+    metodo_pago: 'Efectivo',
+    completada_inmediata: true
   });
   const [errorNueva, setErrorNueva] = useState('');
   const [guardandoNueva, setGuardandoNueva] = useState(false);
@@ -87,9 +91,10 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
 
   async function cargarCitas() {
     setCargando(true);
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
       let url = '/api/citas';
-      const params = [];
+      const params = [`b=${encodeURIComponent(slug)}`];
       if (filtroTiempo === 'hoy') {
         const hoy = getTodayStr();
         params.push(`fecha=${hoy}`);
@@ -112,7 +117,9 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
       if (params.length > 0) {
         url += `?${params.join('&')}`;
       }
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: { 'x-barberia-slug': slug }
+      });
       const data = await res.json();
       setCitas(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -144,10 +151,14 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
   }
 
   async function cambiarEstadoCita(id, nuevoEstado) {
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch(`/api/citas/${id}/estado`, {
+      const res = await fetch(`/api/citas/${id}/estado?b=${encodeURIComponent(slug)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug
+        },
         body: JSON.stringify({ estado: nuevoEstado })
       });
       if (res.ok) {
@@ -178,11 +189,30 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
     setGuardandoNueva(true);
     setErrorNueva('');
 
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch('/api/citas', {
+      const payload = {
+        barbero_id: Number(nuevaCita.barbero_id),
+        servicio_id: Number(nuevaCita.servicio_id),
+        cliente_nombre: nuevaCita.cliente_nombre.trim(),
+        cliente_telefono: (nuevaCita.cliente_telefono || '').trim(),
+        fecha: nuevaCita.fecha,
+        hora_inicio: nuevaCita.hora_inicio,
+        notas: nuevaCita.notas,
+        estado: nuevaCita.completada_inmediata ? 'completada' : 'confirmada',
+        precio_cobrado: nuevaCita.precio_cobrado !== '' ? Number(nuevaCita.precio_cobrado) : undefined,
+        propina: nuevaCita.propina !== '' ? Number(nuevaCita.propina) : 0,
+        metodo_pago: nuevaCita.metodo_pago || 'Efectivo',
+        origen: 'Admin Presencial'
+      };
+
+      const res = await fetch(`/api/citas?b=${encodeURIComponent(slug)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nuevaCita)
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug
+        },
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
 
@@ -199,7 +229,11 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
         cliente_telefono: '',
         fecha: getTodayStr(),
         hora_inicio: '10:00',
-        notas: ''
+        notas: '',
+        precio_cobrado: '',
+        propina: '',
+        metodo_pago: 'Efectivo',
+        completada_inmediata: true
       });
       cargarCitas();
     } catch (err) {
@@ -220,10 +254,14 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
     setGuardandoReasignacion(true);
     setErrorReasignacion('');
 
+    const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
     try {
-      const res = await fetch(`/api/citas/${citaAReasignar.id}/reasignar`, {
+      const res = await fetch(`/api/citas/${citaAReasignar.id}/reasignar?b=${encodeURIComponent(slug)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-barberia-slug': slug
+        },
         body: JSON.stringify({
           barbero_id: Number(nuevoBarberoId),
           usuario: 'Administrador'
@@ -1232,7 +1270,15 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                   <select
                     required
                     value={nuevaCita.servicio_id}
-                    onChange={(e) => setNuevaCita({ ...nuevaCita, servicio_id: e.target.value })}
+                    onChange={(e) => {
+                      const sId = e.target.value;
+                      const sObj = servicios.find(s => String(s.id) === String(sId));
+                      setNuevaCita(prev => ({ 
+                        ...prev, 
+                        servicio_id: sId,
+                        precio_cobrado: sObj ? sObj.precio_cop : prev.precio_cobrado
+                      }));
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-semibold"
                   >
                     <option value="">Seleccionar...</option>
@@ -1240,6 +1286,87 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                       <option key={s.id} value={s.id}>{s.nombre} ({formatCOP(s.precio_cop)})</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Precio y Propina Cobrada */}
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Precio Cobrado (COP) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      required
+                      placeholder="Ej: 35000"
+                      value={nuevaCita.precio_cobrado}
+                      onChange={(e) => setNuevaCita({ ...nuevaCita, precio_cobrado: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-xl pl-6 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-emerald-700 uppercase mb-1">
+                    Propina (100% Barbero)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold text-xs">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      placeholder="0"
+                      value={nuevaCita.propina}
+                      onChange={(e) => setNuevaCita({ ...nuevaCita, propina: e.target.value })}
+                      className="w-full bg-white border border-emerald-300 rounded-xl pl-6 pr-3 py-2 text-xs font-bold text-emerald-800 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Método de Pago
+                  </label>
+                  <select
+                    value={nuevaCita.metodo_pago}
+                    onChange={(e) => setNuevaCita({ ...nuevaCita, metodo_pago: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Efectivo">Efectivo en caja</option>
+                    <option value="Transferencia Bancaria / Nequi">Transferencia / Nequi</option>
+                    <option value="Daviplata">Daviplata</option>
+                    <option value="Tarjeta">Tarjeta Débito / Crédito</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Casilla de Turno Ya Completado y Pagado (Flujo Directo al Liquidador) */}
+              <div 
+                onClick={() => setNuevaCita(prev => ({ ...prev, completada_inmediata: !prev.completada_inmediata }))}
+                className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                  nuevaCita.completada_inmediata 
+                    ? 'bg-emerald-50/80 border-emerald-300' 
+                    : 'bg-slate-50 border-slate-200 opacity-80'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={nuevaCita.completada_inmediata}
+                  onChange={(e) => setNuevaCita({ ...nuevaCita, completada_inmediata: e.target.checked })}
+                  className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-bold text-emerald-950 block">
+                    ✅ Turno ya atendido y cobrado (Completar de inmediato)
+                  </span>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    El servicio se guardará como completado y el dinero se sumará de inmediato al liquidador del colaborador seleccionado.
+                  </p>
                 </div>
               </div>
 
@@ -1295,9 +1422,15 @@ export default function AdminAgenda({ barberos, servicios, shopConfig }) {
                 <button
                   type="submit"
                   disabled={guardandoNueva}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
+                  className={`flex-1 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer ${
+                    nuevaCita.completada_inmediata
+                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                      : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                  }`}
                 >
-                  {guardandoNueva ? 'Guardando...' : 'Confirmar Turno'}
+                  {guardandoNueva 
+                    ? 'Guardando...' 
+                    : (nuevaCita.completada_inmediata ? '💰 Registrar y Sumar al Liquidador' : 'Confirmar Turno')}
                 </button>
               </div>
             </form>
