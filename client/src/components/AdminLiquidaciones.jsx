@@ -14,9 +14,16 @@ import {
   Scissors,
   ArrowRight,
   TrendingUp,
-  Receipt
+  Receipt,
+  HandCoins,
+  ShoppingBag,
+  Wallet,
+  Wrench,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { formatCOP, formatDateReadable, formatTime12, getTodayStr } from '../utils/helpers';
+import AdminPrestamosColaboradores from './AdminPrestamosColaboradores';
 
 export default function AdminLiquidaciones({ barberos, shopConfig }) {
   // Pestañas internas: 'calcular' o 'historial'
@@ -37,7 +44,8 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
   // Ajustes de liquidación
   const [porcentaje, setPorcentaje] = useState(50);
-  const [deducciones, setDeducciones] = useState(0);
+  const [deduccionesManuales, setDeduccionesManuales] = useState(0);
+  const [deduccionesPrestamos, setDeduccionesPrestamos] = useState({});
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [notasLiquidacion, setNotasLiquidacion] = useState('');
 
@@ -66,6 +74,8 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
       setPorcentaje(b.porcentaje_comision || 50);
     }
     setResultadoPreview(null);
+    setDeduccionesPrestamos({});
+    setDeduccionesManuales(0);
     setComprobanteGenerado(null);
     setMensajePorcentajeFijo('');
   }
@@ -153,6 +163,21 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
       if (data.porcentaje_aplicado !== undefined) {
         setPorcentaje(data.porcentaje_aplicado);
       }
+
+      // Inicializar deducciones automáticas para préstamos y adelantos activos
+      const prestamosMap = {};
+      if (Array.isArray(data.prestamos_activos)) {
+        data.prestamos_activos.forEach(p => {
+          const cuotaSugerida = Math.min(Number(p.valor_cuota || 0), Number(p.saldo_pendiente || 0));
+          prestamosMap[p.id] = {
+            seleccionado: true,
+            monto: cuotaSugerida,
+            prestamo: p
+          };
+        });
+      }
+      setDeduccionesPrestamos(prestamosMap);
+      setDeduccionesManuales(0);
     } catch (err) {
       setErrorPreview('Error al conectar con el servidor');
     } finally {
@@ -167,7 +192,14 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
   const comisionProductos = resultadoPreview?.total_comision_productos || 0;
   // Propinas son 100% del colaborador (sin retención del local)
   const comisionCalculada = comisionServicios + comisionProductos + totalPropinas;
-  const totalNetoAPagar = Math.max(0, comisionCalculada - Number(deducciones || 0));
+
+  // Deducciones totales: Préstamos amortizados seleccionados + Otras deducciones
+  const totalDeduccionesPrestamos = Object.values(deduccionesPrestamos).reduce(
+    (sum, item) => item.seleccionado ? sum + Number(item.monto || 0) : sum,
+    0
+  );
+  const totalDeducciones = totalDeduccionesPrestamos + Number(deduccionesManuales || 0);
+  const totalNetoAPagar = Math.max(0, comisionCalculada - totalDeducciones);
   const margenBarberia = resultadoPreview?.margen_barberia !== undefined 
     ? resultadoPreview.margen_barberia 
     : (subtotalBruto - comisionServicios);
@@ -181,6 +213,17 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
     setGuardando(true);
     const slug = shopConfig?.slug || window.__BARBERIA_SLUG || 'the-barber-club';
+
+    const prestamosAmortizados = Object.entries(deduccionesPrestamos)
+      .filter(([_, item]) => item.seleccionado && Number(item.monto) > 0)
+      .map(([id, item]) => ({
+        prestamo_id: id,
+        monto: Number(item.monto),
+        tipo: item.prestamo?.tipo,
+        descripcion: item.prestamo?.descripcion,
+        saldo_restante_estimado: Math.max(0, Number(item.prestamo?.saldo_pendiente || 0) - Number(item.monto))
+      }));
+
     try {
       const res = await fetch(`/api/liquidaciones?b=${encodeURIComponent(slug)}`, {
         method: 'POST',
@@ -193,11 +236,12 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin,
           porcentaje_aplicado: Number(porcentaje),
-          deducciones: Number(deducciones || 0),
+          deducciones: totalDeducciones,
           metodo_pago: metodoPago,
           notas: notasLiquidacion,
           citas_ids: citasIds,
-          ventas_ids: ventasIds
+          ventas_ids: ventasIds,
+          prestamos_amortizados: prestamosAmortizados
         })
       });
 
@@ -220,7 +264,9 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
         monto_comision: comisionCalculada,
         comision_servicios: comisionServicios,
         comision_productos: comisionProductos,
-        deducciones: Number(deducciones || 0),
+        deducciones: totalDeducciones,
+        deducciones_prestamos: prestamosAmortizados,
+        deducciones_manuales: Number(deduccionesManuales || 0),
         total_pagado: totalNetoAPagar,
         margen_barberia: margenBarberia,
         metodo_pago: metodoPago,
@@ -270,21 +316,36 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
   // Compartir por WhatsApp
   function compartirWhatsApp(comprobante) {
-    const telefono = (comprobante.barbero.telefono || '').replace(/[^0-9]/g, '');
+    const telefono = (comprobante.barbero?.telefono || comprobante.barbero_telefono || '').replace(/[^0-9]/g, '');
     const propinasMsg = Number(comprobante.total_propinas || 0) > 0 
       ? `🎁 Propinas Clientes (100%): ${formatCOP(comprobante.total_propinas)}\n`
       : '';
+    
+    const prestamosList = comprobante.deducciones_prestamos || comprobante.abonos_prestamos || [];
+    let prestamosMsg = '';
+    if (prestamosList.length > 0) {
+      prestamosMsg = `\n📋 *Detalle Deducción de Préstamos / Adelantos:*\n` + prestamosList.map(p => {
+        const desc = p.descripcion ? ` (${p.descripcion})` : '';
+        const abono = formatCOP(p.monto || p.monto_abonado || 0);
+        const saldo = p.saldo_restante !== undefined 
+          ? ` [Saldo Rest: ${formatCOP(p.saldo_restante)}]` 
+          : (p.saldo_restante_estimado !== undefined ? ` [Saldo Rest: ${formatCOP(p.saldo_restante_estimado)}]` : '');
+        return ` • ${p.tipo ? p.tipo.toUpperCase() : 'CUOTA'}${desc}: -${abono}${saldo}`;
+      }).join('\n') + `\n`;
+    }
+
     const mensaje = encodeURIComponent(
       `💈 *COMPROBANTE DE PAGO Y LIQUIDACIÓN*\n` +
       `Barbería: *${shopConfig?.nombre_barberia || 'The Barber Club'}*\n` +
-      `Barbero: *${comprobante.barbero.nombre}*\n` +
+      `Barbero: *${comprobante.barbero?.nombre || comprobante.barbero_nombre}*\n` +
       `Período: ${comprobante.fecha_inicio} al ${comprobante.fecha_fin}\n\n` +
       `✂️ Servicios Realizados: ${comprobante.total_servicios}\n` +
       `💰 Total Facturado: ${formatCOP(comprobante.total_bruto)}\n` +
       `📊 Comisión Servicios (${comprobante.porcentaje || comprobante.porcentaje_aplicado}%): ${formatCOP(comprobante.comision_servicios || Math.round((comprobante.total_bruto || 0) * ((comprobante.porcentaje || comprobante.porcentaje_aplicado || 50) / 100)))}\n` +
       propinasMsg +
-      `📉 Deducciones/Adelantos: -${formatCOP(comprobante.deducciones)}\n\n` +
-      `💵 *TOTAL NETO PAGADO: ${formatCOP(comprobante.total_pagado)}*\n` +
+      `📉 Deducciones/Adelantos: -${formatCOP(comprobante.deducciones)}\n` +
+      prestamosMsg +
+      `\n💵 *TOTAL NETO PAGADO: ${formatCOP(comprobante.total_pagado)}*\n` +
       `Método: ${comprobante.metodo_pago}\n\n` +
       `¡Gracias por tu excelente trabajo!`
     );
@@ -302,11 +363,11 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
             Plantilla de Pagos por Porcentaje a Barberos
           </h3>
           <p className="text-xs text-slate-400">
-            Calcula automáticamente las comisiones generadas por los turnos completados y genera el recibo de liquidación.
+            Calcula automáticamente las comisiones generadas por los turnos completados y gestiona préstamos y deducciones.
           </p>
         </div>
 
-        <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1">
+        <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1">
           <button
             onClick={() => setTab('calcular')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -314,6 +375,15 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
             }`}
           >
             Nueva Liquidación
+          </button>
+          <button
+            onClick={() => setTab('prestamos')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              tab === 'prestamos' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <HandCoins className="w-3.5 h-3.5" />
+            <span>Adelantos & Préstamos</span>
           </button>
           <button
             onClick={() => {
@@ -612,6 +682,111 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                       Plantilla de Liquidación Final
                     </h4>
 
+                    {/* SECCIÓN DE DEDUCCIÓN DE ADELANTOS / PRÉSTAMOS ACTIVOS */}
+                    {resultadoPreview?.prestamos_activos && resultadoPreview.prestamos_activos.length > 0 && (
+                      <div className="mb-6 p-4 rounded-xl bg-slate-950/80 border border-amber-500/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <HandCoins className="w-5 h-5 text-amber-400" />
+                            <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                              Cuotas de Adelantos / Préstamos Activos
+                            </h5>
+                          </div>
+                          <span className="text-[11px] text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            {resultadoPreview.prestamos_activos.length} crédito{resultadoPreview.prestamos_activos.length > 1 ? 's' : ''} pendiente{resultadoPreview.prestamos_activos.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-3">
+                          Selecciona las cuotas que se amortizarán automáticamente en esta liquidación. Puedes ajustar el valor de la cuota según lo acordado con el colaborador.
+                        </p>
+
+                        <div className="space-y-2.5">
+                          {resultadoPreview.prestamos_activos.map((prestamo) => {
+                            const itemState = deduccionesPrestamos[prestamo.id] || { seleccionado: false, monto: 0 };
+                            const cuotaSugerida = Math.min(Number(prestamo.valor_cuota || 0), Number(prestamo.saldo_pendiente || 0));
+                            return (
+                              <div 
+                                key={prestamo.id} 
+                                className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                                  itemState.seleccionado 
+                                    ? 'bg-amber-500/10 border-amber-500/40' 
+                                    : 'bg-slate-900/60 border-slate-800 opacity-60'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeduccionesPrestamos(prev => ({
+                                        ...prev,
+                                        [prestamo.id]: {
+                                          ...prev[prestamo.id],
+                                          seleccionado: !prev[prestamo.id]?.seleccionado,
+                                          monto: prev[prestamo.id]?.seleccionado ? 0 : cuotaSugerida,
+                                          prestamo
+                                        }
+                                      }));
+                                    }}
+                                    className="mt-0.5 text-amber-400 hover:text-amber-300 transition-colors"
+                                  >
+                                    {itemState.seleccionado ? (
+                                      <CheckSquare className="w-5 h-5 text-amber-400" />
+                                    ) : (
+                                      <Square className="w-5 h-5 text-slate-500" />
+                                    )}
+                                  </button>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-bold text-white">
+                                        {prestamo.descripcion || 'Sin descripción'}
+                                      </span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                                        {prestamo.tipo === 'adelanto_dinero' && '💵 Adelanto Nómina'}
+                                        {prestamo.tipo === 'prestamo_dinero' && '🏦 Préstamo'}
+                                        {prestamo.tipo === 'productos_local' && '🧴 Prod. Local'}
+                                        {prestamo.tipo === 'herramientas' && '✂️ Herramientas'}
+                                        {!['adelanto_dinero','prestamo_dinero','productos_local','herramientas'].includes(prestamo.tipo) && prestamo.tipo}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      Cuota {Number(prestamo.cuotas_pagadas || 0) + 1} de {prestamo.numero_cuotas} • Saldo pendiente actual: <span className="font-semibold text-rose-400">{formatCOP(prestamo.saldo_pendiente)}</span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                  <span className="text-[11px] text-slate-400 whitespace-nowrap">Descontar en liq:</span>
+                                  <div className="relative w-36">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={prestamo.saldo_pendiente}
+                                      step="1000"
+                                      disabled={!itemState.seleccionado}
+                                      value={itemState.monto}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Math.min(Number(prestamo.saldo_pendiente), Number(e.target.value) || 0));
+                                        setDeduccionesPrestamos(prev => ({
+                                          ...prev,
+                                          [prestamo.id]: {
+                                            ...prev[prestamo.id],
+                                            monto: val,
+                                            prestamo
+                                          }
+                                        }));
+                                      }}
+                                      className="w-full bg-slate-950 border border-amber-500/40 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-amber-400 focus:outline-none disabled:opacity-40 disabled:border-slate-800"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
                       <div>
                         <label className="block text-xs font-semibold text-amber-400 uppercase mb-1">
@@ -630,18 +805,18 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
 
                       <div>
                         <label className="block text-xs font-semibold text-rose-400 uppercase mb-1">
-                          Deducciones / Anticipos (COP)
+                          Otras Deducciones Manuales (COP)
                         </label>
                         <input
                           type="number"
                           min="0"
                           step="1000"
                           placeholder="0"
-                          value={deducciones}
-                          onChange={(e) => setDeducciones(e.target.value)}
+                          value={deduccionesManuales}
+                          onChange={(e) => setDeduccionesManuales(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-rose-400 font-bold text-base focus:outline-none"
                         />
-                        <span className="text-[10px] text-slate-500">Adelantos de nómina, préstamos, etc.</span>
+                        <span className="text-[10px] text-slate-500">Sanciones, daños o anticipos manuales</span>
                       </div>
 
                       <div>
@@ -669,9 +844,17 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                         </div>
                       </div>
 
-                      <div className="text-xs text-slate-400 text-left sm:text-right">
-                        <p>Bruto: <span className="text-white font-semibold">{formatCOP(comisionCalculada)}</span></p>
-                        <p>Deducciones: <span className="text-rose-400 font-semibold">-{formatCOP(deducciones)}</span></p>
+                      <div className="text-xs text-slate-400 text-left sm:text-right space-y-0.5">
+                        <p>Bruto Comisión: <span className="text-white font-semibold">{formatCOP(comisionCalculada)}</span></p>
+                        {totalDeduccionesPrestamos > 0 && (
+                          <p>Cuotas Préstamos: <span className="text-amber-400 font-semibold">-{formatCOP(totalDeduccionesPrestamos)}</span></p>
+                        )}
+                        {Number(deduccionesManuales || 0) > 0 && (
+                          <p>Otras deducciones: <span className="text-rose-400 font-semibold">-{formatCOP(deduccionesManuales)}</span></p>
+                        )}
+                        <p className="border-t border-slate-800 pt-0.5 font-bold text-rose-400">
+                          Total Deducciones: -{formatCOP(totalDeducciones)}
+                        </p>
                       </div>
                     </div>
 
@@ -810,8 +993,27 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
               )}
               {comprobanteGenerado.deducciones > 0 && (
                 <div className="flex justify-between text-rose-400">
-                  <span>Deducciones / Adelantos:</span>
+                  <span>Total Deducciones / Anticipos:</span>
                   <span>-{formatCOP(comprobanteGenerado.deducciones)}</span>
+                </div>
+              )}
+              {Array.isArray(comprobanteGenerado.deducciones_prestamos) && comprobanteGenerado.deducciones_prestamos.length > 0 && (
+                <div className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-800 space-y-1 my-1">
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                    Abonos a Préstamos / Adelantos en esta liq:
+                  </span>
+                  {comprobanteGenerado.deducciones_prestamos.map((p, idx) => (
+                    <div key={idx} className="flex justify-between text-[11px] text-slate-300">
+                      <span>• {p.descripcion || p.tipo || 'Préstamo'}:</span>
+                      <span className="font-semibold text-rose-400">-{formatCOP(p.monto)}</span>
+                    </div>
+                  ))}
+                  {Number(comprobanteGenerado.deducciones_manuales || 0) > 0 && (
+                    <div className="flex justify-between text-[11px] text-slate-300">
+                      <span>• Otras deducciones:</span>
+                      <span className="font-semibold text-rose-400">-{formatCOP(comprobanteGenerado.deducciones_manuales)}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -841,6 +1043,17 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
           </div>
 
         </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* PESTAÑA: GESTIÓN DE ADELANTOS Y PRÉSTAMOS */}
+      {/* ========================================================= */}
+      {tab === 'prestamos' && (
+        <AdminPrestamosColaboradores 
+          barberos={barberos} 
+          shopConfig={shopConfig} 
+          onActualizar={cargarHistorial} 
+        />
       )}
 
       {/* ========================================================= */}
@@ -955,6 +1168,30 @@ export default function AdminLiquidaciones({ barberos, shopConfig }) {
                         <div key={c.id} className="py-1.5 flex justify-between items-center">
                           <span className="text-slate-300">{c.fecha} • {c.cliente_nombre} <span className="text-slate-500">({c.servicio_nombre})</span></span>
                           <span className="font-semibold text-white">{formatCOP(c.precio_cobrado)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(detalleHistorial.abonos_prestamos) && detalleHistorial.abonos_prestamos.length > 0 && (
+                  <div className="border-t border-slate-800 pt-3">
+                    <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                      <HandCoins className="w-4 h-4" />
+                      Abonos a Préstamos Realizados ({detalleHistorial.abonos_prestamos.length}):
+                    </span>
+                    <div className="space-y-1.5 text-xs">
+                      {detalleHistorial.abonos_prestamos.map((abono) => (
+                        <div key={abono.id} className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 flex justify-between items-center">
+                          <div>
+                            <span className="text-white font-medium block">
+                              {abono.descripcion || abono.tipo || 'Préstamo'} (Cuota #{abono.numero_cuota})
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              Saldo anterior: {formatCOP(abono.saldo_anterior)} ➔ Restante: {formatCOP(abono.saldo_restante)}
+                            </span>
+                          </div>
+                          <span className="font-bold text-rose-400">-{formatCOP(abono.monto_abonado)}</span>
                         </div>
                       ))}
                     </div>

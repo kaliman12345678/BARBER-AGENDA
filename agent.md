@@ -488,3 +488,27 @@ Se realizó una investigación profunda sobre los 3 principales competidores:
 * **Integración en `AdminClientes.jsx`:** Insignia del semáforo en cada ficha de cliente (`🟢 Hace Xd`, `🟡 Hace Xd`, `🔴 Inactivo`) y botón directo `🤖 Reactivar con IA`.
 * **Integración en `AdminDashboard.jsx`:** Pestaña dedicada con icono `Sparkles` y badge `WhatsApp IA`, condicionada a `modulos.reactivacion_ia !== false`.
 * **Gestión en SuperAdmin (`SuperAdminDashboard.jsx`):** Módulo conmutable por plan con la llave `reactivacion_ia`.
+
+---
+
+### [2026-11-14] — Módulo de Adelantos, Préstamos y Crédito de Productos para Colaboradores
+
+#### 1. Arquitectura y Persistencia
+* **Tablas en Supabase PostgreSQL:**
+  - `prestamos_colaboradores`: Almacena adelantos de nómina en efectivo (`adelanto_dinero`), préstamos financieros personales (`prestamo_dinero`), productos del local a crédito (`productos_local`), y herramientas/insumos (`herramientas`). Registra `monto_total`, `numero_cuotas`, `valor_cuota`, `saldo_pendiente`, `cuotas_pagadas` y `estado` (`activo`, `pagado`, `cancelado`).
+  - `abonos_prestamos_liquidaciones`: Historial detallado de amortizaciones vinculadas a cada liquidación o abono directo, guardando `saldo_anterior`, `saldo_restante`, `numero_cuota` y `origen`.
+* **Endpoints Backend (`server/server.js` y `client/server/server.js`):**
+  - `GET /api/prestamos`: Listado filtrado por barbero y estado para el tenant actual.
+  - `POST /api/prestamos`: Creación con registro automático en egresos/gastos si es adelanto de efectivo.
+  - `POST /api/prestamos/:id/abono`: Abonos manuales en caja.
+  - `DELETE /api/prestamos/:id`: Anulación controlada.
+  - `GET /api/prestamos/:id/historial`: Trazabilidad completa de cuotas y abonos.
+  - `GET /api/liquidaciones/preview`: Identifica préstamos activos (`saldo_pendiente > 0`) e inyecta la cuota sugerida.
+  - `POST /api/liquidaciones`: Procesa amortizaciones seleccionadas, descuenta saldos, avanza contadores de cuota y genera recibos auditables.
+
+#### 2. Interfaz de Usuario e Integración
+* **Componente `AdminPrestamosColaboradores.jsx`:** Pestaña dedicada en la sección de liquidaciones con métricas de cartera (Total Financiado, Saldo Pendiente por Cobrar, Créditos Activos), filtros y modales para registrar préstamos con cuotas calculadas automáticamente.
+* **Integración en Liquidador (`AdminLiquidaciones.jsx`):**
+  - Selector interactivo de cuotas activas a amortizar con checkboxes y campos editables de valor a descontar.
+  - Deducciones totales compuestas (cuotas seleccionadas + otras deducciones manuales).
+  - Comprobante impreso y mensaje de WhatsApp con desglose pormenorizado de abonos a préstamos y saldo restante.
